@@ -1,0 +1,482 @@
+/* ==========================================================================
+   ENGINE-TWIN — GLASS COCKPIT THEME
+   --------------------------------------------------------------------------
+   Single source of truth for every colour, type size and panel treatment in
+   the ground control station. No component may hardcode a colour.
+
+   ANNUNCIATION DOCTRINE (strict):
+     GREYSCALE  structure — panels, borders, gridlines, axes, legends,
+                inactive controls, nominal readouts.
+     AMBER      the ONLY saturated colour under normal operation, and shown
+                ONLY where a parameter is out of tolerance.
+     RED        hard limit exceedance only.
+     GREEN      exactly two places — the healthy state and telemetry-live.
+   No glows, no neon shadows, no gradients, no coloured panel backgrounds.
+   ========================================================================== */
+
+:root {
+  /* --- Surfaces ------------------------------------------------------- */
+  --bg-page:      #0E0F11;
+  --bg-chrome:    #141619;
+  --bg-panel:     #17191C;
+  --bg-elevated:  #24272B;
+  --border:       #2A2D31;
+
+  /* --- Type ----------------------------------------------------------- */
+  --text-primary: #E8E6E1;
+  --text-muted:   #8A8F96;
+  --text-dim:     #6B7076;
+
+  /* --- Annunciation --------------------------------------------------- */
+  --caution:      #EF9F27;
+  --caution-dim:  #BA7517;
+  --warning:      #E24B4A;
+  --ok:           #97C459;
+
+  /* Derived translucent bands for chart tolerance regions */
+  --caution-band: rgba(239, 159, 39, 0.13);
+  --warning-band: rgba(226, 75, 74, 0.13);
+
+  /* Sensor trace ramp — structural, so greyscale. Four cylinders need four
+     separable traces; they are told apart by lightness, never by hue. When
+     one leaves its envelope it turns amber and identifies itself. */
+  --trace-1: #E8E6E1;
+  --trace-2: #C2BFB9;
+  --trace-3: #9B9992;
+  --trace-4: #74726D;
+
+  /* --- Type scale — three tiers only ---------------------------------- */
+  --fs-tick:    11px;   /* axis ticks (low end of the label tier)         */
+  --fs-label:   12px;   /* labels, units, log lines                       */
+  --fs-title:   14px;   /* panel titles                                   */
+  --fs-readout: 22px;   /* primary numeric readouts                       */
+
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', SFMono-Regular,
+               Menlo, Consolas, monospace;
+
+  --radius: 4px;
+  --accent-w: 4px;      /* abnormal-state left border width               */
+}
+
+/* ==========================================================================
+   BASE
+   ========================================================================== */
+
+html, body {
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Every numeral in the station is tabular so digits never jitter. */
+.num { font-variant-numeric: tabular-nums; letter-spacing: 0; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-page); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--bg-elevated); }
+
+/* ==========================================================================
+   CHROME — top bar, footer, rails
+   ========================================================================== */
+
+.chrome {
+  background: var(--bg-chrome);
+  border-color: var(--border);
+}
+.rule-b { border-bottom: 1px solid var(--border); }
+.rule-t { border-top: 1px solid var(--border); }
+
+/* ==========================================================================
+   PANELS
+   Flat, 4px radius, no border by default. Abnormal state is signalled ONLY
+   by a 4px left border in --caution or --warning. Never by background,
+   never by a glow.
+   ========================================================================== */
+
+.panel {
+  background: var(--bg-panel);
+  border-radius: var(--radius);
+  border: none;
+  border-left: var(--accent-w) solid transparent;   /* reserved, invisible */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.panel[data-state="caution"] { border-left-color: var(--caution); }
+.panel[data-state="warning"] { border-left-color: var(--warning); }
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.panel-title {
+  font-size: var(--fs-title);
+  font-weight: 500;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.panel-note {
+  font-size: var(--fs-tick);
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.panel-body { padding: 10px; flex: 1 1 auto; min-height: 0; }
+
+/* ==========================================================================
+   TYPOGRAPHY ROLES
+   ========================================================================== */
+
+.label {
+  font-size: var(--fs-label);
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.label-sm { font-size: var(--fs-tick); color: var(--text-dim); letter-spacing: 0.04em; text-transform: uppercase; }
+.readout {
+  font-size: var(--fs-readout);
+  font-weight: 500;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+.readout-sm { font-size: var(--fs-title); font-weight: 500; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.text-muted { color: var(--text-muted); }
+.text-dim   { color: var(--text-dim); }
+.unit       { color: var(--text-dim); font-size: var(--fs-label); font-weight: 400; }
+
+/* Annunciation states — apply to readouts and text only.
+   There is deliberately no green text class: green is reserved for the
+   telemetry-live indicator and the healthy-state badge, and nothing else. */
+.is-caution  { color: var(--caution); }
+.is-warning  { color: var(--warning); }
+.is-nominal  { color: var(--text-primary); }
+
+/* ==========================================================================
+   STAT TILES
+   ========================================================================== */
+
+.stat {
+  background: var(--bg-elevated);
+  border-radius: 3px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;   /* tiles stretch with the column; keep the
+                                numeral centred rather than top-stuck */
+  gap: 2px;
+  border-left: 2px solid transparent;
+  min-height: 0;
+}
+.stat[data-state="caution"] { border-left-color: var(--caution); }
+.stat[data-state="warning"] { border-left-color: var(--warning); }
+.stat .label { font-size: var(--fs-tick); }
+.stat .readout { font-size: var(--fs-readout); }
+
+/* ==========================================================================
+   BADGES — greyscale by default; colour only when annunciating
+   ========================================================================== */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font-size: var(--fs-tick);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.badge[data-state="ok"]      { color: var(--ok); }
+.badge[data-state="caution"] { color: var(--caution); }
+.badge[data-state="warning"] { color: var(--warning); }
+
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); flex: 0 0 auto; }
+.dot[data-state="ok"]      { background: var(--ok); }
+.dot[data-state="caution"] { background: var(--caution); }
+.dot[data-state="warning"] { background: var(--warning); }
+
+/* ==========================================================================
+   CONTROLS — inactive controls are always greyscale
+   ========================================================================== */
+
+.btn {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 3px 8px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-tick);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+  white-space: nowrap;
+}
+.btn:hover { background: var(--border); color: var(--text-primary); }
+.btn.is-active { background: var(--bg-elevated); color: var(--text-primary); border-color: var(--text-dim); }
+
+/* Fault-strip trigger cards. Two rows of text, never clipped. */
+.btn-fault {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: 3px;
+  padding: 5px 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-height: 40px;
+  text-align: left;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.btn-fault:hover { background: var(--border); }
+.btn-fault .ft-name {
+  font-size: var(--fs-label);
+  color: var(--text-primary);
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.btn-fault .ft-sub {
+  font-size: var(--fs-tick);
+  color: var(--text-dim);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.btn-fault.is-active { background: var(--bg-elevated); }
+.btn-fault.is-active .ft-name { color: var(--text-primary); }
+.btn-fault.is-active[data-state="warning"] { border-left-color: var(--warning); }
+.btn-fault.is-active[data-state="caution"] { border-left-color: var(--caution); }
+.btn-fault.is-active[data-state="none"]    { border-left-color: var(--text-dim); }
+
+/* Sliders — greyscale track and thumb; these are developer controls. */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  border: none;
+}
+input[type="range"]::-webkit-slider-thumb:hover { background: var(--text-primary); }
+input[type="range"]::-moz-range-thumb {
+  width: 10px; height: 10px; border: none; border-radius: 50%;
+  background: var(--text-muted);
+}
+
+/* ==========================================================================
+   HORIZONTAL BAR CHART (SHAP attribution)
+   ========================================================================== */
+
+.hbar-row { display: grid; grid-template-columns: 1fr auto; gap: 3px 8px; align-items: baseline; }
+.hbar-label {
+  font-size: var(--fs-label);
+  color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.hbar-val {
+  font-size: var(--fs-tick);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.hbar-track { grid-column: 1 / -1; display: block; height: 6px; background: var(--bg-elevated); border-radius: 2px; overflow: hidden; }
+.hbar-fill { display: block; height: 100%; background: var(--text-muted); }
+.hbar-fill[data-state="caution"] { background: var(--caution); }
+.hbar-fill[data-state="warning"] { background: var(--warning); }
+
+/* ==========================================================================
+   EVENT LOG
+   ========================================================================== */
+
+.log-line { font-size: var(--fs-tick); color: var(--text-muted); line-height: 1.5; }
+.log-time { color: var(--text-dim); }
+.log-tag  { color: var(--text-muted); }
+.log-tag[data-state="caution"] { color: var(--caution); }
+.log-tag[data-state="warning"] { color: var(--warning); }
+
+/* ==========================================================================
+   STATUS BAR
+   ========================================================================== */
+
+.station-id {
+  font-size: var(--fs-title);
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.08em;
+}
+.tag {
+  font-size: var(--fs-tick);
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border-radius: 3px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+.tape { display: flex; flex-direction: column; gap: 1px; white-space: nowrap; }
+.tape-val {
+  font-size: var(--fs-label);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.slider-val {
+  font-size: var(--fs-label);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  min-width: 62px;
+  text-align: right;
+}
+
+/* ==========================================================================
+   3D VIEWPORT & CYLINDER STRIP
+   Half height. The strip is the numeric companion to the model's colouring.
+   ========================================================================== */
+
+.viewport-3d {
+  width: 100%;
+  height: 210px;
+  flex: 0 0 210px;
+  background: var(--bg-page);
+}
+.cyl-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border-top: 1px solid var(--border);
+}
+.cyl-cell {
+  background: var(--bg-panel);
+  padding: 5px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.cyl-cell:hover { background: var(--bg-elevated); }
+.cyl-cell[data-state="caution"] { border-bottom-color: var(--caution); }
+.cyl-cell[data-state="warning"] { border-bottom-color: var(--warning); }
+.cyl-egt {
+  font-size: var(--fs-title);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.cyl-cell[data-state="caution"] .cyl-egt { color: var(--caution); }
+.cyl-cell[data-state="warning"] .cyl-egt { color: var(--warning); }
+.cyl-dev {
+  font-size: var(--fs-tick);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   DIAGNOSIS PANEL
+   ========================================================================== */
+
+.condition {
+  font-size: var(--fs-title);
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border-radius: 3px;
+  border-left: 3px solid transparent;
+  padding: 6px 9px;
+  margin-top: 3px;
+  letter-spacing: 0.02em;
+}
+.condition[data-state="caution"] { border-left-color: var(--caution); color: var(--caution); }
+.condition[data-state="warning"] { border-left-color: var(--warning); color: var(--warning); }
+
+.kv { display: flex; flex-direction: column; gap: 1px; background: var(--bg-elevated); border-radius: 3px; padding: 5px 8px; }
+.kv-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  padding: 3px 0;
+}
+
+.rul-box {
+  background: var(--bg-elevated);
+  border-radius: 3px;
+  border-left: 3px solid transparent;
+  padding: 7px 9px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.rul-box[data-state="caution"] { border-left-color: var(--caution); }
+.rul-box[data-state="warning"] { border-left-color: var(--warning); }
+/* The superseded estimate, kept visible so the revision itself is evidence. */
+.rul-prev {
+  font-size: var(--fs-tick);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.empty-note {
+  font-size: var(--fs-label);
+  color: var(--text-dim);
+  text-align: center;
+  padding: 16px 0;
+}
+
+/* ==========================================================================
+   AUTO DEMO STATUS
+   ========================================================================== */
+
+.autodemo-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-elevated);
+  border-radius: 3px;
+  padding: 2px 8px;
+  font-size: var(--fs-tick);
+  white-space: nowrap;
+}
+.autodemo-status[hidden] { display: none; }
+
+/* ==========================================================================
+   RECOMMENDED ACTION
+   ========================================================================== */
+
+.action-text {
+  font-size: var(--fs-title);
+  color: var(--text-primary);
+  line-height: 1.45;
+}
+.action-alert {
+  font-size: var(--fs-label);
+  color: var(--text-muted);
+  line-height: 1.45;
+  background: var(--bg-elevated);
+  border-left: 3px solid transparent;
+  border-radius: 3px;
+  padding: 6px 9px;
+}
+.action-alert[data-state="caution"] { border-left-color: var(--caution); }
+.action-alert[data-state="warning"] { border-left-color: var(--warning); }
+.action-alert[hidden] { display: none; }

@@ -10,7 +10,7 @@ import time
 import math
 import threading
 from pathlib import Path
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
 # Ensure project root is in sys.path
@@ -283,6 +283,14 @@ class DigitalTwinHTTPHandler(SimpleHTTPRequestHandler):
                 self.wfile.write(f.read())
             return
 
+        elif parsed.path == "/static/theme.css":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/css")
+            self.end_headers()
+            with open(DASHBOARD_DIR / "theme.css", "rb") as f:
+                self.wfile.write(f.read())
+            return
+
         elif parsed.path == "/static/engine_view3d.js":
             self.send_response(200)
             self.send_header("Content-Type", "application/javascript")
@@ -422,8 +430,13 @@ def run_standalone_server(port: int = 8000):
     sim_thread = threading.Thread(target=simulation_loop, daemon=True)
     sim_thread.start()
 
-    HTTPServer.allow_reuse_address = True
-    server = HTTPServer(("127.0.0.1", port), DigitalTwinHTTPHandler)
+    # Threaded: the /api/stream SSE handler blocks its thread for the life of
+    # the client connection. On a single-threaded server that starves every
+    # other request, so fault injection, sandbox overrides, reset and rate
+    # changes all hang for as long as a dashboard is connected.
+    ThreadingHTTPServer.allow_reuse_address = True
+    ThreadingHTTPServer.daemon_threads = True
+    server = ThreadingHTTPServer(("127.0.0.1", port), DigitalTwinHTTPHandler)
     print(f"ENGINE-TWIN Standalone Server running at http://127.0.0.1:{port}")
     try:
         server.serve_forever()
