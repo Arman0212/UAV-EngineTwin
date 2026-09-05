@@ -4,410 +4,349 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ENGINE-TWIN | DRDO MALE UAV Aero Piston Engine Ground Control Station</title>
-  <!-- TailwindCSS CDN -->
+  <!-- TailwindCSS CDN (layout utilities only — all colour comes from theme.css) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Chart.js & Three.js CDNs -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-  <!-- FontAwesome Icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap');
-    body { font-family: 'Inter', sans-serif; background-color: #0b0f19; color: #cbd5e1; }
-    .mono { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
-    .card-panel { background-color: #111827; border: 1px solid #1e293b; }
-    .card-panel-header { background-color: #0f172a; border-bottom: 1px solid #1e293b; }
-    .btn-fault { background-color: #1e293b; border: 1px solid #334155; transition: all 0.15s ease; }
-    .btn-fault:hover { background-color: #334155; border-color: #64748b; }
-    .btn-fault.active-fault { background-color: #991b1b !important; border-color: #ef4444 !important; color: #ffffff !important; }
-    .btn-fault.active-sensor { background-color: #0369a1 !important; border-color: #38bdf8 !important; color: #ffffff !important; }
-    ::-webkit-scrollbar { width: 5px; height: 5px; }
-    ::-webkit-scrollbar-track { background: #0b0f19; }
-    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
-  </style>
+  <!-- Monospace throughout: certified-display convention -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap">
+  <!-- GLASS COCKPIT THEME: single source of truth for colour and type -->
+  <link rel="stylesheet" href="/static/theme.css">
 </head>
-<body class="h-screen flex flex-col overflow-hidden select-none bg-[#080c14] text-slate-300">
+<body class="h-screen flex flex-col overflow-hidden select-none">
 
-  <!-- 1. TOP FLIGHT AVIONICS STATUS BAR -->
-  <header class="h-13 bg-[#0d1322] border-b border-slate-800 px-4 py-2 flex items-center justify-between flex-shrink-0 z-30">
-    <div class="flex items-center space-x-3">
-      <div class="w-7 h-7 rounded bg-slate-800 border border-slate-700 flex items-center justify-center text-sky-400 font-bold text-sm">
-        <i class="fa-solid fa-plane"></i>
-      </div>
-      <div>
-        <div class="flex items-center space-x-2">
-          <span class="font-black text-sm tracking-wider text-white">ENGINE-TWIN</span>
-          <span class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono border border-slate-700">DRDO SIH26054</span>
-          <span class="text-[11px] px-2 py-0.5 rounded bg-slate-900 text-slate-400 font-mono border border-slate-800">VRDE 2.2L AERO-DIESEL (200 HP)</span>
-        </div>
-      </div>
+  <!-- ====================================================================
+       1. STATUS BAR
+       Identity, mission context tape, station controls. All greyscale
+       except the telemetry-live indicator.
+       ==================================================================== -->
+  <header class="chrome rule-b px-3 py-1.5 flex items-center justify-between flex-shrink-0 z-30">
+    <div class="flex items-center gap-2">
+      <span class="station-id">ENGINE-TWIN</span>
+      <span class="tag">DRDO SIH26054</span>
+      <span class="tag">VRDE 2.2L Aero-Diesel · 200 HP</span>
     </div>
 
-    <!-- MISSION CONTEXT TELEMETRY TAPE -->
-    <div class="flex items-center space-x-6 text-xs mono">
-      <div class="flex flex-col"><span class="text-slate-500 text-[9px] uppercase tracking-wider">MISSION TIME</span><span id="txt-time" class="font-bold text-slate-200">00:00:00</span></div>
-      <div class="flex flex-col"><span class="text-slate-500 text-[9px] uppercase tracking-wider">FLIGHT PHASE</span><span id="txt-phase" class="font-bold text-emerald-400">CRUISE / LOITER</span></div>
-      <div class="flex flex-col"><span class="text-slate-500 text-[9px] uppercase tracking-wider">ALTITUDE</span><span id="txt-alt" class="font-bold text-sky-300">28,500 FT</span></div>
-      <div class="flex flex-col"><span class="text-slate-500 text-[9px] uppercase tracking-wider">AIRSPEED (TAS)</span><span id="txt-tas" class="font-bold text-slate-200">55.0 M/S</span></div>
-      <div class="flex flex-col"><span class="text-slate-500 text-[9px] uppercase tracking-wider">OAT (ISA)</span><span id="txt-oat" class="font-bold text-slate-300">-42.5 °C</span></div>
-      <div class="flex flex-col"><span class="text-slate-500 text-[9px] uppercase tracking-wider">THROTTLE</span><span id="txt-throttle" class="font-bold text-amber-400">72.0 %</span></div>
+    <!-- Mission context tape -->
+    <div class="flex items-center gap-5">
+      <div class="tape"><span class="label-sm">Mission time</span><span id="txt-time" class="tape-val">00:00:00</span></div>
+      <div class="tape"><span class="label-sm">Flight phase</span><span id="txt-phase" class="tape-val">CRUISE / LOITER</span></div>
+      <div class="tape"><span class="label-sm">Altitude</span><span id="txt-alt" class="tape-val">28,500 FT</span></div>
+      <div class="tape"><span class="label-sm">Airspeed TAS</span><span id="txt-tas" class="tape-val">55.0 M/S</span></div>
+      <div class="tape"><span class="label-sm">OAT (ISA)</span><span id="txt-oat" class="tape-val">-42.5 °C</span></div>
+      <div class="tape"><span class="label-sm">Throttle</span><span id="txt-throttle" class="tape-val">72.0 %</span></div>
     </div>
 
-    <!-- CONNECTION & AUDIO CONTROLS -->
-    <div class="flex items-center space-x-2">
-      <button id="btn-audio" onclick="toggleAudio()" class="px-2.5 py-1 text-xs bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded text-slate-400 transition flex items-center space-x-1.5" title="Toggle Cockpit Audio Alerts">
-        <i id="icon-audio" class="fa-solid fa-volume-xmark"></i>
-        <span id="lbl-audio" class="mono text-[10px]">MUTED</span>
+    <!-- Station controls -->
+    <div class="flex items-center gap-1.5">
+      <button id="btn-sandbox-open" onclick="toggleSandbox()" class="btn" title="Developer flight sandbox controls">Sandbox ▾</button>
+      <button id="btn-audio" onclick="toggleAudio()" class="btn" title="Toggle aural alerts">
+        <span id="lbl-audio">Audio: muted</span>
       </button>
-
-      <div id="badge-connection" class="flex items-center space-x-1.5 px-2.5 py-1 rounded bg-emerald-950/80 border border-emerald-800 text-emerald-400 text-xs mono">
-        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-        <span id="lbl-connection">TELEMETRY LIVE (20 Hz)</span>
+      <div id="badge-connection" class="badge" data-state="ok">
+        <span class="dot" data-state="ok"></span>
+        <span id="lbl-connection">Telemetry live · 20 Hz</span>
       </div>
-
-      <button onclick="resetSimulation()" class="px-2.5 py-1 text-xs bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded text-slate-300 transition flex items-center space-x-1" title="Reset Simulation to Initial State">
-        <i class="fa-solid fa-rotate-right text-[10px]"></i>
-        <span>Reset</span>
-      </button>
+      <button onclick="resetSimulation()" class="btn" title="Reset simulation to initial state">Reset</button>
     </div>
   </header>
 
-  <!-- FLIGHT SANDBOX & ENVIRONMENTAL CONTROLS TOOLBAR -->
-  <div class="bg-[#0c1222] border-b border-slate-800/80 px-3 py-1 flex items-center justify-between text-xs mono text-slate-300 flex-shrink-0 z-20">
-    <div class="flex items-center space-x-4">
-      <span class="text-sky-400 font-bold flex items-center space-x-1 text-[11px]">
-        <i class="fa-solid fa-plane-up"></i>
-        <span>FLIGHT SANDBOX:</span>
-      </span>
-      <div class="flex items-center space-x-1.5">
-        <label class="text-[10px] text-slate-400">THROTTLE:</label>
-        <input type="range" id="slider-throttle" min="0" max="100" value="72" class="w-16 accent-amber-500 cursor-pointer h-1 bg-slate-800 rounded" oninput="onFlightControlChange()">
-        <span id="txt-slider-throttle" class="text-[10px] text-amber-400 font-bold w-8">72%</span>
+  <!-- ====================================================================
+       FLIGHT SANDBOX — collapsible developer controls, closed by default.
+       These drive the simulation, not the aircraft, so they stay out of
+       the operator's primary field of view.
+       ==================================================================== -->
+  <div id="panel-sandbox" class="chrome rule-b px-3 py-2 flex-shrink-0 z-20" hidden>
+    <div class="flex items-center justify-between gap-6">
+      <div class="flex items-center gap-6">
+        <span class="label">Flight sandbox <span class="text-dim">(developer)</span></span>
+
+        <div class="flex items-center gap-2">
+          <label class="label-sm" for="slider-throttle">Throttle</label>
+          <input type="range" id="slider-throttle" min="0" max="100" value="72" class="w-24" oninput="onFlightControlChange()">
+          <span id="txt-slider-throttle" class="slider-val">72 %</span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <label class="label-sm" for="slider-altitude">Altitude</label>
+          <input type="range" id="slider-altitude" min="0" max="35000" step="500" value="28500" class="w-28" oninput="onFlightControlChange()">
+          <span id="txt-slider-altitude" class="slider-val">28.5k FT</span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <label class="label-sm" for="slider-oat">OAT</label>
+          <input type="range" id="slider-oat" min="-50" max="45" step="1" value="-20" class="w-24" oninput="onFlightControlChange()">
+          <span id="txt-slider-oat" class="slider-val">-20 °C</span>
+        </div>
       </div>
-      <div class="flex items-center space-x-1.5">
-        <label class="text-[10px] text-slate-400">ALTITUDE:</label>
-        <input type="range" id="slider-altitude" min="0" max="35000" step="500" value="28500" class="w-20 accent-sky-500 cursor-pointer h-1 bg-slate-800 rounded" oninput="onFlightControlChange()">
-        <span id="txt-slider-altitude" class="text-[10px] text-sky-300 font-bold w-12">28.5k FT</span>
+
+      <div class="flex items-center gap-2">
+        <button id="btn-sandbox-toggle" onclick="toggleManualSandbox()" class="btn">Mode: auto mission</button>
+        <button onclick="toggleSandbox()" class="btn" title="Collapse sandbox">Close ▴</button>
       </div>
-      <div class="flex items-center space-x-1.5">
-        <label class="text-[10px] text-slate-400">OAT:</label>
-        <input type="range" id="slider-oat" min="-50" max="45" step="1" value="-20" class="w-16 accent-emerald-500 cursor-pointer h-1 bg-slate-800 rounded" oninput="onFlightControlChange()">
-        <span id="txt-slider-oat" class="text-[10px] text-emerald-400 font-bold w-10">-20°C</span>
-      </div>
-    </div>
-    <div class="flex items-center space-x-2">
-      <button id="btn-sandbox-toggle" onclick="toggleManualSandbox()" class="px-2 py-0.5 rounded text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">
-        [Mode: AUTO MISSION]
-      </button>
     </div>
   </div>
 
-  <!-- 2. MAIN OPERATOR WORKSPACE (3-COLUMN LAYOUT) -->
-  <main class="flex-1 grid grid-cols-12 gap-2.5 p-2.5 overflow-hidden">
+  <!-- ====================================================================
+       2. OPERATOR WORKSPACE
+       ==================================================================== -->
+  <main class="flex-1 grid grid-cols-12 gap-2 p-2 overflow-hidden">
 
-    <!-- LEFT COLUMN: 3D DIGITAL TWIN & SUBSYSTEM MATRIX (4 Cols) -->
-    <section class="col-span-4 flex flex-col space-y-2.5">
-      <!-- 3D Engine Viewport -->
-      <div class="card-panel rounded-lg flex-1 relative flex flex-col overflow-hidden">
-        <div class="card-panel-header px-3 py-1.5 flex items-center justify-between z-10">
-          <div class="flex items-center space-x-2 text-xs font-semibold text-slate-300">
-            <i class="fa-solid fa-cube text-sky-400 text-[11px]"></i>
-            <span>3D DIGITAL TWIN ENGINE MODEL</span>
-          </div>
-          <!-- Camera Presets -->
-          <div class="flex items-center space-x-1 text-[10px] mono">
-            <button onclick="setCameraPreset('orbit')" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">Orbit</button>
-            <button onclick="setCameraPreset('cylinders')" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">Cyls</button>
-            <button onclick="setCameraPreset('turbo')" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">Turbo</button>
-            <button onclick="setCameraPreset('sump')" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">Sump</button>
+    <!-- ---------------- LEFT: ENGINE MODEL + HEALTH ---------------- -->
+    <section class="col-span-4 flex flex-col gap-2 min-h-0">
+
+      <!-- 3D digital twin — half height, and load-bearing: cylinders are
+           coloured by thermal deviation, faulted components are marked. -->
+      <div id="panel-3d" class="panel flex-shrink-0">
+        <div class="panel-head">
+          <span class="panel-title">Engine model</span>
+          <span class="panel-note">Δ EGT / CHT vs expected</span>
+          <div class="flex items-center gap-1">
+            <button onclick="setCameraPreset('orbit')" class="btn">Orbit</button>
+            <button onclick="setCameraPreset('cylinders')" class="btn">Cyls</button>
+            <button onclick="setCameraPreset('turbo')" class="btn">Turbo</button>
+            <button onclick="setCameraPreset('sump')" class="btn">Sump</button>
           </div>
         </div>
+        <div id="container-3d" class="viewport-3d cursor-grab active:cursor-grabbing"></div>
 
-        <!-- 3D WebGL Canvas Container -->
-        <div id="container-3d" class="w-full h-full flex-1 cursor-grab active:cursor-grabbing bg-[#090d16]"></div>
-
-        <!-- Cylinder Thermal Readout Bar -->
-        <div class="card-panel-header px-3 py-1.5 flex justify-between text-[11px] mono border-t border-slate-800">
-          <span class="cursor-pointer hover:text-sky-300" onclick="focusCylinder(0)">CYL 1: <b id="txt-cyl1-stat" class="text-emerald-400">100%</b> (<span id="txt-cyl1-temp" class="text-slate-400">810°C</span>)</span>
-          <span class="cursor-pointer hover:text-sky-300" onclick="focusCylinder(1)">CYL 2: <b id="txt-cyl2-stat" class="text-emerald-400">100%</b> (<span id="txt-cyl2-temp" class="text-slate-400">810°C</span>)</span>
-          <span class="cursor-pointer hover:text-sky-300" onclick="focusCylinder(2)">CYL 3: <b id="txt-cyl3-stat" class="text-emerald-400">100%</b> (<span id="txt-cyl3-temp" class="text-slate-400">810°C</span>)</span>
-          <span class="cursor-pointer hover:text-sky-300" onclick="focusCylinder(3)">CYL 4: <b id="txt-cyl4-stat" class="text-emerald-400">100%</b> (<span id="txt-cyl4-temp" class="text-slate-400">810°C</span>)</span>
+        <!-- Per-cylinder thermal deviation strip -->
+        <div class="cyl-strip">
+          <div id="cyl-cell-0" class="cyl-cell" onclick="focusCylinder(0)" title="Focus cylinder 1">
+            <span class="label-sm">Cyl 1</span>
+            <span class="cyl-egt"><span id="txt-cyl1-temp">810</span><span class="unit"> °C</span></span>
+            <span id="txt-cyl1-dev" class="cyl-dev">Δ +0 / +0</span>
+          </div>
+          <div id="cyl-cell-1" class="cyl-cell" onclick="focusCylinder(1)" title="Focus cylinder 2">
+            <span class="label-sm">Cyl 2</span>
+            <span class="cyl-egt"><span id="txt-cyl2-temp">810</span><span class="unit"> °C</span></span>
+            <span id="txt-cyl2-dev" class="cyl-dev">Δ +0 / +0</span>
+          </div>
+          <div id="cyl-cell-2" class="cyl-cell" onclick="focusCylinder(2)" title="Focus cylinder 3">
+            <span class="label-sm">Cyl 3</span>
+            <span class="cyl-egt"><span id="txt-cyl3-temp">810</span><span class="unit"> °C</span></span>
+            <span id="txt-cyl3-dev" class="cyl-dev">Δ +0 / +0</span>
+          </div>
+          <div id="cyl-cell-3" class="cyl-cell" onclick="focusCylinder(3)" title="Focus cylinder 4">
+            <span class="label-sm">Cyl 4</span>
+            <span class="cyl-egt"><span id="txt-cyl4-temp">810</span><span class="unit"> °C</span></span>
+            <span id="txt-cyl4-dev" class="cyl-dev">Δ +0 / +0</span>
+          </div>
         </div>
       </div>
 
-      <!-- Subsystem Health Matrix -->
-      <div class="card-panel rounded-lg p-2.5 flex flex-col space-y-1.5">
-        <div class="flex items-center justify-between pb-1 border-b border-slate-800">
-          <span class="text-xs font-bold text-slate-300 tracking-wider flex items-center space-x-1.5">
-            <i class="fa-solid fa-gauge-high text-sky-400 text-xs"></i>
-            <span>SUBSYSTEM HEALTH STATUS</span>
-          </span>
-          <span id="badge-status-level" class="text-[10px] px-2 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-emerald-400 font-bold mono">NOMINAL</span>
+      <!-- Subsystem health -->
+      <div id="panel-health" class="panel flex-shrink-0">
+        <div class="panel-head">
+          <span class="panel-title">Subsystem health</span>
+          <span id="badge-status-level" class="badge" data-state="ok">Nominal</span>
         </div>
+        <div class="panel-body grid grid-cols-3 gap-1.5">
+          <div id="stat-overall" class="stat">
+            <span class="label">Overall</span>
+            <span class="readout"><span id="val-health-overall">100.0</span><span class="unit"> %</span></span>
+          </div>
+          <div id="stat-oil" class="stat">
+            <span class="label">Oil system</span>
+            <span class="readout"><span id="val-health-oil">100.0</span><span class="unit"> %</span></span>
+          </div>
+          <div id="stat-turbo" class="stat">
+            <span class="label">Turbo / boost</span>
+            <span class="readout"><span id="val-health-turbo">100.0</span><span class="unit"> %</span></span>
+          </div>
+          <div id="stat-cyls" class="stat">
+            <span class="label">Combustion</span>
+            <span class="readout"><span id="val-health-cyls">100.0</span><span class="unit"> %</span></span>
+          </div>
+          <div id="stat-vib" class="stat">
+            <span class="label">Vibration 2X</span>
+            <span class="readout"><span id="val-health-vib">100.0</span><span class="unit"> %</span></span>
+          </div>
+          <div id="stat-elec" class="stat">
+            <span class="label">Avionics bus</span>
+            <span class="readout"><span id="val-health-elec">100.0</span><span class="unit"> %</span></span>
+          </div>
+        </div>
+      </div>
 
-        <div class="grid grid-cols-3 gap-1.5 text-xs mono pt-0.5">
-          <div class="bg-slate-900/90 p-1.5 rounded border border-slate-800 flex flex-col">
-            <span class="text-slate-400 text-[9px]">OVERALL HEALTH</span>
-            <span id="val-health-overall" class="text-base font-bold text-emerald-400 mt-0.5">100.0 %</span>
-          </div>
-          <div class="bg-slate-900/90 p-1.5 rounded border border-slate-800 flex flex-col">
-            <span class="text-slate-400 text-[9px]">OIL SYSTEM</span>
-            <span id="val-health-oil" class="text-base font-bold text-emerald-400 mt-0.5">100.0 %</span>
-          </div>
-          <div class="bg-slate-900/90 p-1.5 rounded border border-slate-800 flex flex-col">
-            <span class="text-slate-400 text-[9px]">TURBO / BOOST</span>
-            <span id="val-health-turbo" class="text-base font-bold text-emerald-400 mt-0.5">100.0 %</span>
-          </div>
-          <div class="bg-slate-900/90 p-1.5 rounded border border-slate-800 flex flex-col">
-            <span class="text-slate-400 text-[9px]">COMBUSTION</span>
-            <span id="val-health-cyls" class="text-base font-bold text-emerald-400 mt-0.5">100.0 %</span>
-          </div>
-          <div class="bg-slate-900/90 p-1.5 rounded border border-slate-800 flex flex-col">
-            <span class="text-slate-400 text-[9px]">VIBRATION (2X)</span>
-            <span id="val-health-vib" class="text-base font-bold text-emerald-400 mt-0.5">100.0 %</span>
-          </div>
-          <div class="bg-slate-900/90 p-1.5 rounded border border-slate-800 flex flex-col">
-            <span class="text-slate-400 text-[9px]">AVIONICS BUS</span>
-            <span id="val-health-elec" class="text-base font-bold text-emerald-400 mt-0.5">100.0 %</span>
-          </div>
+      <!-- Recommended action — the twin computes this; it belongs on screen -->
+      <div id="panel-action" class="panel flex-1 min-h-0">
+        <div class="panel-head">
+          <span class="panel-title">Recommended action</span>
+          <span id="badge-action-regime" class="panel-note">Stable</span>
+        </div>
+        <div class="panel-body flex flex-col gap-2">
+          <div id="txt-recommended-action" class="action-text">Continue nominal mission profile.</div>
+          <div id="txt-active-alert" class="action-alert" hidden></div>
         </div>
       </div>
     </section>
 
-    <!-- CENTER COLUMN: REAL-TIME TELEMETRY CHARTS (5 Cols) -->
-    <section class="col-span-5 flex flex-col space-y-2.5">
-      <!-- Chart 1: Exhaust Gas Temperature (EGT 1-4) & CHT -->
-      <div class="card-panel rounded-lg p-2.5 flex-1 flex flex-col">
-        <div class="flex items-center justify-between mb-1 pb-1 border-b border-slate-800/80">
-          <div class="flex items-center space-x-2">
-            <span class="w-2 h-2 rounded-full bg-orange-400"></span>
-            <span class="text-xs font-bold text-slate-200">EXHAUST & HEAD TEMPERATURES (EGT 1–4 & CHT)</span>
-          </div>
-          <div id="badge-chart1-alert" class="text-[10px] mono text-slate-400">Solid = Sensor | Dashed = MVEM Expected</div>
+    <!-- ---------------- CENTER: TELEMETRY ---------------- -->
+    <section class="col-span-5 flex flex-col gap-2 min-h-0">
+
+      <div id="panel-chart-temp" class="panel flex-1 min-h-0">
+        <div class="panel-head">
+          <span class="panel-title">Exhaust &amp; head temperature</span>
+          <span class="panel-note">Solid = sensor · Dashed = model expected</span>
         </div>
-        <div class="flex-1 relative min-h-[110px]">
+        <div class="panel-body relative min-h-0">
           <canvas id="chart-temp"></canvas>
         </div>
       </div>
 
-      <!-- Chart 2: Lubrication Oil Pressure & Turbo Boost MAP -->
-      <div class="card-panel rounded-lg p-2.5 flex-1 flex flex-col">
-        <div class="flex items-center justify-between mb-1 pb-1 border-b border-slate-800/80">
-          <div class="flex items-center space-x-2">
-            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-            <span class="text-xs font-bold text-slate-200">OIL PRESSURE (bar) & MANIFOLD BOOST MAP (bar)</span>
-          </div>
-          <div class="text-[10px] mono text-slate-400">Residual Normalization: ±3σ Bounds</div>
+      <div id="panel-chart-press" class="panel flex-1 min-h-0">
+        <div class="panel-head">
+          <span class="panel-title">Oil pressure &amp; manifold boost</span>
+          <span class="panel-note">Residual normalisation ±3σ</span>
         </div>
-        <div class="flex-1 relative min-h-[110px]">
+        <div class="panel-body relative min-h-0">
           <canvas id="chart-pressures"></canvas>
         </div>
       </div>
 
-      <!-- Chart 3: Vibration Spectrum (RMS) & Power (HP) -->
-      <div class="card-panel rounded-lg p-2.5 h-40 flex flex-col">
-        <div class="flex items-center justify-between mb-1 pb-1 border-b border-slate-800/80">
-          <div class="flex items-center space-x-2">
-            <span class="w-2 h-2 rounded-full bg-purple-400"></span>
-            <span class="text-xs font-bold text-slate-200">ORDER-TRACKED VIBRATION (RMS g) & POWER (HP)</span>
-          </div>
-          <span id="txt-power-hp" class="text-[11px] mono text-purple-300 font-bold">POWER: 150.0 HP</span>
+      <div id="panel-chart-vib" class="panel flex-shrink-0" style="height: 168px;">
+        <div class="panel-head">
+          <span class="panel-title">Order-tracked vibration &amp; power</span>
+          <span id="txt-power-hp" class="panel-note">Power 150.0 HP</span>
         </div>
-        <div class="flex-1 relative min-h-[90px]">
+        <div class="panel-body relative min-h-0">
           <canvas id="chart-vibration"></canvas>
         </div>
       </div>
     </section>
 
-    <!-- RIGHT COLUMN: AI PROGNOSTICS, SHAP XAI & EVENT LOG (3 Cols) -->
-    <section class="col-span-3 flex flex-col space-y-2.5">
+    <!-- ---------------- RIGHT: DIAGNOSIS & PROGNOSIS ---------------- -->
+    <section class="col-span-3 flex flex-col gap-2 min-h-0">
 
-      <!-- AI Diagnosis & RUL Forecast Card -->
-      <div class="card-panel rounded-lg p-3 flex flex-col space-y-2.5 border-l-4 border-l-sky-500">
-        <div class="flex items-center justify-between pb-1 border-b border-slate-800">
-          <span class="text-xs font-bold text-slate-300 tracking-wider flex items-center space-x-1.5">
-            <i class="fa-solid fa-brain text-sky-400 text-xs"></i>
-            <span>AI DIAGNOSTIC INFERENCE</span>
-          </span>
-          <span id="badge-anomaly" class="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 mono font-bold">NOMINAL</span>
+      <!-- AI diagnosis + RUL -->
+      <div id="panel-ai" class="panel flex-shrink-0">
+        <div class="panel-head">
+          <span class="panel-title">Diagnosis</span>
+          <span id="badge-anomaly" class="badge">Nominal</span>
         </div>
+        <div class="panel-body flex flex-col gap-2">
+          <div>
+            <div class="label">Diagnosed condition</div>
+            <div id="lbl-fault-class" class="condition">HEALTHY</div>
+          </div>
 
-        <div class="space-y-1">
-          <div class="text-[10px] text-slate-400 uppercase tracking-wider">DIAGNOSED CONDITION:</div>
-          <div id="lbl-fault-class" class="text-xs font-bold text-slate-100 mono bg-slate-900/90 px-2.5 py-1.5 rounded border border-slate-800">
-            HEALTHY (NOMINAL)
+          <div class="grid grid-cols-2 gap-1.5">
+            <div class="kv"><span class="label-sm">Confidence</span><span class="readout-sm"><span id="val-conf">99.8</span><span class="unit"> %</span></span></div>
+            <div class="kv"><span class="label-sm">Severity</span><span class="readout-sm"><span id="val-sev">0.00</span></span></div>
           </div>
-          <div class="flex justify-between text-xs mono text-slate-400 pt-0.5">
-            <span>Confidence: <b id="val-conf" class="text-emerald-400">99.8%</b></span>
-            <span>Severity: <b id="val-sev" class="text-slate-300">0.00</b></span>
+
+          <div class="kv-row">
+            <span class="label-sm">Anomaly index</span>
+            <span class="readout-sm"><span id="val-anom-idx">0.04</span><span class="unit"> / 1.00</span></span>
           </div>
-          <div class="bg-slate-900/90 p-2 rounded border border-slate-800 space-y-1 text-xs mono">
-            <div class="flex justify-between items-center">
-              <span class="text-slate-400 text-[11px]">Anomaly Index:</span>
-              <span id="val-anom-idx" class="font-bold text-sky-400">0.04 / 1.00</span>
+          <div class="kv-row">
+            <span class="label-sm">Reconstruction error</span>
+            <span id="val-raw-mse" class="text-dim">MSE 2.1 · limit 26.6</span>
+          </div>
+
+          <!-- RUL: revised estimate over its superseded range -->
+          <div id="box-rul" class="rul-box">
+            <div class="flex items-center justify-between">
+              <span class="label-sm">RUL forecast · 95% CI</span>
+              <span id="badge-rul-unc" class="badge">Uncertainty: low</span>
             </div>
-            <div class="flex justify-between items-center text-[10px] text-slate-500">
-              <span>Reconstruction Error:</span>
-              <span id="val-raw-mse">MSE: 2.1 (Thresh: 26.6)</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Bounded RUL Forecast Window -->
-        <div class="bg-slate-900/90 p-2 rounded border border-slate-800 space-y-0.5">
-          <div class="flex justify-between items-center text-[10px]">
-            <span class="text-slate-400 font-medium">RUL FORECAST (95% CI)</span>
-            <span id="badge-rul-unc" class="text-[9px] text-sky-400 mono bg-sky-950 px-1 py-0.5 rounded border border-sky-800">UNCERTAINTY: LOW</span>
-          </div>
-          <div id="txt-rul-interval" class="text-sm font-bold text-sky-300 mono">
-            450.0 – 550.0 Flight Hrs
+            <div class="readout"><span id="txt-rul-interval">450.0 – 550.0</span><span class="unit"> h</span></div>
+            <div id="txt-rul-previous" class="rul-prev" hidden></div>
           </div>
         </div>
       </div>
 
-      <!-- SHAP Explainability & Root-Cause Attribution Drawer -->
-      <div class="card-panel rounded-lg p-2.5 flex-1 flex flex-col space-y-1.5 overflow-hidden">
-        <div class="flex items-center justify-between pb-1 border-b border-slate-800">
-          <span class="text-xs font-bold text-slate-300 tracking-wider flex items-center space-x-1.5">
-            <i class="fa-solid fa-chart-column text-purple-400 text-xs"></i>
-            <span>SHAP ROOT-CAUSE EVIDENCE</span>
-          </span>
-          <span class="text-[9px] text-slate-400 mono">Feature Attribution</span>
+      <!-- SHAP attribution — ranked horizontal bars, top five -->
+      <div id="panel-shap" class="panel flex-1 min-h-0">
+        <div class="panel-head">
+          <span class="panel-title">Root-cause attribution</span>
+          <span class="panel-note">Top 5 · SHAP</span>
         </div>
-        <div id="container-shap" class="flex-1 space-y-1.5 overflow-y-auto pr-1 text-xs mono">
-          <div class="text-slate-500 text-center py-4 text-xs">All channels within normal physical bounds.</div>
+        <div id="container-shap" class="panel-body overflow-y-auto flex flex-col gap-2">
+          <div class="empty-note">All channels within tolerance.</div>
         </div>
       </div>
 
-      <!-- Real-Time Flight Avionics Event Log -->
-      <div class="card-panel rounded-lg p-2 h-32 flex flex-col space-y-1 overflow-hidden border-t-2 border-t-slate-700">
-        <div class="flex items-center justify-between text-[10px] text-slate-400 mono pb-0.5 border-b border-slate-800">
-          <span>EVENT TIMELINE LOG</span>
-          <span id="txt-log-count">0 events</span>
+      <!-- Event log -->
+      <div id="panel-log" class="panel flex-shrink-0" style="height: 128px;">
+        <div class="panel-head">
+          <span class="panel-title">Event log</span>
+          <span id="txt-log-count" class="panel-note">0 events</span>
         </div>
-        <div id="container-logs" class="flex-1 overflow-y-auto text-[10px] mono space-y-1 text-slate-400 pr-1">
-          <div><span class="text-slate-500">[00:00:01]</span> <span class="text-emerald-400">[SYS]</span> Telemetry synchronized at 20 Hz.</div>
-        </div>
+        <div id="container-logs" class="panel-body overflow-y-auto"></div>
       </div>
-
     </section>
-
   </main>
 
-  <!-- 3. BOTTOM ENGINEERING FAULT INJECTOR & STAGE DEMO PANEL -->
-  <footer class="bg-[#0a0f1d] border-t border-slate-800 px-3 py-2 flex flex-col space-y-1.5 flex-shrink-0 z-30">
+  <!-- ====================================================================
+       3. FAULT INJECTION — two rows so no label clips
+       ==================================================================== -->
+  <footer class="chrome rule-t px-3 py-2 flex flex-col gap-2 flex-shrink-0 z-30">
     <div class="flex items-center justify-between">
-      <div class="flex items-center space-x-2">
-        <span class="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-1">
-          <i class="fa-solid fa-sliders text-sky-400"></i>
-          <span>FAULT INJECTION CONTROL PANEL</span>
-        </span>
-        <span id="txt-active-status" class="text-[10px] mono text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800">STATUS: HEALTHY BASELINE</span>
+      <div class="flex items-center gap-2">
+        <span class="label">Fault injection</span>
+        <span id="txt-active-status" class="badge">Status: healthy baseline</span>
       </div>
 
-      <!-- Auto Stage Demo Status Bar -->
-      <div id="box-autodemo-status" class="hidden items-center space-x-2 text-xs mono bg-slate-900 px-2.5 py-0.5 rounded border border-sky-800">
-        <span class="w-2 h-2 rounded-full bg-sky-400 animate-ping"></span>
-        <span id="txt-autodemo-phase" class="text-sky-300 text-[11px]">Auto Demo: Phase 1/4 (08s)</span>
-        <button onclick="stopAutoDemo()" class="text-red-400 hover:text-red-300 text-[10px] ml-2 font-bold">[STOP]</button>
-      </div>
+      <div class="flex items-center gap-3">
+        <!-- Auto demo -->
+        <div id="box-autodemo-status" class="autodemo-status" hidden>
+          <span class="dot" data-state="caution"></span>
+          <span id="txt-autodemo-phase" class="text-muted">Auto demo</span>
+          <button onclick="stopAutoDemo()" class="btn">Stop</button>
+        </div>
+        <button onclick="toggleAutoDemo()" id="btn-autodemo" class="btn" title="Run the scripted demonstration arc">▶ Auto demo</button>
 
-      <!-- Sim Speed Controls -->
-      <div class="flex items-center space-x-1 text-[11px] mono text-slate-400">
-        <span>RATE:</span>
-        <button onclick="setSimSpeed(1.0)" id="btn-spd-1" class="px-2 py-0.5 bg-sky-950 border border-sky-700 text-sky-300 rounded font-bold">1x</button>
-        <button onclick="setSimSpeed(2.0)" id="btn-spd-2" class="px-2 py-0.5 bg-slate-800 border border-slate-700 text-slate-300 rounded">2x</button>
-        <button onclick="setSimSpeed(5.0)" id="btn-spd-5" class="px-2 py-0.5 bg-slate-800 border border-slate-700 text-slate-300 rounded">5x</button>
+        <div class="flex items-center gap-1">
+          <span class="label-sm">Rate</span>
+          <button onclick="setSimSpeed(1.0)" id="btn-spd-1" class="btn is-active">1x</button>
+          <button onclick="setSimSpeed(2.0)" id="btn-spd-2" class="btn">2x</button>
+          <button onclick="setSimSpeed(5.0)" id="btn-spd-5" class="btn">5x</button>
+        </div>
       </div>
     </div>
 
-    <!-- Fault Trigger Cards Grid -->
-    <div class="grid grid-cols-9 gap-1.5">
-      <!-- 0. Healthy Reset -->
-      <button onclick="injectFault('HEALTHY')" id="btn-flt-HEALTHY" class="btn-fault rounded p-1.5 flex flex-col justify-between text-left h-14 bg-emerald-950 border-emerald-700 text-emerald-300">
-        <div class="flex justify-between items-center w-full">
-          <span class="text-[10px] font-bold">HEALTHY</span>
-          <i class="fa-solid fa-check text-[10px]"></i>
-        </div>
-        <span class="text-[9px] text-emerald-400 mono">[ RESET ALL ]</span>
+    <div class="grid grid-cols-4 gap-1.5">
+      <button onclick="injectFault('HEALTHY')" id="btn-flt-HEALTHY" class="btn-fault">
+        <span class="ft-name">Healthy baseline</span>
+        <span class="ft-sub">Clear all injected faults</span>
       </button>
-
-      <!-- 1. Oil Pressure Loss -->
-      <button onclick="injectFault('OIL_PRESSURE_LOSS')" id="btn-flt-OIL_PRESSURE_LOSS" class="btn-fault rounded p-1.5 flex flex-col justify-between text-left h-14">
-        <div class="flex justify-between items-center w-full">
-          <span class="text-[10px] font-bold text-slate-200">OIL LOSS</span>
-          <span class="text-[8px] px-1 bg-red-950 text-red-400 rounded border border-red-900">CRIT</span>
-        </div>
-        <span class="text-[8px] text-slate-400 mono">P_oil &darr; 1.1 bar</span>
+      <button onclick="injectFault('OIL_PRESSURE_LOSS')" id="btn-flt-OIL_PRESSURE_LOSS" class="btn-fault">
+        <span class="ft-name">Oil pressure loss</span>
+        <span class="ft-sub">P_oil ↓ 1.1 bar · limit exceedance</span>
       </button>
-
-      <!-- 2. Sensor Probe Defect (EGT3) -->
-      <button onclick="injectFault('SENSOR_FAULT_EGT3')" id="btn-flt-SENSOR_FAULT_EGT3" class="btn-fault rounded p-1.5 flex flex-col justify-between text-left h-14">
-        <div class="flex justify-between items-center w-full">
-          <span class="text-[10px] font-bold text-slate-200">PROBE EGT3</span>
-          <span class="text-[8px] px-1 bg-sky-950 text-sky-400 rounded border border-sky-900">PROBE</span>
-        </div>
-        <span class="text-[8px] text-slate-400 mono">Sensor &ne; Engine</span>
+      <button onclick="injectFault('SENSOR_FAULT_EGT3')" id="btn-flt-SENSOR_FAULT_EGT3" class="btn-fault">
+        <span class="ft-name">Probe defect EGT3</span>
+        <span class="ft-sub">Sensor ≠ engine · no abort</span>
       </button>
-
-      <!-- 3. Bearing 2X Vib -->
-      <button onclick="injectFault('BEARING_WEAR_VIBRATION')" id="btn-flt-BEARING_WEAR_VIBRATION" class="btn-fault rounded p-1.5 flex flex-col justify-between text-left h-14">
-        <div class="flex justify-between items-center w-full">
-          <span class="text-[10px] font-bold text-slate-200">BEARING 2X</span>
-          <span class="text-[8px] px-1 bg-purple-950 text-purple-400 rounded border border-purple-900">MECH</span>
-        </div>
-        <span class="text-[8px] text-slate-400 mono">Vib &uarr; 3.8g (2X)</span>
+      <button onclick="injectFault('BEARING_WEAR_VIBRATION')" id="btn-flt-BEARING_WEAR_VIBRATION" class="btn-fault">
+        <span class="ft-name">Bearing wear 2X</span>
+        <span class="ft-sub">Vibration ↑ 3.8 g at 2X order</span>
       </button>
-
-      <!-- 4. Turbo Boost Loss -->
-      <button onclick="injectFault('TURBO_BOOST_DEFICIENCY')" id="btn-flt-TURBO_BOOST_DEFICIENCY" class="btn-fault rounded p-1.5 flex flex-col justify-between text-left h-14">
-        <div class="flex justify-between items-center w-full">
-          <span class="text-[10px] font-bold text-slate-200">TURBO BOOST</span>
-          <span class="text-[8px] px-1 bg-amber-950 text-amber-400 rounded border border-amber-900">BOOST</span>
-        </div>
-        <span class="text-[8px] text-slate-400 mono">MAP &darr; 1.45 bar</span>
+      <button onclick="injectFault('TURBO_BOOST_DEFICIENCY')" id="btn-flt-TURBO_BOOST_DEFICIENCY" class="btn-fault">
+        <span class="ft-name">Turbo boost loss</span>
+        <span class="ft-sub">MAP ↓ 1.45 bar</span>
       </button>
-
-      <!-- 5. Lean Mixture Cyl 3 -->
-      <button onclick="injectFault('LEAN_MIXTURE_CYL3')" id="btn-flt-LEAN_MIXTURE_CYL3" class="btn-fault rounded p-1.5 flex flex-col justify-between text-left h-14">
-        <div class="flex justify-between items-center w-full">
-          <span class="text-[10px] font-bold text-slate-200">LEAN MIX C3</span>
-          <span class="text-[8px] px-1 bg-orange-950 text-orange-400 rounded border border-orange-900">AFR</span>
-        </div>
-        <span class="text-[8px] text-slate-400 mono">EGT3 &uarr; 940°C</span>
+      <button onclick="injectFault('LEAN_MIXTURE_CYL3')" id="btn-flt-LEAN_MIXTURE_CYL3" class="btn-fault">
+        <span class="ft-name">Lean mixture Cyl 3</span>
+        <span class="ft-sub">EGT3 ↑ 940 °C</span>
       </button>
-
-      <!-- 6. Cooling Loss Cyl 2 -->
-      <button onclick="injectFault('COOLING_DEGRADATION_CYL2')" id="btn-flt-COOLING_DEGRADATION_CYL2" class="btn-fault rounded p-1.5 flex flex-col justify-between text-left h-14">
-        <div class="flex justify-between items-center w-full">
-          <span class="text-[10px] font-bold text-slate-200">COOLING C2</span>
-          <span class="text-[8px] px-1 bg-rose-950 text-rose-400 rounded border border-rose-900">THERM</span>
-        </div>
-        <span class="text-[8px] text-slate-400 mono">CHT2 &uarr; 245°C</span>
+      <button onclick="injectFault('COOLING_DEGRADATION_CYL2')" id="btn-flt-COOLING_DEGRADATION_CYL2" class="btn-fault">
+        <span class="ft-name">Cooling loss Cyl 2</span>
+        <span class="ft-sub">CHT2 ↑ 245 °C</span>
       </button>
-
-      <!-- 7. Cylinder Misfire -->
-      <button onclick="injectFault('CYLINDER_MISFIRE_TIMING')" id="btn-flt-CYLINDER_MISFIRE_TIMING" class="btn-fault rounded p-1.5 flex flex-col justify-between text-left h-14">
-        <div class="flex justify-between items-center w-full">
-          <span class="text-[10px] font-bold text-slate-200">MISFIRE</span>
-          <span class="text-[8px] px-1 bg-yellow-950 text-yellow-400 rounded border border-yellow-900">IGN</span>
-        </div>
-        <span class="text-[8px] text-slate-400 mono">Timing Jitter</span>
-      </button>
-
-      <!-- 8. Auto Stage Demo Runner -->
-      <button onclick="toggleAutoDemo()" id="btn-autodemo" class="rounded p-1.5 flex flex-col justify-between text-left h-14 bg-sky-950 hover:bg-sky-900 border border-sky-700 text-sky-300 transition">
-        <div class="flex justify-between items-center w-full">
-          <span class="text-[10px] font-bold">AUTO STAGE</span>
-          <i class="fa-solid fa-play text-[10px]"></i>
-        </div>
-        <span class="text-[8px] text-sky-400 mono">4-Phase Script</span>
+      <button onclick="injectFault('CYLINDER_MISFIRE_TIMING')" id="btn-flt-CYLINDER_MISFIRE_TIMING" class="btn-fault">
+        <span class="ft-name">Cylinder misfire</span>
+        <span class="ft-sub">Ignition timing jitter</span>
       </button>
     </div>
   </footer>
 
-  <!-- Load Scripts -->
   <script src="/static/engine_view3d.js"></script>
   <script src="/static/app.js"></script>
 </body>
