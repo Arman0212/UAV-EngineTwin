@@ -39,11 +39,13 @@ def main():
     try:
         import uvicorn
         from engine_service import app
-        print("[INFO] Starting FastAPI High-Performance WebSocket Engine Server...")
+        print("[INFO] Starting FastAPI server. Telemetry transport: WebSocket (/ws/telemetry).")
         uvicorn.run("engine_service:app", host="127.0.0.1", port=8000, log_level="warning")
     except ImportError:
         from standalone_server import run_standalone_server
-        print("[INFO] FastAPI/Uvicorn not found. Starting Zero-Dependency Built-In Standalone Server...")
+        print("[INFO] FastAPI/Uvicorn not found. Starting zero-dependency standalone server.")
+        print("[INFO] Telemetry transport: Server-Sent Events (/api/stream). WebSocket is")
+        print("       unavailable on this path; the dashboard falls back automatically.")
         run_standalone_server(port=8000)
 
 if __name__ == "__main__":

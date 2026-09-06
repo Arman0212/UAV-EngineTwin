@@ -23,7 +23,7 @@ class HealthIndexEngine:
             "oil_pressure": 0.06,  # bar
             "oil_temp": 0.9,       # Celsius
             "manifold_pressure": 0.02, # bar
-            "rpm": 8.0,            # RPM
+            "rpm": 6.0,            # RPM (matches SensorModel.sigma_rpm)
             "fuel_flow": 0.35,     # LPH
             "vibration_rms": 0.08, # g
             "bus_voltage": 0.12    # V

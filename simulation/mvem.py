@@ -45,7 +45,12 @@ class MeanValueEngineModel:
     Control-oriented Physics Engine Simulator.
     Integrates intake ODEs, inertia torque balance, and lumped-parameter thermal heat transfer.
     """
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: Optional[Dict[str, Any]] = None, seed: Optional[int] = None):
+        # Owned RNG so stochastic terms are reproducible. Previously the
+        # vibration z-axis drew from NumPy's global RNG, which meant a seeded
+        # dataset run still produced different data on every regeneration.
+        self.rng = np.random.default_rng(seed)
+
         # Base Engine Specs (VRDE 2.2L Turbo Aero-Diesel)
         self.displacement_v_d = 2.2e-3    # m^3 (2.2 litres)
         self.cylinders = 4
@@ -275,7 +280,7 @@ class MeanValueEngineModel:
         time_t = flight.time_s
         vib_x = vib_1x_amp * math.sin(2.0 * math.pi * f_1x * time_t) + vib_2x_amp * math.sin(2.0 * math.pi * f_2x * time_t)
         vib_y = vib_1x_amp * math.cos(2.0 * math.pi * f_1x * time_t) + 0.8 * vib_2x_amp * math.cos(2.0 * math.pi * f_2x * time_t) + vib_misfire_amp * math.sin(math.pi * f_1x * time_t)
-        vib_z = 0.5 * vib_1x_amp + vib_2x_amp * 1.1 + vib_misfire_amp * 0.8 + np.random.normal(0, 0.05)
+        vib_z = 0.5 * vib_1x_amp + vib_2x_amp * 1.1 + vib_misfire_amp * 0.8 + self.rng.normal(0, 0.05)
         vib_rms = math.sqrt((vib_x**2 + vib_y**2 + vib_z**2) / 3.0) + (self.bearing_wear_factor - 1.0) * 1.5 + vib_misfire_amp * 0.5
 
         # -------------------------------------------------------------
