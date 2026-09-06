@@ -41,7 +41,7 @@ def simulate_run(
     Executes a single simulation sortie and returns a DataFrame of sensor readings + physics ground truth.
     """
     flight_gen = FlightProfile(delta_t_isa=delta_t_isa)
-    mvem = MeanValueEngineModel()
+    mvem = MeanValueEngineModel(seed=seed)
     sensors = SensorModel(seed=seed)
     injector = FaultInjector(mvem, sensors)
 
@@ -126,7 +126,14 @@ def simulate_run(
 
     return pd.DataFrame(records)
 
+# Fixed seed for the scenario draws (ISA offsets, fault onset, ramp, severity).
+# These select *which* sorties get generated, so they must be pinned separately
+# from the per-run simulation seeds for a regeneration to reproduce byte for byte.
+SCENARIO_SEED = 20260906
+
+
 def generate_all_datasets():
+    scenario_rng = np.random.default_rng(SCENARIO_SEED)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     print("=" * 60)
     print("ENGINE-TWIN: Generating Calibrated Synthetic Datasets")
@@ -175,7 +182,7 @@ def generate_all_datasets():
                 run_id=run_idx,
                 duration_s=240.0,
                 dt_s=0.1,
-                delta_t_isa=np.random.choice([-10.0, 0.0, 10.0]),
+                delta_t_isa=float(scenario_rng.choice([-10.0, 0.0, 10.0])),
                 fault_type=f_type,
                 fault_start_pct=0.30,
                 fault_ramp_s=15.0,
@@ -201,11 +208,11 @@ def generate_all_datasets():
             run_id=run_idx,
             duration_s=200.0,
             dt_s=0.1,
-            delta_t_isa=float(np.random.uniform(-12.0, 12.0)),
+            delta_t_isa=float(scenario_rng.uniform(-12.0, 12.0)),
             fault_type=f_type,
-            fault_start_pct=float(np.random.uniform(0.25, 0.45)),
-            fault_ramp_s=float(np.random.uniform(10.0, 25.0)),
-            fault_severity=float(np.random.uniform(0.80, 1.0)),
+            fault_start_pct=float(scenario_rng.uniform(0.25, 0.45)),
+            fault_ramp_s=float(scenario_rng.uniform(10.0, 25.0)),
+            fault_severity=float(scenario_rng.uniform(0.80, 1.0)),
             seed=run_idx * 7 + 13
         )
         test_dfs.append(df)
