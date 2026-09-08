@@ -27,15 +27,27 @@
   --text-muted:   #8A8F96;
   --text-dim:     #6B7076;
 
-  /* --- Annunciation --------------------------------------------------- */
-  --caution:      #EF9F27;
-  --caution-dim:  #BA7517;
-  --warning:      #E24B4A;
-  --ok:           #97C459;
+  /* --- Annunciation ----------------------------------------------------
+     One annunciator scale across the whole project: the ground station, the
+     3D model and the project brief use these same four hues, so CAUTION on
+     a printed page and CAUTION on the glass are the same colour. */
+  --caution:      #DFA33A;
+  --caution-dim:  #A97A24;
+  --warning:      #DD5A4E;
+  --ok:           #8CBE68;
+
+  /* --- Instrument accent ------------------------------------------------
+     Reserved for one meaning and no other: the physics model. The MVEM
+     expectation traces, the residual band edges and the 3D selection outline
+     are all instrument blue, so "blue" always reads as "what physics says"
+     and never competes with the annunciator scale. */
+  --instrument:      #63A8D6;
+  --instrument-dim:  #3E7AA3;
+  --instrument-band: rgba(99, 168, 214, 0.10);
 
   /* Derived translucent bands for chart tolerance regions */
-  --caution-band: rgba(239, 159, 39, 0.13);
-  --warning-band: rgba(226, 75, 74, 0.13);
+  --caution-band: rgba(223, 163, 58, 0.13);
+  --warning-band: rgba(221, 90, 78, 0.13);
 
   /* Sensor trace ramp — structural, so greyscale. Four cylinders need four
      separable traces; they are told apart by lightness, never by hue. When
@@ -480,3 +492,122 @@ input[type="range"]::-moz-range-thumb {
 .action-alert[data-state="caution"] { border-left-color: var(--caution); }
 .action-alert[data-state="warning"] { border-left-color: var(--warning); }
 .action-alert[hidden] { display: none; }
+
+/* ==========================================================================
+   COMPONENT INSPECTOR
+   Appears under the 3D model when a part is selected. It answers the one
+   question the model itself cannot: what are the numbers behind that colour.
+   ========================================================================== */
+
+.model-hint {
+  padding: 6px 10px 8px;
+  font-size: var(--fs-tick);
+  color: var(--text-dim);
+  letter-spacing: 0.02em;
+}
+
+.inspector {
+  border-top: 1px solid var(--border);
+  border-left: var(--accent-w) solid var(--instrument);
+  background: var(--bg-elevated);
+  padding: 8px 10px 10px;
+}
+
+.inspector-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.inspector-title {
+  font-size: var(--fs-title);
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-tick);
+  font-variant-numeric: tabular-nums;
+}
+
+.inspector-table th {
+  text-align: right;
+  padding: 3px 0 5px;
+  color: var(--text-dim);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+.inspector-table th:first-child { text-align: left; }
+
+.inspector-table td {
+  text-align: right;
+  padding: 4px 0;
+  color: var(--text-muted);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.inspector-table td:first-child { text-align: left; color: var(--text-muted); }
+.inspector-table tr:last-child td { border-bottom: 0; }
+
+/* Measured value carries the weight; the model column is instrument blue,
+   matching the dashed baseline traces and the 3D selection outline. */
+.inspector-table .v-meas  { color: var(--text-primary); }
+.inspector-table .v-model { color: var(--instrument); }
+
+/* Residuals are the whole argument, so they annunciate on their own scale. */
+.inspector-table .v-res             { color: var(--text-muted); }
+.inspector-table .v-res[data-state="caution"] { color: var(--caution); }
+.inspector-table .v-res[data-state="warning"] { color: var(--warning); }
+
+.inspector-note {
+  margin-top: 7px;
+  font-size: var(--fs-tick);
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+/* Anything that selects a component in the model advertises that it does. */
+.stat.is-selectable,
+.cyl-cell {
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+.stat.is-selectable:hover,
+.cyl-cell:hover {
+  border-color: var(--instrument-dim);
+}
+.stat.is-selectable[data-selected="true"],
+.cyl-cell[data-selected="true"] {
+  border-color: var(--instrument);
+  background: var(--instrument-band);
+}
+
+.btn.is-active {
+  border-color: var(--instrument-dim);
+  color: var(--text-primary);
+}
+
+a.btn { text-decoration: none; display: inline-flex; align-items: center; }
+
+/* Keyboard users get the same affordance as pointer users. */
+.stat.is-selectable:focus-visible,
+.cyl-cell:focus-visible,
+.btn:focus-visible,
+a.btn:focus-visible {
+  outline: 2px solid var(--instrument);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stat.is-selectable,
+  .cyl-cell { transition: none; }
+}

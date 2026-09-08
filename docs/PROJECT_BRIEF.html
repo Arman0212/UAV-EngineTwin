@@ -1,0 +1,786 @@
+<title>EngineTwin</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:ital,wght@0,400;0,600;0,700;0,900&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+  :root {
+    --paper:      #EDEFF2;
+    --surface:    #FFFFFF;
+    --surface-2:  #E4E8ED;
+    --ink:        #0E1C28;
+    --ink-2:      #4A5C6E;
+    --ink-3:      #758595;
+    --rule:       #C6D0D9;
+    --rule-soft:  #DAE1E7;
+    --instrument: #1F5F8B;
+    --nominal:    #4F7A3A;
+    --caution:    #A66A00;
+    --critical:   #A63328;
+
+    --f-display: "Chivo", "Helvetica Neue", Arial, sans-serif;
+    --f-body:    "Source Serif 4", Georgia, "Times New Roman", serif;
+    --f-mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:      #0B1117;
+      --surface:    #121B23;
+      --surface-2:  #1A252F;
+      --ink:        #DEE5EB;
+      --ink-2:      #9AACBC;
+      --ink-3:      #6B7E90;
+      --rule:       #27333E;
+      --rule-soft:  #1E2831;
+      --instrument: #63A8D6;
+      --nominal:    #8CBE68;
+      --caution:    #DFA33A;
+      --critical:   #DB6E60;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:      #0B1117;
+    --surface:    #121B23;
+    --surface-2:  #1A252F;
+    --ink:        #DEE5EB;
+    --ink-2:      #9AACBC;
+    --ink-3:      #6B7E90;
+    --rule:       #27333E;
+    --rule-soft:  #1E2831;
+    --instrument: #63A8D6;
+    --nominal:    #8CBE68;
+    --caution:    #DFA33A;
+    --critical:   #DB6E60;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 16px;
+    line-height: 1.62;
+    margin: 0;
+    padding: 0 20px 88px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .sheet { max-width: 1000px; margin: 0 auto; }
+
+  /* ---------- masthead ---------- */
+  .masthead {
+    padding: 52px 0 28px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .ps-line {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 14px;
+    font-family: var(--f-mono);
+    font-size: 12px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--instrument);
+    margin-bottom: 22px;
+  }
+  .ps-line .sep { color: var(--ink-3); font-weight: 400; }
+
+  h1 {
+    font-family: var(--f-display);
+    font-weight: 900;
+    font-size: clamp(52px, 9vw, 104px);
+    line-height: 0.86;
+    letter-spacing: -0.035em;
+    margin: 0 0 18px;
+    text-wrap: balance;
+  }
+  h1 .thin { font-weight: 400; color: var(--ink-2); letter-spacing: -0.02em; }
+
+  .ps-title {
+    font-family: var(--f-body);
+    font-size: clamp(17px, 2vw, 21px);
+    line-height: 1.42;
+    color: var(--ink-2);
+    max-width: 40em;
+    margin: 0 0 30px;
+    text-wrap: balance;
+  }
+
+  /* document-control rail */
+  .control {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0;
+    border-top: 1px solid var(--rule);
+    font-family: var(--f-mono);
+  }
+  .control div {
+    padding: 12px 16px 12px 0;
+    border-right: 1px solid var(--rule-soft);
+  }
+  .control div:last-child { border-right: 0; }
+  .control dt {
+    font-size: 9.5px; font-weight: 700; letter-spacing: 0.13em;
+    text-transform: uppercase; color: var(--ink-3);
+    margin-bottom: 5px;
+  }
+  .control dd {
+    margin: 0; font-size: 13px; font-weight: 500; color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- generic section ---------- */
+  section { padding-top: 54px; }
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 10.5px; font-weight: 700;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--instrument);
+    margin-bottom: 14px;
+  }
+  h2 {
+    font-family: var(--f-display);
+    font-weight: 700;
+    font-size: clamp(26px, 3.4vw, 34px);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin: 0 0 20px;
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: var(--f-display);
+    font-weight: 600; font-size: 17px; letter-spacing: -0.01em;
+    margin: 0 0 8px;
+  }
+  p { margin: 0 0 18px; max-width: 66ch; }
+  p:last-child { margin-bottom: 0; }
+  strong { font-weight: 600; }
+  .lede { font-size: 18.5px; line-height: 1.58; }
+
+  /* ---------- the residual equation ---------- */
+  .equation {
+    background: var(--surface);
+    border-left: 3px solid var(--instrument);
+    padding: 26px 30px;
+    margin: 28px 0;
+    overflow-x: auto;
+  }
+  .equation .eq {
+    font-family: var(--f-mono);
+    font-size: clamp(15px, 2.2vw, 20px);
+    font-weight: 500;
+    color: var(--ink);
+    white-space: nowrap;
+    margin-bottom: 12px;
+  }
+  .equation .eq .num { color: var(--instrument); }
+  .equation .gloss {
+    font-size: 14.5px; color: var(--ink-2); margin: 0; max-width: 60ch;
+  }
+
+  /* ---------- signature chart ---------- */
+  .figure {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    padding: 26px 26px 20px;
+    margin-top: 26px;
+  }
+  .figure-head { margin-bottom: 18px; }
+  .figure-head h3 { margin-bottom: 4px; }
+  .figure-head p { font-size: 14px; color: var(--ink-2); margin: 0; }
+  .chart-scroll { overflow-x: auto; }
+  .chart-scroll svg { display: block; min-width: 660px; width: 100%; height: auto; }
+
+  .grid-line   { stroke: var(--rule-soft); stroke-width: 1; }
+  .axis-line   { stroke: var(--rule); stroke-width: 1.5; }
+  .axis-label  { fill: var(--ink-3); font-family: var(--f-mono); font-size: 10.5px; font-weight: 500; }
+  .axis-title  { fill: var(--ink-2); font-family: var(--f-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.11em; }
+  .trace-power  { fill: none; stroke: var(--instrument); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+  .trace-health { fill: none; stroke: var(--nominal); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+  .dot-power  { fill: var(--instrument); }
+  .dot-health { fill: var(--nominal); }
+  .band-fill  { fill: var(--instrument); opacity: 0.07; }
+  .callout-line { stroke: var(--caution); stroke-width: 1.2; stroke-dasharray: 3 3; }
+  .callout-text { fill: var(--caution); font-family: var(--f-mono); font-size: 10px; font-weight: 700; }
+  .endpoint-text { fill: var(--ink); font-family: var(--f-mono); font-size: 11.5px; font-weight: 700; }
+
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 22px;
+    margin-top: 16px; padding-top: 14px;
+    border-top: 1px solid var(--rule-soft);
+    font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-2);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; }
+  .swatch { width: 16px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+
+  /* ---------- results table ---------- */
+  .table-scroll { overflow-x: auto; margin-top: 8px; }
+  table { border-collapse: collapse; width: 100%; min-width: 620px; }
+  caption {
+    caption-side: bottom; text-align: left; padding-top: 12px;
+    font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-3);
+  }
+  th, td {
+    text-align: right; padding: 11px 14px;
+    border-bottom: 1px solid var(--rule-soft);
+    font-variant-numeric: tabular-nums;
+  }
+  th:first-child, td:first-child { text-align: left; padding-left: 0; }
+  thead th {
+    font-family: var(--f-mono); font-size: 10px; font-weight: 700;
+    letter-spacing: 0.11em; text-transform: uppercase;
+    color: var(--ink-3);
+    border-bottom: 1.5px solid var(--ink);
+    vertical-align: bottom;
+  }
+  tbody td { font-family: var(--f-mono); font-size: 13.5px; color: var(--ink-2); }
+  tbody td:first-child { font-family: var(--f-body); font-size: 15.5px; color: var(--ink); }
+  td.win { color: var(--ink); font-weight: 700; }
+  thead th.ours { color: var(--instrument); }
+
+  /* ---------- capability coverage ---------- */
+  .caps { display: grid; gap: 0; margin-top: 8px; }
+  .cap {
+    display: grid;
+    grid-template-columns: 26px 1fr auto;
+    gap: 16px; align-items: start;
+    padding: 15px 0;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .cap-n {
+    font-family: var(--f-mono); font-size: 11px; font-weight: 700;
+    color: var(--ink-3); padding-top: 3px;
+  }
+  .cap-body h3 { margin-bottom: 3px; }
+  .cap-body p { font-size: 14.5px; color: var(--ink-2); margin: 0; }
+  .pill {
+    font-family: var(--f-mono); font-size: 10px; font-weight: 700;
+    letter-spacing: 0.09em; text-transform: uppercase;
+    padding: 4px 9px; white-space: nowrap;
+    border: 1px solid currentColor;
+    color: var(--nominal);
+    margin-top: 3px;
+  }
+
+  /* ---------- two-column prose ---------- */
+  .cols {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 34px; margin-top: 8px;
+  }
+  .cols p { max-width: none; }
+
+  /* ---------- limitations ---------- */
+  .limits {
+    background: var(--surface-2);
+    padding: 28px 30px;
+    margin-top: 22px;
+  }
+  .limits ul { margin: 0; padding-left: 20px; }
+  .limits li { margin-bottom: 11px; color: var(--ink-2); font-size: 15.5px; }
+  .limits li:last-child { margin-bottom: 0; }
+  .limits li strong { color: var(--ink); }
+
+  /* ---------- run block ---------- */
+  .run {
+    font-family: var(--f-mono);
+    background: var(--ink);
+    color: var(--paper);
+    padding: 24px 28px;
+    margin-top: 22px;
+    font-size: 13.5px;
+    line-height: 2;
+    overflow-x: auto;
+  }
+  :root[data-theme="dark"] .run,
+  .run { color: #E7ECF1; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .run { background: #060B10; }
+  }
+  :root[data-theme="dark"] .run { background: #060B10; }
+  .run .c { color: #7E93A6; }
+  .run .k { color: #8FBF6A; }
+
+  footer {
+    margin-top: 60px; padding-top: 22px;
+    border-top: 2px solid var(--ink);
+    font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-3);
+    display: flex; flex-wrap: wrap; gap: 8px 26px;
+  }
+
+  @media (max-width: 620px) {
+    .control div { border-right: 0; border-bottom: 1px solid var(--rule-soft); }
+    .cap { grid-template-columns: 22px 1fr; }
+    .pill { grid-column: 2; justify-self: start; }
+  }
+</style>
+
+<div class="sheet">
+
+  <header class="masthead">
+    <div class="ps-line">
+      <span>SIH26054</span><span class="sep">/</span>
+      <span>DRDO</span><span class="sep">/</span>
+      <span>Robotics &amp; Drones</span><span class="sep">/</span>
+      <span>Software</span>
+    </div>
+
+    <h1>Engine<span class="thin">Twin</span></h1>
+
+    <p class="ps-title">
+      AI-Enabled Real-Time Digital Twin System for Health Monitoring, Fault
+      Prediction and Mission Reliability Enhancement of Aero Piston Engines
+      used in MALE UAVs.
+    </p>
+
+    <dl class="control">
+      <div><dt>Powerplant</dt><dd>VRDE 2.2 L turbo aero-diesel</dd></div>
+      <div><dt>Envelope</dt><dd>0 – 30,000 ft</dd></div>
+      <div><dt>Update rate</dt><dd>20 Hz</dd></div>
+      <div><dt>Tick budget</dt><dd>1.5 ms / 150 ms</dd></div>
+      <div><dt>Provenance</dt><dd>Simulated</dd></div>
+    </dl>
+  </header>
+
+  <section>
+    <div class="eyebrow">The problem</div>
+    <h2>At 28,000 feet, a healthy engine looks sick</h2>
+    <p class="lede">
+      A conventional engine instrument system watches each channel against a
+      fixed redline. On a light aircraft at 8,000 ft that works. On a MALE UAV
+      climbing to 30,000 ft on a twenty-hour sortie it fails in both directions
+      at once.
+    </p>
+    <div class="cols">
+      <p>
+        Climb high enough and a <em>healthy</em> engine starts tripping alarms.
+        Manifold pressure falls as the turbo runs out of air, rated power derates
+        from 200 HP to 110 HP, exhaust temperatures drift. Nothing is broken —
+        the atmosphere changed. The operator learns to ignore the alarm.
+      </p>
+      <p>
+        Meanwhile a genuinely failing engine sits comfortably inside every
+        redline. An injector clogging on cylinder 3 pushes EGT₃ up by 40 °C, well
+        under the 880 °C continuous limit, so nothing trips — right up until it
+        does.
+      </p>
+    </div>
+    <p>
+      The trap is that a raw sensor reading carries two things at once: the state
+      of the engine, and the state of the flight. You cannot threshold your way
+      out of that, and a black-box model trained on raw telemetry inherits the
+      same problem — it just hides it behind a confidence score.
+    </p>
+  </section>
+
+  <section>
+    <div class="eyebrow">The idea</div>
+    <h2>Diagnose the gap from physics, never the reading</h2>
+    <p>
+      A Mean Value Engine Model runs in lockstep with the engine, fed the same
+      altitude, ambient conditions and throttle. It predicts what a
+      <em>healthy</em> engine would be doing right now. Diagnosis then happens on
+      the difference, normalised per channel:
+    </p>
+
+    <div class="equation">
+      <div class="eq">r<span class="num">ᵢ</span> &nbsp;=&nbsp; ( y<span class="num">measured</span> − y<span class="num">physics</span> ) &nbsp;/&nbsp; σ<span class="num">channel</span></div>
+      <p class="gloss">
+        Fifteen channels — RPM, manifold pressure, fuel flow, oil pressure and
+        temperature, four CHT, four EGT, vibration RMS, bus voltage — reduced to
+        one vector of standard deviations from thermodynamic expectation.
+      </p>
+    </div>
+
+    <p>
+      Because the physics baseline has already absorbed altitude, throttle and
+      ambient temperature, a healthy engine sits at <strong>r ≈ 0</strong>
+      everywhere in the envelope — sea level or 30,000 ft, idle or full power.
+      The learning problem stops being “recognise this engine” and becomes
+      “recognise a departure from physics,” which is a far smaller and far more
+      transferable problem. Every model downstream sees residuals. None of them
+      ever sees a raw sensor value.
+    </p>
+
+    <div class="figure">
+      <div class="figure-head">
+        <h3>One continuous climb, sea level to 30,000 ft</h3>
+        <p>Measured from the running twin. Rated power falls 187 → 110 HP as the
+          turbo runs out of air; the health index does not follow it down.</p>
+      </div>
+
+      <div class="chart-scroll">
+        <svg viewBox="0 0 740 330" role="img"
+             aria-label="Line chart. Across a climb from sea level to 30,000 feet, engine power falls from 187 to 110 horsepower while the health index stays near 100 percent throughout, with a single transient dip to 71.5 percent at climb onset.">
+
+          <!-- horizontal gridlines -->
+          <line class="grid-line" x1="70" y1="30"  x2="690" y2="30"/>
+          <line class="grid-line" x1="70" y1="90"  x2="690" y2="90"/>
+          <line class="grid-line" x1="70" y1="150" x2="690" y2="150"/>
+          <line class="grid-line" x1="70" y1="210" x2="690" y2="210"/>
+
+          <!-- healthy band shading, top of health scale -->
+          <rect class="band-fill" x="70" y="30" width="620" height="66"/>
+
+          <!-- axes -->
+          <line class="axis-line" x1="70" y1="270" x2="690" y2="270"/>
+          <line class="axis-line" x1="70" y1="30"  x2="70"  y2="270"/>
+
+          <!-- left axis: power -->
+          <text class="axis-label" x="62" y="274" text-anchor="end">0</text>
+          <text class="axis-label" x="62" y="214" text-anchor="end">55</text>
+          <text class="axis-label" x="62" y="154" text-anchor="end">110</text>
+          <text class="axis-label" x="62" y="94"  text-anchor="end">165</text>
+          <text class="axis-label" x="62" y="34"  text-anchor="end">220</text>
+          <text class="axis-title" x="70" y="16" text-anchor="start">SHAFT POWER · HP</text>
+
+          <!-- right axis: health -->
+          <text class="axis-label" x="698" y="274">0</text>
+          <text class="axis-label" x="698" y="214">25</text>
+          <text class="axis-label" x="698" y="154">50</text>
+          <text class="axis-label" x="698" y="94">75</text>
+          <text class="axis-label" x="698" y="34">100</text>
+          <text class="axis-title" x="690" y="16" text-anchor="end">HEALTH INDEX · %</text>
+
+          <!-- x axis -->
+          <text class="axis-label" x="70"  y="290" text-anchor="middle">0</text>
+          <text class="axis-label" x="277" y="290" text-anchor="middle">10,000</text>
+          <text class="axis-label" x="483" y="290" text-anchor="middle">20,000</text>
+          <text class="axis-label" x="690" y="290" text-anchor="middle">30,000</text>
+          <text class="axis-title" x="380" y="312" text-anchor="middle">PRESSURE ALTITUDE · FT</text>
+
+          <!-- health trace (stays high) -->
+          <polyline class="trace-health" points="70,41.3 122,98.4 174,31.4 226,37.0 277,30.7 329,45.8 381,31.7 433,36.5 484,38.4 536,32.9 588,31.4 640,38.4 690,35.0"/>
+
+          <!-- power trace (falls away) -->
+          <polyline class="trace-power" points="70,66.0 122,67.1 174,68.2 226,69.3 277,69.3 329,82.4 381,95.5 433,108.5 484,116.2 536,127.1 588,136.9 640,147.8 690,150.0"/>
+
+          <!-- power markers -->
+          <circle class="dot-power" cx="70" cy="66.0" r="3"/>
+          <circle class="dot-power" cx="277" cy="69.3" r="3"/>
+          <circle class="dot-power" cx="483" cy="116.6" r="3"/>
+          <circle class="dot-power" cx="690" cy="150.0" r="3.6"/>
+
+          <!-- health markers -->
+          <circle class="dot-health" cx="70" cy="41.3" r="3"/>
+          <circle class="dot-health" cx="122" cy="98.4" r="3.4"/>
+          <circle class="dot-health" cx="690" cy="35.0" r="3.6"/>
+
+          <!-- endpoint annotations -->
+          <text class="endpoint-text" x="82" y="60">187 HP</text>
+          <text class="endpoint-text" x="684" y="166" text-anchor="end">110 HP</text>
+          <text class="endpoint-text" x="684" y="26" text-anchor="end">97.9 %</text>
+
+          <!-- honest callout on the transient -->
+          <line class="callout-line" x1="122" y1="98.4" x2="168" y2="130"/>
+          <text class="callout-text" x="172" y="134">71.5 % — climb-onset transient</text>
+        </svg>
+      </div>
+
+      <div class="legend">
+        <span><i class="swatch" style="background: var(--instrument)"></i> Shaft power (left axis)</span>
+        <span><i class="swatch" style="background: var(--nominal)"></i> Overall health index (right axis)</span>
+        <span>Zero false diagnoses across 15 samples of the climb</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Measured</div>
+    <h2>Against the two things it has to beat</h2>
+    <p>
+      Evaluated on 48,000 held-out frames from 32 fully independent sorties, each
+      flown to its own drawn mission shape over a wider envelope than anything in
+      training. Every figure below is printed by
+      <span style="font-family: var(--f-mono); font-size: 0.92em">validation/benchmark.py</span>
+      on the grader’s own machine.
+    </p>
+
+    <div class="table-scroll">
+      <table>
+        <caption>Method A: fixed-threshold EIS, Garmin/EDM-930 style. Method B: random forest on raw telemetry.</caption>
+        <thead>
+          <tr>
+            <th scope="col">Metric</th>
+            <th scope="col">Fixed-threshold EIS</th>
+            <th scope="col">Black-box ML</th>
+            <th scope="col" class="ours">EngineTwin</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Classification accuracy</td><td>53.65 %</td><td>86.93 %</td><td class="win">97.64 %</td></tr>
+          <tr><td>Macro F1</td><td>0.2463</td><td>0.8696</td><td class="win">0.9770</td></tr>
+          <tr><td>Mean detection latency</td><td>28.26 s</td><td>8.00 s</td><td class="win">2.87 s</td></tr>
+          <tr><td>False alarms, healthy sorties</td><td>0.00 %</td><td>11.74 %</td><td class="win">1.42 %</td></tr>
+          <tr><td>CPU inference</td><td>0.035 ms</td><td>0.001 ms</td><td class="win">0.397 ms</td></tr>
+          <tr><td>Sensor vs. engine fault</td><td>False abort</td><td>Confounded</td><td class="win">Decoupled</td></tr>
+          <tr><td>Root cause</td><td>None</td><td>Feature importance</td><td class="win">Ranked attribution</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="margin-top: 24px">
+      Read the EIS column carefully. A perfect 0.00 % false-alarm rate alongside a
+      macro F1 of 0.25 is not a strength — the thresholds are set so wide that
+      almost nothing real trips them. The black-box model has the opposite
+      problem: strong in-distribution accuracy, and an 11.74 % false-alarm rate
+      because high-altitude telemetry looks anomalous to a model with no physics
+      baseline for derating.
+    </p>
+    <p>
+      The ablation isolates that effect directly, training the <em>same</em>
+      network on raw channels instead of residuals. Physics anchoring is worth
+      <strong>+0.0597 macro F1</strong> and <strong>14.31 points</strong> of
+      false-alarm rate. Restricted to healthy frames above 20,000 ft, where
+      derating is largest, the gap widens to <strong>0.70 % against 18.42 %</strong>.
+      That is the whole argument for the residual representation, measured rather
+      than asserted.
+    </p>
+  </section>
+
+  <section>
+    <div class="eyebrow">Problem statement coverage</div>
+    <h2>Six required capabilities</h2>
+    <div class="caps">
+      <div class="cap">
+        <div class="cap-n">01</div>
+        <div class="cap-body">
+          <h3>Real-time parameter visualisation and health monitoring</h3>
+          <p>20 Hz glass-cockpit ground station: 3D engine model with per-cylinder
+            thermal mapping, telemetry against the physics baseline inside ±3σ
+            bands, and seven subsystem health scores.</p>
+        </div>
+        <div class="pill">Operational</div>
+      </div>
+
+      <div class="cap">
+        <div class="cap-n">02</div>
+        <div class="cap-body">
+          <h3>Anomaly detection</h3>
+          <p>Unsupervised residual autoencoder trained only on healthy flight, with
+            a threshold calibrated at μ + 3σ — so it flags failure modes absent
+            from the taxonomy entirely.</p>
+        </div>
+        <div class="pill">Operational</div>
+      </div>
+
+      <div class="cap">
+        <div class="cap-n">03</div>
+        <div class="cap-body">
+          <h3>Failure prediction before occurrence</h3>
+          <p>Ten-class multi-task classifier with learned temperature scaling, so
+            reported confidence means something, plus a continuous severity head.</p>
+        </div>
+        <div class="pill">Operational</div>
+      </div>
+
+      <div class="cap">
+        <div class="cap-n">04</div>
+        <div class="cap-body">
+          <h3>RUL estimation and degradation tracking</h3>
+          <p>Degradation regime classified as stable, drifting or abrupt over a
+            rolling window, projected to the 30 % condemnation threshold and
+            reported in flight hours with bounds.</p>
+        </div>
+        <div class="pill">Operational</div>
+      </div>
+
+      <div class="cap">
+        <div class="cap-n">05</div>
+        <div class="cap-body">
+          <h3>Mission profile simulation under varying conditions</h3>
+          <p>Per-sortie mission shapes plus a manual sandbox that recomputes the
+            ISA atmosphere, so commanding altitude genuinely thins the air the
+            turbocharger breathes.</p>
+        </div>
+        <div class="pill">Operational</div>
+      </div>
+
+      <div class="cap">
+        <div class="cap-n">06</div>
+        <div class="cap-body">
+          <h3>Post-flight analysis and mission replay</h3>
+          <p>Every sortie recorded frame by frame; the debrief reports band and
+            phase dwell, subsystem minima and the full diagnosis timeline, then
+            replays the flight through the live telemetry path.</p>
+        </div>
+        <div class="pill">Operational</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">The case that decides sorties</div>
+    <h2>A dead probe is not a dead cylinder</h2>
+    <div class="cols">
+      <p>
+        A thermocouple fails open on cylinder 3. EGT₃ falls toward ambient. To a
+        redline system this is an engine in the process of dying, and a perfectly
+        serviceable aircraft gets recalled.
+      </p>
+      <p>
+        EngineTwin checks EGT₃ against CHT₃ and fuel flow, finds the neighbouring
+        channels entirely nominal, and reports <em>sensor probe defect — engine
+        healthy</em>. Overall health barely moves. The mission continues.
+      </p>
+    </div>
+    <p>
+      <span class="pill" style="color: var(--caution); display: inline-block; margin: 6px 0">Precision 1.000 · Recall 1.000</span>
+      <br>
+      That confusion is why <span style="font-family: var(--f-mono); font-size: 0.92em">SENSOR_FAULT_EGT3</span>
+      is a first-class member of the fault taxonomy rather than a heuristic bolted
+      on afterwards — it is the single failure mode most likely to abort a healthy
+      sortie.
+    </p>
+  </section>
+
+  <section>
+    <div class="eyebrow">Boundaries</div>
+    <h2>What this is not</h2>
+    <p>
+      A reviewer who finds an unstated limitation discounts everything else in the
+      submission. So, stated plainly:
+    </p>
+    <div class="limits">
+      <ul>
+        <li><strong>Everything is simulated.</strong> The engine, the
+          instrumentation and the faults are models. No hardware-in-the-loop
+          validation has been performed, and nothing here is certified for
+          airworthiness.</li>
+        <li><strong>The estimator is not an EKF.</strong> It is a linear Kalman
+          filter with a complementary prediction step toward the physics model.
+          There is no non-linear transition function and no Jacobian, so the
+          covariance is a tuned noise-rejection parameter, not a calibrated
+          uncertainty.</li>
+        <li><strong>The attribution is not SHAP.</strong> It is gradient × input —
+          a first-order local ranking chosen for the 50 ms edge budget, without
+          Shapley’s local-accuracy or consistency guarantees.</li>
+        <li><strong>The RUL interval is a trend interval,</strong> constructed
+          from the spread of the degradation fit rather than from a
+          distribution-free coverage guarantee. Conformal prediction is the honest
+          upgrade.</li>
+        <li><strong>Per-frame inference degrades under extreme noise.</strong> At
+          five times instrumentation sigma the classifier names a false mechanical
+          fault on roughly one frame in six. The annunciator votes over a rolling
+          window, so it does not reach the operator — but it is a real weakness.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">The ground station</div>
+    <h2>An engine you can point at</h2>
+    <p>
+      The operator console runs at 20 Hz in any browser, with no internet route
+      required — every asset is served from the twin’s own host. The engine is
+      rendered as a live model rather than a diagram: each cylinder is shaded by
+      its thermal deviation <em>from the model</em>, in sigma, so a cold-day
+      700 °C and a hot-day 760 °C both read as nominal, and only a genuine
+      departure changes colour.
+    </p>
+
+    <div class="cols">
+      <div>
+        <h3 style="margin-bottom:8px">Direct selection</h3>
+        <p>
+          Every part is pickable. Hover to identify it, click to inspect it — and
+          the inspector answers the question the model alone cannot: the measured
+          value, what physics expected, and the residual between them in standard
+          deviations. Cylinders, EGT probes, turbocharger, oil sump, crankcase and
+          propeller are each their own component, because a dead thermocouple and
+          a dead cylinder are different findings.
+        </p>
+      </div>
+      <div>
+        <h3 style="margin-bottom:8px">One annunciator scale</h3>
+        <p>
+          The colours on this page are the console’s colours. Instrument blue
+          means one thing everywhere — <em>what physics says</em> — carrying the
+          model-expected traces, the residual column and the 3D selection
+          outline. Amber and red are spent only on genuine exceedance, and sensor
+          traces stay greyscale so hue is never wasted on identity.
+        </p>
+      </div>
+    </div>
+
+    <div class="figure" style="margin-top:26px">
+      <div class="figure-head">
+        <h3>Five minutes at the console</h3>
+        <p>The demonstration arc, in the order it makes the argument.</p>
+      </div>
+      <div class="caps" style="margin-top:0">
+        <div class="cap">
+          <div class="cap-n">01</div>
+          <div class="cap-body">
+            <h3>Watch it loiter</h3>
+            <p>High-altitude cruise. Every strip shows the measurement tracking
+              the physics baseline inside its ±3σ band. The absolute numbers look
+              nothing like sea level, and nothing complains.</p>
+          </div>
+        </div>
+        <div class="cap">
+          <div class="cap-n">02</div>
+          <div class="cap-body">
+            <h3>Break the oil system</h3>
+            <p>Under three seconds later the trigger fires, the classifier names
+              <span style="font-family:var(--f-mono);font-size:0.9em">OIL_PRESSURE_LOSS</span>,
+              the sump goes red on the model and the directive reads
+              <em>return to base</em>.</p>
+          </div>
+        </div>
+        <div class="cap">
+          <div class="cap-n">03</div>
+          <div class="cap-body">
+            <h3>Break a sensor instead</h3>
+            <p>EGT₃ falls toward ambient. This is the case a redline system aborts
+              a healthy aircraft over. Health barely moves; the mission continues.</p>
+          </div>
+        </div>
+        <div class="cap">
+          <div class="cap-n">04</div>
+          <div class="cap-body">
+            <h3>Ask it why</h3>
+            <p>Open the evidence drawer, or click the implicated part in the model.
+              The diagnosis arrives with its ranked residual channels and an
+              inspection window in flight hours.</p>
+          </div>
+        </div>
+        <div class="cap">
+          <div class="cap-n">05</div>
+          <div class="cap-body">
+            <h3>Land and debrief</h3>
+            <p>Pick the sortie from the recorder, read its post-flight report, then
+              replay the whole flight through the same telemetry path — the console
+              replays without knowing the difference.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Verification</div>
+    <h2>Every number regenerates on your machine</h2>
+    <p>
+      Nine suites — physics, AI layer, end-to-end fault propagation, leakage
+      audit, adversarial stress, baseline comparison, architectural ablation,
+      multi-engine transfer, edge profiling. Every suite exits non-zero on
+      failure, so a green run means all nine genuinely passed. No internet
+      connection is required at any point.
+    </p>
+    <div class="run">
+      <span class="c"># bring up the ground station</span><br>
+      <span class="k">python</span> main.py<br>
+      <br>
+      <span class="c"># reproduce every figure on this page (~2.5 min)</span><br>
+      <span class="k">python</span> run_all_tests.py<br>
+      <br>
+      <span class="c"># rebuild data and models from scratch</span><br>
+      <span class="k">python</span> data/generate_dataset.py<br>
+      <span class="k">python</span> train_and_export_models.py
+    </div>
+  </section>
+
+  <footer>
+    <span>Smart India Hackathon 2026 · Grand Finale</span>
+    <span>Problem Statement SIH26054</span>
+    <span>Defence Research and Development Organisation</span>
+    <span>All telemetry tagged SIMULATED</span>
+  </footer>
+
+</div>

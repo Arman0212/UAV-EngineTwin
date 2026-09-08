@@ -49,6 +49,9 @@
     <div class="flex items-center gap-1.5">
       <button id="btn-sandbox-open" onclick="toggleSandbox()" class="btn" title="Developer flight sandbox controls">Sandbox ▾</button>
       <button id="btn-debrief-open" onclick="toggleDebrief()" class="btn" title="Post-flight analysis and mission replay">Debrief ▾</button>
+      <a href="https://claude.ai/code/artifact/fd59ade8-7421-4f96-9720-96d8f2a0bea0"
+         target="_blank" rel="noopener" class="btn"
+         title="Open the SIH26054 project brief">Brief ↗</a>
       <button id="btn-audio" onclick="toggleAudio()" class="btn" title="Toggle aural alerts">
         <span id="lbl-audio">Audio: muted</span>
       </button>
@@ -149,28 +152,51 @@
             <button onclick="setCameraPreset('cylinders')" class="btn">Cyls</button>
             <button onclick="setCameraPreset('turbo')" class="btn">Turbo</button>
             <button onclick="setCameraPreset('sump')" class="btn">Sump</button>
+            <button id="btn-labels" onclick="toggleModelLabels()" class="btn is-active"
+                    title="Show or hide component labels">Labels</button>
           </div>
         </div>
         <div id="container-3d" class="viewport-3d cursor-grab active:cursor-grabbing"></div>
 
+        <!-- Component inspector — populated when a part is selected in the
+             model, or from the subsystem tiles below. Click any component. -->
+        <div id="panel-inspector" class="inspector" hidden>
+          <div class="inspector-head">
+            <span id="txt-inspector-title" class="inspector-title">Cylinder 1</span>
+            <span id="txt-inspector-health" class="badge">100.0 %</span>
+            <button onclick="clearComponentSelection()" class="btn" title="Clear selection (Esc)">✕</button>
+          </div>
+          <table class="inspector-table">
+            <thead>
+              <tr><th>Channel</th><th>Measured</th><th>Model</th><th>Residual</th></tr>
+            </thead>
+            <tbody id="tbody-inspector"></tbody>
+          </table>
+          <div id="txt-inspector-note" class="inspector-note"></div>
+        </div>
+
+        <div id="txt-model-hint" class="model-hint">
+          Click any component in the model to inspect it · drag to orbit
+        </div>
+
         <!-- Per-cylinder thermal deviation strip -->
         <div class="cyl-strip">
-          <div id="cyl-cell-0" class="cyl-cell" onclick="focusCylinder(0)" title="Focus cylinder 1">
+          <div id="cyl-cell-0" class="cyl-cell" onclick="selectComponent('cyl-0')" title="Inspect cylinder 1">
             <span class="label-sm">Cyl 1</span>
             <span class="cyl-egt"><span id="txt-cyl1-temp">810</span><span class="unit"> °C</span></span>
             <span id="txt-cyl1-dev" class="cyl-dev">Δ +0 / +0</span>
           </div>
-          <div id="cyl-cell-1" class="cyl-cell" onclick="focusCylinder(1)" title="Focus cylinder 2">
+          <div id="cyl-cell-1" class="cyl-cell" onclick="selectComponent('cyl-1')" title="Inspect cylinder 2">
             <span class="label-sm">Cyl 2</span>
             <span class="cyl-egt"><span id="txt-cyl2-temp">810</span><span class="unit"> °C</span></span>
             <span id="txt-cyl2-dev" class="cyl-dev">Δ +0 / +0</span>
           </div>
-          <div id="cyl-cell-2" class="cyl-cell" onclick="focusCylinder(2)" title="Focus cylinder 3">
+          <div id="cyl-cell-2" class="cyl-cell" onclick="selectComponent('cyl-2')" title="Inspect cylinder 3">
             <span class="label-sm">Cyl 3</span>
             <span class="cyl-egt"><span id="txt-cyl3-temp">810</span><span class="unit"> °C</span></span>
             <span id="txt-cyl3-dev" class="cyl-dev">Δ +0 / +0</span>
           </div>
-          <div id="cyl-cell-3" class="cyl-cell" onclick="focusCylinder(3)" title="Focus cylinder 4">
+          <div id="cyl-cell-3" class="cyl-cell" onclick="selectComponent('cyl-3')" title="Inspect cylinder 4">
             <span class="label-sm">Cyl 4</span>
             <span class="cyl-egt"><span id="txt-cyl4-temp">810</span><span class="unit"> °C</span></span>
             <span id="txt-cyl4-dev" class="cyl-dev">Δ +0 / +0</span>
@@ -189,19 +215,19 @@
             <span class="label">Overall</span>
             <span class="readout"><span id="val-health-overall">100.0</span><span class="unit"> %</span></span>
           </div>
-          <div id="stat-oil" class="stat">
+          <div id="stat-oil" class="stat is-selectable" onclick="selectComponent('sump')" title="Inspect the oil circuit in the model">
             <span class="label">Oil system</span>
             <span class="readout"><span id="val-health-oil">100.0</span><span class="unit"> %</span></span>
           </div>
-          <div id="stat-turbo" class="stat">
+          <div id="stat-turbo" class="stat is-selectable" onclick="selectComponent('turbo')" title="Inspect the turbocharger in the model">
             <span class="label">Turbo / boost</span>
             <span class="readout"><span id="val-health-turbo">100.0</span><span class="unit"> %</span></span>
           </div>
-          <div id="stat-cyls" class="stat">
+          <div id="stat-cyls" class="stat is-selectable" onclick="selectComponent('cyl-0')" title="Inspect cylinder 1 in the model">
             <span class="label">Combustion</span>
             <span class="readout"><span id="val-health-cyls">100.0</span><span class="unit"> %</span></span>
           </div>
-          <div id="stat-vib" class="stat">
+          <div id="stat-vib" class="stat is-selectable" onclick="selectComponent('crankcase')" title="Inspect the crankcase in the model">
             <span class="label">Vibration 2X</span>
             <span class="readout"><span id="val-health-vib">100.0</span><span class="unit"> %</span></span>
           </div>

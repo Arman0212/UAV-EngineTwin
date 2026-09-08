@@ -30,12 +30,14 @@ const THEME = (() => {
     textPrimary: css('--text-primary', '#E8E6E1'),
     textMuted: css('--text-muted', '#8A8F96'),
     textDim: css('--text-dim', '#6B7076'),
-    caution: css('--caution', '#EF9F27'),
-    cautionDim: css('--caution-dim', '#BA7517'),
-    warning: css('--warning', '#E24B4A'),
-    ok: css('--ok', '#97C459'),
-    cautionBand: css('--caution-band', 'rgba(239,159,39,0.13)'),
-    warningBand: css('--warning-band', 'rgba(226,75,74,0.13)'),
+    caution: css('--caution', '#DFA33A'),
+    cautionDim: css('--caution-dim', '#A97A24'),
+    warning: css('--warning', '#DD5A4E'),
+    ok: css('--ok', '#8CBE68'),
+    instrument: css('--instrument', '#63A8D6'),
+    instrumentDim: css('--instrument-dim', '#3E7AA3'),
+    cautionBand: css('--caution-band', 'rgba(223,163,58,0.13)'),
+    warningBand: css('--warning-band', 'rgba(221,90,78,0.13)'),
     trace: [
       css('--trace-1', '#E8E6E1'),
       css('--trace-2', '#C2BFB9'),
@@ -77,6 +79,7 @@ let lastAudioAlertTime = 0;
 
 // Active system & fault state (cached for zero-flicker rendering)
 let currentActiveFault = "HEALTHY";
+let latestTwinState = null;    // most recent frame, for the component inspector
 let lastActiveFaultButton = null;
 let lastShapSignature = "";
 let lastOverallStatus = "";
@@ -180,8 +183,11 @@ document.addEventListener("DOMContentLoaded", () => {
   console.log("ENGINE-TWIN GCS Controller Initialized.");
 
   if (typeof Engine3DView !== "undefined") {
-    try { engine3D = new Engine3DView("container-3d"); }
-    catch (e) { console.warn("3D View Init Warning:", e); }
+    try {
+      engine3D = new Engine3DView("container-3d");
+      // The model owns picking; the station owns what a selection means.
+      engine3D.onSelect = onComponentSelected;
+    } catch (e) { console.warn("3D View Init Warning:", e); }
   }
 
   try { initCharts(); }
@@ -401,9 +407,15 @@ function votedAiState(ai) {
 function updateDashboard(state) {
   if (!state || state.status === "initializing") return;
 
+  latestTwinState = state;
+
   // Live or replayed frames are otherwise identical, so this is the only
   // place the dashboard cares which it is rendering.
   updateReplayBadge(state);
+
+  // The inspector reads the same frame everything else does, so its numbers
+  // never lag the panel beside them.
+  if (selectedComponentId) renderInspector();
 
   // --- Mission context tape --------------------------------------
   const totalSec = Math.floor(state.timestamp_s || 0);
@@ -845,9 +857,15 @@ function initCharts() {
     }
   };
 
-  // Model-expected baseline: 1.4px dashed, always dim.
+  // Model-expected baseline: 1.4px dashed, in instrument blue.
+  //
+  // This is the one place hue carries meaning rather than identity. Sensor
+  // traces stay greyscale and are told apart by lightness; the physics
+  // expectation is blue everywhere in the project, including the 3D selection
+  // outline and the project brief, so a glance at any chart separates "what we
+  // measured" from "what physics says" before reading a single label.
   const baselineStyle = {
-    borderColor: THEME.textDim,
+    borderColor: THEME.instrument,
     borderDash: [5, 4],
     borderWidth: 1.4,
     backgroundColor: 'transparent',
@@ -1463,4 +1481,112 @@ function updateReplayBadge(state) {
     el.innerText = "Live";
     el.removeAttribute("data-state");
   }
+}
+
+// ------------------------------------------------------------------
+// 15. COMPONENT SELECTION & INSPECTOR
+//
+// The 3D model, the cylinder strip and the subsystem tiles are three views
+// of the same set of components. Selecting in any one of them selects in
+// all of them, and the inspector shows the channels behind whatever is
+// selected — measured, model-expected, and the residual between them.
+// ------------------------------------------------------------------
+let selectedComponentId = null;
+
+// Which selectable chrome element corresponds to which component id.
+const COMPONENT_CHROME = {
+  'cyl-0': 'cyl-cell-0',
+  'cyl-1': 'cyl-cell-1',
+  'cyl-2': 'cyl-cell-2',
+  'cyl-3': 'cyl-cell-3',
+  'sump': 'stat-oil',
+  'turbo': 'stat-turbo',
+  'crankcase': 'stat-vib'
+};
+
+function selectComponent(id) {
+  // Selecting the same thing twice clears it, so a second click is an undo.
+  if (id && id === selectedComponentId) { clearComponentSelection(); return; }
+  if (engine3D && typeof engine3D.select === "function") {
+    engine3D.select(id);          // fires onSelect, which lands in onComponentSelected
+  } else {
+    onComponentSelected(id);
+  }
+}
+
+function clearComponentSelection() {
+  if (engine3D && typeof engine3D.select === "function") engine3D.select(null);
+  else onComponentSelected(null);
+}
+
+function onComponentSelected(id) {
+  selectedComponentId = id;
+
+  // Mirror the selection onto the tiles and the cylinder strip.
+  Object.entries(COMPONENT_CHROME).forEach(([cid, elId]) => {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    if (cid === id) el.setAttribute("data-selected", "true");
+    else el.removeAttribute("data-selected");
+  });
+
+  const panel = document.getElementById("panel-inspector");
+  const hint = document.getElementById("txt-model-hint");
+  if (panel) panel.hidden = !id;
+  if (hint) hint.hidden = !!id;
+
+  if (id) renderInspector();
+}
+
+function toggleModelLabels() {
+  if (!engine3D || typeof engine3D.setLabelsVisible !== "function") return;
+  const next = !engine3D.labelsVisible;
+  engine3D.setLabelsVisible(next);
+  const btn = document.getElementById("btn-labels");
+  if (btn) btn.classList.toggle("is-active", next);
+}
+
+// Residual grading uses the same sigma thresholds as the health index, so a
+// value the inspector calls CAUTION is the same value the panel border does.
+function residualState(sigma) {
+  const a = Math.abs(Number(sigma) || 0);
+  if (a >= 6.0) return "warning";
+  if (a >= 3.0) return "caution";
+  return "nominal";
+}
+
+function renderInspector() {
+  if (!selectedComponentId || !engine3D) return;
+  const info = engine3D.describeComponent(selectedComponentId, latestTwinState);
+  if (!info) return;
+
+  setText("txt-inspector-title", info.title);
+
+  const healthEl = document.getElementById("txt-inspector-health");
+  if (healthEl) {
+    if (info.healthPct === null || info.healthPct === undefined) {
+      healthEl.hidden = true;
+    } else {
+      healthEl.hidden = false;
+      healthEl.innerText = `${Number(info.healthPct).toFixed(1)} %`;
+      setState(healthEl, healthState(info.healthPct, "inspector"));
+    }
+  }
+
+  const tbody = document.getElementById("tbody-inspector");
+  if (tbody) {
+    tbody.innerHTML = info.rows.map(r => {
+      const hasRes = r.r !== undefined && r.r !== null;
+      const st = hasRes ? residualState(r.r) : "nominal";
+      const resTxt = hasRes ? `${Number(r.r) >= 0 ? "+" : ""}${Number(r.r).toFixed(1)} σ` : "—";
+      return `<tr>
+        <td>${r.k}</td>
+        <td class="v-meas">${r.v}</td>
+        <td class="v-model">${r.exp === undefined ? "—" : r.exp}</td>
+        <td class="v-res" data-state="${st}">${resTxt}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  setText("txt-inspector-note", info.note || "");
 }
