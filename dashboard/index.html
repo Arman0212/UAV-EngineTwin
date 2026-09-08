@@ -21,13 +21,138 @@
   <!-- GLASS COCKPIT THEME: single source of truth for colour and type -->
   <link rel="stylesheet" href="/static/theme.css">
 </head>
-<body class="h-screen flex flex-col overflow-hidden select-none">
+<body class="select-none" data-phase="cover">
+
+  <!-- ====================================================================
+       CHAPTER 1 — THE COVER
+       A fixed layer, not a page. Scrolling drives the handover to the
+       console below it; see the scroll transition block in theme.css and
+       the progress mapping in cover.js.
+       ==================================================================== -->
+  <div id="cover" class="cover">
+
+    <div class="cover-bg" aria-hidden="true">
+      <div class="cover-grid"></div>
+      <div class="cover-glow"></div>
+      <div class="cover-horizon"></div>
+      <div class="cover-vignette"></div>
+    </div>
+
+    <!-- Beat A — the masthead -->
+    <div class="beat beat-a">
+      <div class="beat-inner">
+        <div class="cover-ps">
+          <span>SIH26054</span><span class="sep">/</span>
+          <span>DRDO</span><span class="sep">/</span>
+          <span>Robotics &amp; Drones</span>
+        </div>
+        <h1 class="cover-title">ENGINE<span class="thin">TWIN</span></h1>
+        <p class="cover-sub">
+          A real-time digital twin for the aero piston engines that power
+          medium-altitude long-endurance UAVs. It runs physics alongside the
+          engine and diagnoses the difference.
+        </p>
+        <dl class="cover-meta">
+          <div><dt>Powerplant</dt><dd>VRDE 2.2 L turbo</dd></div>
+          <div><dt>Envelope</dt><dd>0 – 30,000 ft</dd></div>
+          <div><dt>Update rate</dt><dd>20 Hz</dd></div>
+          <div><dt>Tick budget</dt><dd>1.5 / 150 ms</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <!-- Beat B — the thesis -->
+    <div class="beat beat-b">
+      <div class="beat-inner">
+        <div class="beat-eyebrow">The idea</div>
+        <h2 class="beat-head">Diagnose the gap from physics, never the reading</h2>
+        <div class="cover-eq">
+          r<span class="tok">ᵢ</span> &nbsp;=&nbsp; ( y<span class="tok">measured</span>
+          − y<span class="tok">physics</span> ) &nbsp;/&nbsp; σ<span class="tok">channel</span>
+        </div>
+        <p class="beat-body">
+          A Mean Value Engine Model runs in lockstep with the engine, fed the same
+          altitude, ambient conditions and throttle. Because the baseline has
+          already absorbed altitude and derating, a healthy engine sits at r ≈ 0
+          across the whole envelope — sea level or 30,000 ft. Every model
+          downstream sees residuals. None of them ever sees a raw sensor value.
+        </p>
+      </div>
+    </div>
+
+    <!-- Beat C — the evidence -->
+    <div class="beat beat-c">
+      <div class="beat-inner">
+        <div class="beat-eyebrow">Measured</div>
+        <h2 class="beat-head" style="max-width:26ch">One continuous climb, sea level to 30,000 ft</h2>
+        <div class="cover-figure">
+          <svg viewBox="0 0 740 300" role="img"
+               aria-label="Across a climb from sea level to 30,000 feet, engine power falls from 187 to 110 horsepower while the health index stays near 100 percent throughout.">
+            <line class="g-line" x1="70" y1="30"  x2="690" y2="30"/>
+            <line class="g-line" x1="70" y1="90"  x2="690" y2="90"/>
+            <line class="g-line" x1="70" y1="150" x2="690" y2="150"/>
+            <line class="g-line" x1="70" y1="210" x2="690" y2="210"/>
+            <rect class="g-band" x="70" y="30" width="620" height="66"/>
+            <line class="g-axis" x1="70" y1="270" x2="690" y2="270"/>
+            <line class="g-axis" x1="70" y1="30"  x2="70"  y2="270"/>
+
+            <text class="g-tick" x="62" y="274" text-anchor="end">0</text>
+            <text class="g-tick" x="62" y="154" text-anchor="end">110</text>
+            <text class="g-tick" x="62" y="34"  text-anchor="end">220</text>
+            <text class="g-title" x="70" y="16">SHAFT POWER · HP</text>
+
+            <text class="g-tick" x="698" y="274">0</text>
+            <text class="g-tick" x="698" y="154">50</text>
+            <text class="g-tick" x="698" y="34">100</text>
+            <text class="g-title" x="690" y="16" text-anchor="end">HEALTH · %</text>
+
+            <text class="g-tick" x="70"  y="290" text-anchor="middle">0</text>
+            <text class="g-tick" x="277" y="290" text-anchor="middle">10,000</text>
+            <text class="g-tick" x="483" y="290" text-anchor="middle">20,000</text>
+            <text class="g-tick" x="690" y="290" text-anchor="middle">30,000 FT</text>
+
+            <polyline class="g-health" points="70,41.3 122,98.4 174,31.4 226,37.0 277,30.7 329,45.8 381,31.7 433,36.5 484,38.4 536,32.9 588,31.4 640,38.4 690,35.0"/>
+            <polyline class="g-power"  points="70,66.0 122,67.1 174,68.2 226,69.3 277,69.3 329,82.4 381,95.5 433,108.5 484,116.2 536,127.1 588,136.9 640,147.8 690,150.0"/>
+
+            <circle class="g-dot-p" cx="70"  cy="66.0"  r="3"/>
+            <circle class="g-dot-p" cx="690" cy="150.0" r="3.6"/>
+            <circle class="g-dot-h" cx="122" cy="98.4"  r="3.4"/>
+            <circle class="g-dot-h" cx="690" cy="35.0"  r="3.6"/>
+
+            <text class="g-end" x="82"  y="60">187 HP</text>
+            <text class="g-end" x="684" y="166" text-anchor="end">110 HP</text>
+            <text class="g-end" x="684" y="26"  text-anchor="end">97.9 %</text>
+            <text class="g-note" x="140" y="118">71.5 % — climb-onset transient</text>
+          </svg>
+          <div class="cover-fig-cap">
+            <span class="key"><i class="sw" style="background:var(--instrument)"></i>Shaft power</span>
+            <span class="key"><i class="sw" style="background:var(--ok)"></i>Overall health index</span>
+            <span>Zero false diagnoses across the climb</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cover-cue" aria-hidden="true">
+      <span>Scroll</span>
+      <span class="rail"></span>
+    </div>
+    <div class="cover-progress" aria-hidden="true"></div>
+  </div>
+
 
   <!-- ====================================================================
        1. STATUS BAR
        Identity, mission context tape, station controls. All greyscale
        except the telemetry-live indicator.
        ==================================================================== -->
+  <!-- ====================================================================
+       CHAPTER 2 — THE CONSOLE
+       The same station as before, unchanged in structure. It is a fixed
+       layer beneath the cover, revealed by the same scroll position that
+       recedes the cover, so the two never separate.
+       ==================================================================== -->
+  <div id="app-shell" class="app-shell">
   <header class="chrome rule-b px-3 py-1.5 flex items-center justify-between flex-shrink-0 z-30">
     <div class="flex items-center gap-2">
       <span class="station-id">ENGINE-TWIN</span>
@@ -49,6 +174,8 @@
     <div class="flex items-center gap-1.5">
       <button id="btn-sandbox-open" onclick="toggleSandbox()" class="btn" title="Developer flight sandbox controls">Sandbox ▾</button>
       <button id="btn-debrief-open" onclick="toggleDebrief()" class="btn" title="Post-flight analysis and mission replay">Debrief ▾</button>
+      <button onclick="returnToCover()" class="btn btn-cover-return"
+              title="Scroll back up to the cover">↑ Cover</button>
       <a href="https://claude.ai/code/artifact/fd59ade8-7421-4f96-9720-96d8f2a0bea0"
          target="_blank" rel="noopener" class="btn"
          title="Open the SIH26054 project brief">Brief ↗</a>
@@ -411,8 +538,14 @@
       </button>
     </div>
   </footer>
+  </div><!-- /#app-shell -->
+
+  <!-- The document's only job in normal flow: be tall enough to scroll.
+       Both chapters are fixed layers, so this never pushes anything around. -->
+  <div id="scroll-track" aria-hidden="true"></div>
 
   <script src="/static/engine_view3d.js"></script>
   <script src="/static/app.js"></script>
+  <script src="/static/cover.js"></script>
 </body>
 </html>
