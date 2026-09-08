@@ -694,13 +694,15 @@ body {
   z-index: 20;
   overflow: hidden;
   background: var(--bg-chrome);
-  will-change: transform, opacity, filter;
 }
 
 /* Exit animation triggered by the Continue button */
 .cover.cover-exit {
   animation: coverLeave 750ms var(--ease) forwards;
   pointer-events: none;
+  /* Promoted only for the 750ms it is actually animating. A permanent
+     will-change keeps a full-viewport layer alive for the whole session. */
+  will-change: transform, opacity, filter;
 }
 
 @keyframes coverLeave {
@@ -805,19 +807,36 @@ body[data-phase="app"] .cover { display: none; }
 /* Each beat's opacity and vertical offset are driven by its progress
    variable. The slight Y translation creates depth — elements drift up
    as they arrive and leave, rather than popping in. */
-.beat-1  { opacity: var(--p1);  transform: translate3d(0, calc(-8vh * (1 - var(--p1))), 0); }
-.beat-2  { opacity: var(--p2);  transform: translate3d(0, calc(7vh * (1 - var(--p2))), 0); }
-.beat-3  { opacity: var(--p3);  transform: translate3d(0, calc(7vh * (1 - var(--p3))), 0); }
-.beat-4  { opacity: var(--p4);  transform: translate3d(0, calc(6vh * (1 - var(--p4))), 0); }
-.beat-5  { opacity: var(--p5);  transform: translate3d(0, calc(7vh * (1 - var(--p5))), 0); }
-.beat-6  { opacity: var(--p6);  transform: translate3d(0, calc(6vh * (1 - var(--p6))), 0); }
-.beat-7  { opacity: var(--p7);  transform: translate3d(0, calc(7vh * (1 - var(--p7))), 0); }
-.beat-8  { opacity: var(--p8);  transform: translate3d(0, calc(5vh * (1 - var(--p8))), 0); }
-.beat-9  { opacity: var(--p9);  transform: translate3d(0, calc(6vh * (1 - var(--p9))), 0); }
-.beat-10 {
-  opacity: var(--p10);
-  transform: translate3d(0, calc(5vh * (1 - var(--p10))), 0)
-             scale(calc(0.97 + 0.03 * var(--p10)));
+/* Every chapter animates from its OWN --v, set on the element by cover.js.
+   These were previously 22 separate rules reading --p1..--p22 off :root, which
+   meant each frame invalidated style for the whole document — every chapter
+   plus the entire console — 22 times over. Scoping the variable to the element
+   confines each write to that element's subtree, which is what makes a
+   22-chapter journey affordable at 60fps.
+
+   --dy is the arrival travel: chapters drift into place rather than popping. */
+.beat {
+  --v: 0;
+  --dy: 6vh;
+  opacity: var(--v);
+  transform: translate3d(0, calc(var(--dy) * (1 - var(--v))), 0);
+  /* A chapter far from the playhead is not merely transparent — it is skipped
+     in paint and hit-testing entirely. Without this all 22 full-viewport
+     layers composite on every frame. */
+  visibility: hidden;
+}
+.beat.is-near { visibility: visible; }
+
+.beat-1 { --dy: -8vh; }
+.beat-2, .beat-3, .beat-5, .beat-7 { --dy: 7vh; }
+.beat-8 { --dy: 5vh; }
+.beat-10, .beat-22 { --dy: 5vh; }
+
+/* The closing chapter is the only one that also scales, so it lands rather
+   than slides. */
+.beat-22 {
+  transform: translate3d(0, calc(var(--dy) * (1 - var(--v))), 0)
+             scale(calc(0.97 + 0.03 * var(--v)));
 }
 
 /* ==========================================================================
@@ -1452,26 +1471,13 @@ body[data-phase="app"] .btn-cover-return { display: inline-flex; }
   --track: 2400vh;
 }
 
-.beat-11 { opacity: var(--p11); transform: translate3d(0, calc(6vh * (1 - var(--p11))), 0); }
-.beat-12 { opacity: var(--p12); transform: translate3d(0, calc(6vh * (1 - var(--p12))), 0); }
-.beat-13 { opacity: var(--p13); transform: translate3d(0, calc(6vh * (1 - var(--p13))), 0); }
-.beat-14 { opacity: var(--p14); transform: translate3d(0, calc(6vh * (1 - var(--p14))), 0); }
-.beat-15 { opacity: var(--p15); transform: translate3d(0, calc(6vh * (1 - var(--p15))), 0); }
-.beat-16 { opacity: var(--p16); transform: translate3d(0, calc(6vh * (1 - var(--p16))), 0); }
-.beat-17 { opacity: var(--p17); transform: translate3d(0, calc(6vh * (1 - var(--p17))), 0); }
-.beat-18 { opacity: var(--p18); transform: translate3d(0, calc(6vh * (1 - var(--p18))), 0); }
-.beat-19 { opacity: var(--p19); transform: translate3d(0, calc(6vh * (1 - var(--p19))), 0); }
-.beat-20 { opacity: var(--p20); transform: translate3d(0, calc(6vh * (1 - var(--p20))), 0); }
-.beat-21 { opacity: var(--p21); transform: translate3d(0, calc(6vh * (1 - var(--p21))), 0); }
-.beat-22 {
-  opacity: var(--p22);
-  transform: translate3d(0, calc(5vh * (1 - var(--p22))), 0)
-             scale(calc(0.97 + 0.03 * var(--p22)));
-}
 
 /* Long chapters need their own scroll when the viewport is short; the page
    body must never be the thing that scrolls sideways or clips a table. */
-.beat-inner { max-height: 88vh; overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
+.beat-inner { max-height: 88vh; overflow-x: hidden; }
+/* Only chapters carrying a table or a long list can overflow; the rest
+   must not create a scroll container they never use. */
+.beat.is-near .beat-inner { overflow-y: auto; padding-right: 4px; }
 .beat-inner::-webkit-scrollbar { width: 4px; }
 .beat-inner::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 

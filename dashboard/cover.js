@@ -62,7 +62,6 @@
   }
 
   let phase = null;
-  let ticking = false;
   let trackLocked = false;
   let countersAnimated = false;
   let liveBeat = 0;
@@ -143,44 +142,128 @@
   }
 
   /* ------------------------------------------------------------------
-   * SCROLL -> PROGRESS MAPPING
+   * RENDER LOOP
+   *
+   * Two problems made the journey feel rough, and they are different:
+   *
+   *  1. COST. Writing --p1..--p22 on :root invalidated style for the entire
+   *     document every frame. Each chapter now owns its own --v, so a write
+   *     touches one element instead of all of them, and only chapters near
+   *     the playhead are written to or painted at all.
+   *
+   *  2. CADENCE. A wheel notch moves the page ~100px in one jump. Mapping
+   *     that straight onto progress makes the chapters step rather than
+   *     glide, which reads as jerky even at a solid 60fps. So the rendered
+   *     position chases the scroll position instead of equalling it, and the
+   *     easing between them is what the eye actually reads as smoothness.
    * ---------------------------------------------------------------- */
-  function apply(p) {
+
+  // How quickly the render catches the scroll. Lower is heavier and smoother;
+  // too low and the page feels detached from the wheel.
+  const CHASE = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ? 1.0    // no easing: render exactly where the scroll is
+    : 0.12;
+  const EPSILON = 0.00015;      // below this, stop rendering entirely
+  const NEAR_RANGE = 2;         // chapters kept painted either side of the playhead
+
+  let pTarget = 0;
+  let pRender = 0;
+  let running = false;
+  let nearFrom = -1, nearTo = -1;
+
+  const lastV = new Array(BEAT_COUNT + 1).fill(-1);
+
+  /** Marks which chapters are close enough to be worth painting. */
+  function setNearWindow(centre) {
+    const from = Math.max(1, centre - NEAR_RANGE);
+    const to = Math.min(BEAT_COUNT, centre + NEAR_RANGE);
+    if (from === nearFrom && to === nearTo) return;
+
+    for (let i = 1; i <= BEAT_COUNT; i++) {
+      const el = beatEls[i];
+      if (!el) continue;
+      const shouldBeNear = i >= from && i <= to;
+      const wasNear = i >= nearFrom && i <= nearTo;
+      if (shouldBeNear === wasNear) continue;
+      el.classList.toggle('is-near', shouldBeNear);
+      // A chapter leaving the window is fully cleared, so it cannot be left
+      // frozen at a partial opacity when the playhead jumps.
+      if (!shouldBeNear && lastV[i] !== 0) {
+        el.style.setProperty('--v', '0');
+        lastV[i] = 0;
+      }
+    }
+    nearFrom = from; nearTo = to;
+  }
+
+  function render(p) {
+    // One global write, for the things that genuinely span the whole cover:
+    // the parallax plates, the progress rail and the altitude gauge.
     root.style.setProperty('--p', p.toFixed(4));
 
+    const centre = Math.round(p / SPAN) + 1;
+    setNearWindow(centre);
+
     let best = 0, bestVal = 0;
-    for (let i = 1; i <= BEAT_COUNT; i++) {
+    for (let i = nearFrom; i <= nearTo; i++) {
+      const el = beatEls[i];
+      if (!el) continue;
       const v = beatValue(p, BEATS[i]);
-      root.style.setProperty('--p' + i, v.toFixed(4));
+      // Skip the write when nothing visible changed.
+      if (Math.abs(v - lastV[i]) > 0.002) {
+        el.style.setProperty('--v', v.toFixed(4));
+        lastV[i] = v;
+      }
       if (v > bestVal) { bestVal = v; best = i; }
     }
 
-    // The dominant beat gets `.is-live`, which is what releases its staggered
-    // reveal. Content-heavy chapters unfold as you scroll into them rather
-    // than arriving all at once, which is the whole point of a long journey.
+    // The dominant chapter releases its staggered reveal.
     if (best !== liveBeat && bestVal > 0.55) {
       if (beatEls[liveBeat]) beatEls[liveBeat].classList.remove('is-live');
       if (beatEls[best]) beatEls[best].classList.add('is-live');
       liveBeat = best;
     }
 
-    // Altitude rail — the persistent thread through the whole descent.
-    const ft = Math.round(p * CEILING_FT / 100) * 100;
     if (altFill) altFill.style.setProperty('--alt', p.toFixed(4));
-    if (altReadout) altReadout.textContent = ft.toLocaleString();
+    if (altReadout) {
+      const ft = Math.round(p * CEILING_FT / 100) * 100;
+      altReadout.textContent = ft.toLocaleString();
+    }
 
     if (beatValue(p, BEATS[8]) > 0.35 && !countersAnimated) animateCounters();
   }
 
+  function frame() {
+    const delta = pTarget - pRender;
+
+    if (Math.abs(delta) < EPSILON) {
+      pRender = pTarget;
+      render(pRender);
+      running = false;              // settled — stop burning frames
+      return;
+    }
+
+    pRender += delta * CHASE;
+    render(pRender);
+    requestAnimationFrame(frame);
+  }
+
+  function kick() {
+    if (running) return;
+    running = true;
+    requestAnimationFrame(frame);
+  }
+
+  /** Jumps straight to a position without easing, for resets. */
+  function snapTo(p) {
+    pTarget = pRender = p;
+    render(p);
+  }
+
   function onScroll() {
-    if (ticking) return;
-    ticking = true;
-    requestAnimationFrame(() => {
-      ticking = false;
-      if (trackLocked) return;
-      apply(clamp01(window.scrollY / maxScroll()));
-      // No auto-transition — the Continue button handles the handover.
-    });
+    if (trackLocked) return;
+    pTarget = clamp01(window.scrollY / maxScroll());
+    kick();
   }
 
   /* ------------------------------------------------------------------
@@ -220,7 +303,7 @@
 
     requestAnimationFrame(() => {
       window.scrollTo(0, maxScroll());
-      apply(1);
+      snapTo(1);
       requestAnimationFrame(() => {
         const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
@@ -252,6 +335,6 @@
   // Browsers restore scroll position on reload; the journey always starts fresh.
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
   window.scrollTo(0, 0);
-  apply(0);
+  snapTo(0);
   setPhase('cover');
 })();
