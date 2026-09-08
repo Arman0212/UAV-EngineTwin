@@ -1,14 +1,15 @@
 /**
- * ENGINE-TWIN: Cover chapter — scroll handover
+ * ENGINE-TWIN: Cover chapter — infinity-scroll introduction
  *
  * The cover and the console are two fixed layers of one document. This file
- * maps scroll position onto a handful of progress variables on :root; every
- * movement those variables cause is expressed in theme.css.
+ * maps scroll position onto progress variables on :root; theme.css expresses
+ * every movement. Nothing here reads layout, so no frame triggers a reflow —
+ * the browser only re-composites transform, opacity and filter.
  *
- * That split is deliberate. Nothing here reads or writes layout, so no frame
- * can trigger a reflow: the browser only ever re-composites transform, opacity
- * and filter. It also means the choreography can be retimed by editing the
- * BEATS table below, without touching a single style.
+ * Beat ranges are generated rather than hand-tabulated. With twenty-plus
+ * chapters a hand-written table drifts out of balance the moment one is
+ * inserted, and an uneven gap between two beats is exactly what reads as a
+ * page change.
  */
 
 (() => {
@@ -17,32 +18,40 @@
   const root = document.documentElement;
   const body = document.body;
 
-  // Where each beat holds, in journey progress. Ranges overlap so one beat is
-  // still leaving as the next arrives — a gap would read as a page change,
-  // which is the exact thing this transition exists to avoid.
-  // These ranges are tuned, not guessed. Simulating the journey with tighter
-  // ranges showed three points where every beat had faded but the next had not
-  // arrived — the screen went nearly empty, which reads as exactly the page
-  // change this transition exists to remove. Each beat now still holds a third
-  // of its presence as the next one reaches the same level.
-  const BEATS = {
-    A: { in: -0.20, hold: 0.00, out: 0.34 },   // masthead, on screen at rest
-    B: { in:  0.13, hold: 0.40, out: 0.67 },   // thesis
-    C: { in:  0.49, hold: 0.74, out: 0.93 }    // evidence
-  };
+  /* ------------------------------------------------------------------
+   * BEAT GEOMETRY
+   *
+   * Beats are spaced evenly across the journey and each one lives well
+   * into its neighbours' territory. OVERLAP is the fraction of the gap a
+   * beat keeps fading over: at 0.85 a beat is still carrying 40% of the
+   * frame at the moment its successor reaches the same level, so the
+   * screen is never close to empty between chapters.
+   * ---------------------------------------------------------------- */
+  const BEAT_COUNT = 22;
+  const OVERLAP = 0.85;
+  const SPAN = 1 / (BEAT_COUNT - 1);
 
-  // The handover itself. The console begins arriving well before the cover has
-  // finished leaving, so the two cross rather than hand off.
-  const RECEDE = { from: 0.62, to: 1.00 };
-  const REVEAL = { from: 0.52, to: 0.96 };
+  const BEATS = {};
+  for (let i = 1; i <= BEAT_COUNT; i++) {
+    const hold = (i - 1) * SPAN;
+    BEATS[i] = {
+      in: hold - SPAN * OVERLAP,
+      hold,
+      // The closing beat holds past the end of the journey so it stays put
+      // once there is nothing left to scroll.
+      out: (i === BEAT_COUNT) ? hold + SPAN : hold + SPAN * OVERLAP
+    };
+  }
 
-  // Past this the console is simply the site, and the journey is over.
-  const SETTLE_AT = 0.995;
+  // Altitude readout. The journey is a climb — this is a UAV project, and
+  // tying descent-through-the-page to ascent-through-the-envelope is the one
+  // metaphor the subject actually supplies.
+  const CEILING_FT = 30000;
 
   const clamp01 = (v) => v < 0 ? 0 : (v > 1 ? 1 : v);
   const ramp = (v, a, b) => (b === a) ? 1 : clamp01((v - a) / (b - a));
 
-  // Smoothstep keeps the beats from arriving and leaving at constant speed,
+  // Smoothstep keeps beats from arriving and leaving at constant speed,
   // which is what separates "cinematic" from "linked to a scrollbar".
   const smooth = (t) => t * t * (3 - 2 * t);
 
@@ -55,6 +64,20 @@
   let phase = null;
   let ticking = false;
   let trackLocked = false;
+  let countersAnimated = false;
+  let liveBeat = 0;
+
+  const beatEls = {};
+  let altFill = null;
+  let altReadout = null;
+
+  function cacheNodes() {
+    for (let i = 1; i <= BEAT_COUNT; i++) {
+      beatEls[i] = document.querySelector('.beat-' + i);
+    }
+    altFill = document.getElementById('alt-fill');
+    altReadout = document.getElementById('alt-readout');
+  }
 
   function maxScroll() {
     return Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
@@ -65,13 +88,8 @@
     phase = next;
     body.setAttribute('data-phase', next);
 
-    // The 3D viewport is measured when the console is still behind the cover,
-    // and on mobile the shell changes shape entirely when it settles. Tell the
-    // renderer once it is live, or the model stays letterboxed.
-    //
-    // app.js declares engine3D with `let`, so it lives in the global lexical
-    // scope rather than on `window` — reachable by name, but only once app.js
-    // has actually run.
+    // The 3D viewport is measured while the console is still behind the cover.
+    // Tell the renderer once it is live, or the model stays letterboxed.
     if (next === 'app' && typeof engine3D !== 'undefined' && engine3D &&
         typeof engine3D.onWindowResize === 'function') {
       requestAnimationFrame(() => engine3D.onWindowResize());
@@ -79,12 +97,10 @@
   }
 
   /**
-   * Once the console is live, the scroll track collapses to nothing.
-   *
-   * Without this, a stray wheel gesture over a panel would drag the operator
-   * back out to the cover mid-fault. Both layers are fixed, so removing the
-   * track moves nothing on screen — the page simply stops having anywhere to
-   * scroll, and `returnToCover()` is the only way back.
+   * Once the console is live the scroll track collapses to nothing.
+   * Without this, a stray wheel gesture would drag the operator back to the
+   * cover mid-fault. Both layers are fixed, so removing the track moves
+   * nothing on screen.
    */
   function lockTrack(locked) {
     if (locked === trackLocked) return;
@@ -92,13 +108,68 @@
     root.style.setProperty('--track', locked ? '0px' : '');
   }
 
+  /* ------------------------------------------------------------------
+   * COUNTER ANIMATION
+   * When the statistics beat becomes visible, the numbers count up.
+   * ---------------------------------------------------------------- */
+  function animateCounters() {
+    if (countersAnimated) return;
+    countersAnimated = true;
+
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const els = document.querySelectorAll('.stat-number[data-target]');
+
+    els.forEach(el => {
+      const target = parseFloat(el.dataset.target);
+      const isFloat = target % 1 !== 0;
+      const render = (v) => {
+        if (target >= 1000) el.textContent = Math.round(v).toLocaleString();
+        else if (isFloat) el.textContent = v.toFixed(target < 10 ? 2 : 1);
+        else el.textContent = Math.round(v);
+      };
+
+      if (reduced) { render(target); return; }
+
+      const duration = 1400;
+      const start = performance.now();
+      function tick(now) {
+        const t = Math.min((now - start) / duration, 1);
+        const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        render(target * eased);
+        if (t < 1) requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    });
+  }
+
+  /* ------------------------------------------------------------------
+   * SCROLL -> PROGRESS MAPPING
+   * ---------------------------------------------------------------- */
   function apply(p) {
     root.style.setProperty('--p', p.toFixed(4));
-    root.style.setProperty('--pA', beatValue(p, BEATS.A).toFixed(4));
-    root.style.setProperty('--pB', beatValue(p, BEATS.B).toFixed(4));
-    root.style.setProperty('--pC', beatValue(p, BEATS.C).toFixed(4));
-    root.style.setProperty('--pR', smooth(ramp(p, RECEDE.from, RECEDE.to)).toFixed(4));
-    root.style.setProperty('--pApp', smooth(ramp(p, REVEAL.from, REVEAL.to)).toFixed(4));
+
+    let best = 0, bestVal = 0;
+    for (let i = 1; i <= BEAT_COUNT; i++) {
+      const v = beatValue(p, BEATS[i]);
+      root.style.setProperty('--p' + i, v.toFixed(4));
+      if (v > bestVal) { bestVal = v; best = i; }
+    }
+
+    // The dominant beat gets `.is-live`, which is what releases its staggered
+    // reveal. Content-heavy chapters unfold as you scroll into them rather
+    // than arriving all at once, which is the whole point of a long journey.
+    if (best !== liveBeat && bestVal > 0.55) {
+      if (beatEls[liveBeat]) beatEls[liveBeat].classList.remove('is-live');
+      if (beatEls[best]) beatEls[best].classList.add('is-live');
+      liveBeat = best;
+    }
+
+    // Altitude rail — the persistent thread through the whole descent.
+    const ft = Math.round(p * CEILING_FT / 100) * 100;
+    if (altFill) altFill.style.setProperty('--alt', p.toFixed(4));
+    if (altReadout) altReadout.textContent = ft.toLocaleString();
+
+    if (beatValue(p, BEATS[8]) > 0.35 && !countersAnimated) animateCounters();
   }
 
   function onScroll() {
@@ -106,28 +177,47 @@
     ticking = true;
     requestAnimationFrame(() => {
       ticking = false;
-      if (trackLocked) return;               // nothing left to map
-
-      const p = clamp01(window.scrollY / maxScroll());
-      apply(p);
-
-      if (p >= SETTLE_AT) {
-        apply(1);
-        setPhase('app');
-        lockTrack(true);
-      } else {
-        setPhase('cover');
-      }
+      if (trackLocked) return;
+      apply(clamp01(window.scrollY / maxScroll()));
+      // No auto-transition — the Continue button handles the handover.
     });
   }
 
-  /** Reopens the journey and walks back to the top of it. */
+  /* ------------------------------------------------------------------
+   * COVER -> APP TRANSITION
+   * ---------------------------------------------------------------- */
+  window.enterApp = function enterApp() {
+    const cover = document.getElementById('cover');
+    const appShell = document.getElementById('app-shell');
+    if (!cover || !appShell) return;
+
+    const btn = document.getElementById('btn-enter-app');
+    if (btn) btn.disabled = true;
+
+    cover.classList.add('cover-exit');
+    appShell.classList.add('app-entering');
+
+    setTimeout(() => {
+      setPhase('app');
+      lockTrack(true);
+      cover.classList.remove('cover-exit');
+      appShell.classList.remove('app-entering');
+      if (btn) btn.disabled = false;
+    }, 750);
+  };
+
+  /* ------------------------------------------------------------------
+   * APP -> COVER RETURN
+   * ---------------------------------------------------------------- */
   window.returnToCover = function returnToCover() {
     lockTrack(false);
     setPhase('cover');
 
-    // Restore the scroll position the console was settled at, so the cover
-    // reappears from where it went rather than jumping into frame.
+    countersAnimated = false;
+    document.querySelectorAll('.stat-number[data-target]').forEach(el => {
+      el.textContent = '0';
+    });
+
     requestAnimationFrame(() => {
       window.scrollTo(0, maxScroll());
       apply(1);
@@ -138,13 +228,28 @@
     });
   };
 
-  window.addEventListener('scroll', onScroll, { passive: true });
-  window.addEventListener('resize', () => {
-    if (!trackLocked) onScroll();
-  }, { passive: true });
+  /** Jumps the journey to a chapter, used by the chapter rail. */
+  window.goToBeat = function goToBeat(n) {
+    if (trackLocked) return;
+    const target = clamp01((n - 1) * SPAN) * maxScroll();
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: target, behavior: reduced ? 'auto' : 'smooth' });
+  };
 
-  // Browsers restore scroll position on reload, which would drop the visitor
-  // mid-transition with no context. The journey always starts at its start.
+  /* ------------------------------------------------------------------
+   * EVENT WIRING
+   * ---------------------------------------------------------------- */
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', () => { if (!trackLocked) onScroll(); },
+                          { passive: true });
+
+  // Gate the staggered-reveal styles on JS having run. If this file fails to
+  // load, every chapter still renders its content rather than staying blank.
+  root.classList.add('cover-js');
+
+  cacheNodes();
+
+  // Browsers restore scroll position on reload; the journey always starts fresh.
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
   window.scrollTo(0, 0);
   apply(0);

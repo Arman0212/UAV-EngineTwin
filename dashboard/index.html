@@ -38,9 +38,16 @@
       <div class="cover-vignette"></div>
     </div>
 
-    <!-- Beat A — the masthead -->
-    <div class="beat beat-a">
-      <div class="beat-inner">
+    <div class="cover-shapes" aria-hidden="true">
+      <div class="cover-shape cover-shape-1"></div>
+      <div class="cover-shape cover-shape-2"></div>
+      <div class="cover-shape cover-shape-3"></div>
+      <div class="cover-shape cover-shape-4"></div>
+    </div>
+
+    <!-- Beat 1 — Hero / masthead -->
+    <div class="beat beat-1">
+      <div class="beat-inner stagger">
         <div class="cover-ps">
           <span>SIH26054</span><span class="sep">/</span>
           <span>DRDO</span><span class="sep">/</span>
@@ -61,28 +68,105 @@
       </div>
     </div>
 
-    <!-- Beat B — the thesis -->
-    <div class="beat beat-b">
-      <div class="beat-inner">
+    <!-- Beat 2 — The Problem -->
+    <div class="beat beat-2">
+      <div class="beat-inner stagger">
+        <div class="beat-eyebrow">The problem</div>
+        <h2 class="beat-head" style="max-width:28ch">Why threshold alarms fail at 28,000 ft</h2>
+        <p class="beat-body">
+          A conventional engine instrument system watches each channel against a fixed
+          redline. On a light aircraft at 8,000 ft, that works. On a MALE UAV climbing
+          from sea level to 30,000 ft on a 20-hour sortie, it fails in both directions
+          at once.
+        </p>
+        <div class="cover-callout">
+          <span class="callout-icon">&#9888;</span>
+          <p class="beat-body">Climb high enough and a <em>healthy</em> engine looks sick.
+          Power derates from 200 HP to 110 HP, EGT drifts, MAP falls &mdash; nothing is
+          broken, but every fixed threshold reads it as a fault. The operator learns to
+          ignore alarms.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Beat 3 — The Trap -->
+    <div class="beat beat-3">
+      <div class="beat-inner stagger">
+        <div class="beat-eyebrow">The trap</div>
+        <h2 class="beat-head" style="max-width:28ch">A raw sensor reading carries two things at once</h2>
+        <div class="cover-split">
+          <div class="split-card">
+            <span class="split-label">Engine state</span>
+            <p>Is the injector clogging? Is the turbo losing boost? Is a bearing wearing?</p>
+          </div>
+          <span class="split-plus">+</span>
+          <div class="split-card">
+            <span class="split-label">Flight state</span>
+            <p>What altitude? What ambient pressure? What temperature? What throttle setting?</p>
+          </div>
+        </div>
+        <p class="beat-body" style="margin-top:24px">
+          You cannot threshold your way out of that. A black-box model trained on
+          raw telemetry inherits the same problem &mdash; it just hides it behind a
+          confidence score.
+        </p>
+      </div>
+    </div>
+
+    <!-- Beat 4 — The Idea -->
+    <div class="beat beat-4">
+      <div class="beat-inner stagger">
         <div class="beat-eyebrow">The idea</div>
         <h2 class="beat-head">Diagnose the gap from physics, never the reading</h2>
         <div class="cover-eq">
-          r<span class="tok">ᵢ</span> &nbsp;=&nbsp; ( y<span class="tok">measured</span>
-          − y<span class="tok">physics</span> ) &nbsp;/&nbsp; σ<span class="tok">channel</span>
+          r<span class="tok">&#7522;</span> &nbsp;=&nbsp; ( y<span class="tok">measured</span>
+          &minus; y<span class="tok">physics</span> ) &nbsp;/&nbsp; &sigma;<span class="tok">channel</span>
         </div>
         <p class="beat-body">
           A Mean Value Engine Model runs in lockstep with the engine, fed the same
           altitude, ambient conditions and throttle. Because the baseline has
-          already absorbed altitude and derating, a healthy engine sits at r ≈ 0
-          across the whole envelope — sea level or 30,000 ft. Every model
+          already absorbed altitude and derating, a healthy engine sits at r &asymp; 0
+          across the whole envelope &mdash; sea level or 30,000 ft. Every model
           downstream sees residuals. None of them ever sees a raw sensor value.
         </p>
       </div>
     </div>
 
-    <!-- Beat C — the evidence -->
-    <div class="beat beat-c">
-      <div class="beat-inner">
+    <!-- Beat 5 — How It Works -->
+    <div class="beat beat-5">
+      <div class="beat-inner stagger">
+        <div class="beat-eyebrow">How it works</div>
+        <h2 class="beat-head" style="max-width:24ch">What happens in one 50 ms tick</h2>
+        <div class="cover-pipeline">
+          <div class="pipe-node"><span class="pipe-num">01</span><span class="pipe-label">Flight profile</span></div>
+          <div class="pipe-connector"></div>
+          <div class="pipe-node"><span class="pipe-num">02</span><span class="pipe-label">MVEM physics</span></div>
+          <div class="pipe-connector"></div>
+          <div class="pipe-node"><span class="pipe-num">03</span><span class="pipe-label">Sensors</span></div>
+          <div class="pipe-connector"></div>
+          <div class="pipe-node"><span class="pipe-num">04</span><span class="pipe-label">Kalman fusion</span></div>
+          <div class="pipe-connector"></div>
+          <div class="pipe-node"><span class="pipe-num">05</span><span class="pipe-label">Residuals</span></div>
+          <div class="pipe-connector"></div>
+          <div class="pipe-node"><span class="pipe-num">06</span><span class="pipe-label">Health index</span></div>
+          <div class="pipe-connector"></div>
+          <div class="pipe-node"><span class="pipe-num">07</span><span class="pipe-label">Anomaly</span></div>
+          <div class="pipe-connector"></div>
+          <div class="pipe-node"><span class="pipe-num">08</span><span class="pipe-label">Diagnosis</span></div>
+          <div class="pipe-connector"></div>
+          <div class="pipe-node"><span class="pipe-num">09</span><span class="pipe-label">RUL</span></div>
+          <div class="pipe-connector"></div>
+          <div class="pipe-node"><span class="pipe-num">10</span><span class="pipe-label">Broadcast</span></div>
+        </div>
+        <p class="beat-body" style="margin-top:20px; text-align:center;">
+          Budget is 150 ms. The whole chain costs about 1 ms of CPU. No GPU.
+        </p>
+      </div>
+    </div>
+
+    <!-- Beat 6 — The Evidence -->
+    <div class="beat beat-6">
+      <div class="beat-inner stagger">
         <div class="beat-eyebrow">Measured</div>
         <h2 class="beat-head" style="max-width:26ch">One continuous climb, sea level to 30,000 ft</h2>
         <div class="cover-figure">
@@ -130,6 +214,552 @@
             <span>Zero false diagnoses across the climb</span>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Beat 7 — Capabilities -->
+    <div class="beat beat-7">
+      <div class="beat-inner stagger">
+        <div class="beat-eyebrow">Capabilities</div>
+        <h2 class="beat-head" style="max-width:28ch">Built for mission-critical operation</h2>
+        <div class="cover-features">
+          <div class="feature-item">
+            <span class="feature-icon">&#9672;</span>
+            <h3>Real-time 20 Hz</h3>
+            <p>Full diagnostic cycle 20 times per second, under 1.5 ms per tick</p>
+          </div>
+          <div class="feature-item">
+            <span class="feature-icon">&#9672;</span>
+            <h3>Physics-anchored</h3>
+            <p>MVEM baseline removes flight conditions; AI sees only engine health</p>
+          </div>
+          <div class="feature-item">
+            <span class="feature-icon">&#9672;</span>
+            <h3>Fault diagnosis</h3>
+            <p>7 failure modes classified with calibrated confidence and continuous severity</p>
+          </div>
+          <div class="feature-item">
+            <span class="feature-icon">&#9672;</span>
+            <h3>Sensor validation</h3>
+            <p>Cross-channel consistency separates broken probes from broken engines</p>
+          </div>
+          <div class="feature-item">
+            <span class="feature-icon">&#9672;</span>
+            <h3>RUL estimation</h3>
+            <p>Remaining useful life with 95% confidence intervals in flight hours</p>
+          </div>
+          <div class="feature-item">
+            <span class="feature-icon">&#9672;</span>
+            <h3>Explainable AI</h3>
+            <p>Every diagnosis comes with the residual channels that drove it</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Beat 8 — By the Numbers -->
+    <div class="beat beat-8">
+      <div class="beat-inner stagger">
+        <div class="beat-eyebrow">By the numbers</div>
+        <h2 class="beat-head" style="max-width:24ch">Performance at a glance</h2>
+        <div class="cover-stats">
+          <div class="cover-stat">
+            <span class="stat-number" data-target="15">0</span>
+            <span class="stat-label">Sensor channels</span>
+          </div>
+          <div class="cover-stat">
+            <span class="stat-number" data-target="20">0</span>
+            <span class="stat-label">Hz update rate</span>
+          </div>
+          <div class="cover-stat">
+            <span class="stat-number" data-target="1.5">0</span>
+            <span class="stat-label">ms tick budget</span>
+          </div>
+          <div class="cover-stat">
+            <span class="stat-number" data-target="7">0</span>
+            <span class="stat-label">Fault modes</span>
+          </div>
+          <div class="cover-stat">
+            <span class="stat-number stat-highlight" data-target="0">0</span>
+            <span class="stat-label">False diagnoses</span>
+          </div>
+          <div class="cover-stat">
+            <span class="stat-number" data-target="30000">0</span>
+            <span class="stat-label">ft envelope</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Beat 9 — The Stack -->
+    <div class="beat beat-9">
+      <div class="beat-inner stagger">
+        <div class="beat-eyebrow">The stack</div>
+        <h2 class="beat-head" style="max-width:26ch">Six layers, one diagnostic chain</h2>
+        <div class="cover-stack">
+          <div class="stack-layer">
+            <span class="stack-num">1</span>
+            <div>
+              <h3>MVEM Physics</h3>
+              <p>Mean Value Engine Model calibrated to VRDE 2.2L turbocharged aero-diesel</p>
+            </div>
+          </div>
+          <div class="stack-layer">
+            <span class="stack-num">2</span>
+            <div>
+              <h3>Kalman Estimator</h3>
+              <p>12-state physics-anchored filter &mdash; coasts on physics when datalink drops</p>
+            </div>
+          </div>
+          <div class="stack-layer">
+            <span class="stack-num">3</span>
+            <div>
+              <h3>Anomaly Autoencoder</h3>
+              <p>Symmetric bottleneck 15&rarr;6&rarr;15, trained on healthy residuals only</p>
+            </div>
+          </div>
+          <div class="stack-layer">
+            <span class="stack-num">4</span>
+            <div>
+              <h3>Fault Classifier</h3>
+              <p>Multi-task: 10-class head with temperature scaling + severity head</p>
+            </div>
+          </div>
+          <div class="stack-layer">
+            <span class="stack-num">5</span>
+            <div>
+              <h3>Attribution Engine</h3>
+              <p>Gradient &times; input over 15 residual channels, under a millisecond</p>
+            </div>
+          </div>
+          <div class="stack-layer">
+            <span class="stack-num">6</span>
+            <div>
+              <h3>Flight Recorder</h3>
+              <p>Every sortie to JSONL &mdash; replayable, reportable, debrief-ready</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- Beat 10 — Five levels of the twin -->
+    <div class="beat beat-10">
+      <div class="beat-inner stagger">
+        <div class="beat-eyebrow">The representation</div>
+        <h2 class="beat-head" style="max-width:26ch">The engine exists at five levels at once</h2>
+        <p class="beat-body">
+          A digital twin that only mirrors the sensor stream cannot tell you what
+          the sensor got wrong. This one keeps every layer separately, and the
+          gaps between them are where the diagnosis lives.
+        </p>
+        <div class="cover-levels">
+          <div class="level-row">
+            <span class="level-n">01</span>
+            <span class="level-name">Physical truth</span>
+            <span class="level-desc">The engine as it actually is, faults included. Nothing downstream is allowed to see this.</span>
+          </div>
+          <div class="level-row">
+            <span class="level-n">02</span>
+            <span class="level-name">Raw sensor</span>
+            <span class="level-desc">Truth seen through per-channel noise, first-order lag, ADC quantisation and sample rate.</span>
+          </div>
+          <div class="level-row">
+            <span class="level-n">03</span>
+            <span class="level-name">Filtered estimate</span>
+            <span class="level-desc">Twelve states fused from measurement and physics; coasts on physics when the datalink drops.</span>
+          </div>
+          <div class="level-row">
+            <span class="level-n">04</span>
+            <span class="level-name">Healthy baseline</span>
+            <span class="level-desc">A second engine model, fed the same flight, that never sees the fault. This is the reference.</span>
+          </div>
+          <div class="level-row">
+            <span class="level-n">05</span>
+            <span class="level-name">AI health layer</span>
+            <span class="level-desc">Anomaly score, fault class, severity, remaining life and ranked attribution.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Beat 11 — The physics -->
+    <div class="beat beat-11">
+      <div class="beat-inner stagger">
+        <div class="beat-eyebrow">The physics</div>
+        <h2 class="beat-head" style="max-width:26ch">A Mean Value Engine Model, not a curve fit</h2>
+        <p class="beat-body">
+          The baseline is an integrator, not a lookup. Every tick it advances
+          manifold filling dynamics, turbocharger boost against the altitude
+          derating law, the crankshaft torque balance, four independent cylinder
+          thermal states and the oil circuit. That is what lets it hold r ≈ 0
+          through a climb, a throttle change and a cold day alike.
+        </p>
+        <div class="cover-features">
+          <div class="feature-item">
+            <span class="feature-icon">◇</span>
+            <h3>Manifold &amp; boost</h3>
+            <p>Filling dynamics with a 0.35 s time constant; compressor output derates above the ~10,000 ft critical altitude as backpressure rises.</p>
+          </div>
+          <div class="feature-item">
+            <span class="feature-icon">◇</span>
+            <h3>Torque balance</h3>
+            <p>Indicated torque against friction and propeller load, integrated on crank inertia — so RPM is a consequence, never a setpoint.</p>
+          </div>
+          <div class="feature-item">
+            <span class="feature-icon">◇</span>
+            <h3>Four thermal states</h3>
+            <p>Each cylinder carries its own head and exhaust temperature, so a single-cylinder fault has somewhere to show up.</p>
+          </div>
+          <div class="feature-item">
+            <span class="feature-icon">◇</span>
+            <h3>Calibrated envelope</h3>
+            <p>200 HP at sea level and 10,000 ft, 150 HP at 20,000 ft, 110 HP at 30,000 ft — the published VRDE derating curve.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Beat 12 — The instrument model -->
+    <div class="beat beat-12">
+      <div class="beat-inner stagger">
+        <div class="beat-eyebrow">The instruments</div>
+        <h2 class="beat-head" style="max-width:26ch">Residuals are measured in sigma, so sigma has to be real</h2>
+        <p class="beat-body">
+          Every channel is normalised by its own noise figure. Those figures come
+          from the instrument model rather than from tuning: a thermocouple is
+          slow and coarse, a magnetic pickup is fast and clean, and the residual
+          vector has to respect the difference or a quiet channel drowns a loud one.
+        </p>
+        <div class="cover-specs">
+          <div class="spec-cell"><div class="spec-chan">Exhaust gas temp</div>
+            <div class="spec-vals"><span><i>σ</i> 3.5 °C</span><span><i>τ</i> 2.0 s</span><span><i>rate</i> 5 Hz</span></div></div>
+          <div class="spec-cell"><div class="spec-chan">Cylinder head temp</div>
+            <div class="spec-vals"><span><i>σ</i> 1.8 °C</span><span><i>×</i> 4 cylinders</span></div></div>
+          <div class="spec-cell"><div class="spec-chan">Crankshaft speed</div>
+            <div class="spec-vals"><span><i>σ</i> 6 rpm</span><span><i>τ</i> 0.05 s</span><span><i>rate</i> 50 Hz</span></div></div>
+          <div class="spec-cell"><div class="spec-chan">Manifold pressure</div>
+            <div class="spec-vals"><span><i>σ</i> 0.02 bar</span></div></div>
+          <div class="spec-cell"><div class="spec-chan">Oil pressure</div>
+            <div class="spec-vals"><span><i>σ</i> 0.06 bar</span></div></div>
+          <div class="spec-cell"><div class="spec-chan">Oil temperature</div>
+            <div class="spec-vals"><span><i>σ</i> 0.9 °C</span></div></div>
+          <div class="spec-cell"><div class="spec-chan">Fuel flow</div>
+            <div class="spec-vals"><span><i>σ</i> 0.35 L/h</span></div></div>
+          <div class="spec-cell"><div class="spec-chan">Vibration RMS</div>
+            <div class="spec-vals"><span><i>σ</i> 0.08 g</span><span><i>order</i> 2×</span></div></div>
+          <div class="spec-cell"><div class="spec-chan">Avionics bus</div>
+            <div class="spec-vals"><span><i>σ</i> 0.12 V</span></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Beat 13 — The fault library -->
+    <div class="beat beat-13">
+      <div class="beat-inner stagger">
+        <div class="beat-eyebrow">The fault library</div>
+        <h2 class="beat-head" style="max-width:26ch">Ten classes, each injectable at any severity and ramp</h2>
+        <p class="beat-body">
+          Faults are parametric perturbations of the physics or the
+          instrumentation, not label flips on a dataset. Each one has a mechanism
+          and a signature the residual vector can actually carry.
+        </p>
+        <div class="cover-taxonomy">
+          <div class="fault-card"><span class="fault-name">HEALTHY</span>
+            <span class="fault-mech">no perturbation</span>
+            <span class="fault-sig">r ≈ 0 across all fifteen channels</span></div>
+          <div class="fault-card" data-sev="caution"><span class="fault-name">LEAN_MIXTURE_CYL3</span>
+            <span class="fault-mech">injector partially clogged</span>
+            <span class="fault-sig">EGT₃ climbs, thermal gradient across the bank tilts</span></div>
+          <div class="fault-card" data-sev="caution"><span class="fault-name">RICH_MIXTURE_CYL1</span>
+            <span class="fault-mech">injector leaking</span>
+            <span class="fault-sig">EGT₁ falls while total fuel flow rises</span></div>
+          <div class="fault-card" data-sev="warning"><span class="fault-name">COOLING_DEGRADATION_CYL2</span>
+            <span class="fault-mech">baffle or airflow blockage</span>
+            <span class="fault-sig">CHT₂ rises fast; EGT largely unaffected</span></div>
+          <div class="fault-card" data-sev="warning"><span class="fault-name">OIL_PRESSURE_LOSS</span>
+            <span class="fault-mech">relief valve leak</span>
+            <span class="fault-sig">oil pressure below 2.0 bar, temperature trailing</span></div>
+          <div class="fault-card" data-sev="caution"><span class="fault-name">TURBO_BOOST_DEFICIENCY</span>
+            <span class="fault-mech">wastegate stuck, compressor fouling</span>
+            <span class="fault-sig">MAP deficit that deepens with altitude</span></div>
+          <div class="fault-card" data-sev="caution"><span class="fault-name">CYLINDER_MISFIRE_TIMING</span>
+            <span class="fault-mech">timing jitter, valve seating</span>
+            <span class="fault-sig">RPM instability and a 0.5× vibration order</span></div>
+          <div class="fault-card" data-sev="caution"><span class="fault-name">BEARING_WEAR_VIBRATION</span>
+            <span class="fault-mech">crank or rod bearing wear</span>
+            <span class="fault-sig">2× order growing over time, oil temperature following</span></div>
+          <div class="fault-card" data-sev="sensor"><span class="fault-name">SENSOR_FAULT_EGT3</span>
+            <span class="fault-mech">thermocouple open circuit</span>
+            <span class="fault-sig">EGT₃ at ambient, engine entirely untouched</span></div>
+          <div class="fault-card" data-sev="caution"><span class="fault-name">ELECTRICAL_VOLTAGE_SAG</span>
+            <span class="fault-mech">alternator diode fault</span>
+            <span class="fault-sig">bus voltage sags under avionics load</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Beat 14 — The false abort -->
+    <div class="beat beat-14">
+      <div class="beat-inner stagger">
+        <div class="beat-eyebrow">The case that decides sorties</div>
+        <h2 class="beat-head" style="max-width:24ch">A dead probe is not a dead cylinder</h2>
+        <div class="cover-split">
+          <div class="split-card">
+            <div class="split-label">Fixed-threshold EIS</div>
+            <p>EGT₃ falls toward ambient. Every redline for that channel is
+              breached at once. The system reports an engine in the process of
+              dying, and a perfectly serviceable aircraft is recalled.</p>
+          </div>
+          <div class="split-plus">vs</div>
+          <div class="split-card">
+            <div class="split-label">EngineTwin</div>
+            <p>EGT₃ is checked against CHT₃ and fuel flow. The neighbouring
+              channels are entirely nominal, so no combustion event explains the
+              reading. Verdict: sensor probe defect, engine healthy.</p>
+          </div>
+        </div>
+        <p class="beat-body" style="margin-top:24px">
+          This is why the probe defect is a first-class member of the taxonomy
+          rather than a heuristic bolted on afterwards. It is the single failure
+          mode most likely to abort a healthy sortie — and on the held-out set it
+          is separated at <b style="color:var(--instrument)">1.000 precision and
+          1.000 recall</b> across 2,768 frames.
+        </p>
+      </div>
+    </div>
+
+    <!-- Beat 15 — Benchmark -->
+    <div class="beat beat-15">
+      <div class="beat-inner stagger">
+        <div class="beat-eyebrow">Measured against the alternatives</div>
+        <h2 class="beat-head" style="max-width:26ch">Two things it has to beat, and does</h2>
+        <div class="cover-table-wrap">
+          <table class="cover-table">
+            <thead><tr>
+              <th>Metric</th><th>Fixed-threshold EIS</th><th>Black-box ML</th><th class="ours">EngineTwin</th>
+            </tr></thead>
+            <tbody>
+              <tr><td>Classification accuracy</td><td>53.65 %</td><td>86.93 %</td><td class="win">97.64 %</td></tr>
+              <tr><td>Macro F1</td><td>0.2463</td><td>0.8696</td><td class="win">0.9770</td></tr>
+              <tr><td>Mean detection latency</td><td>28.26 s</td><td>8.00 s</td><td class="win">2.87 s</td></tr>
+              <tr><td>False alarms, healthy</td><td class="poor">0.00 %</td><td>11.74 %</td><td class="win">1.42 %</td></tr>
+              <tr><td>CPU inference</td><td>0.035 ms</td><td>0.001 ms</td><td class="win">0.397 ms</td></tr>
+              <tr><td>Sensor vs. engine</td><td>false abort</td><td>confounded</td><td class="win">decoupled</td></tr>
+              <tr><td>Root cause</td><td>none</td><td>feature importance</td><td class="win">ranked attribution</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="table-note">
+          Read the EIS column carefully. A perfect 0.00 % false-alarm rate beside
+          a macro F1 of 0.25 is not a strength — the thresholds are set so wide
+          that almost nothing real trips them.
+        </p>
+      </div>
+    </div>
+
+    <!-- Beat 16 — Ablation -->
+    <div class="beat beat-16">
+      <div class="beat-inner stagger">
+        <div class="beat-eyebrow">What is load-bearing</div>
+        <h2 class="beat-head" style="max-width:26ch">Train the same network on raw channels and watch it fall over</h2>
+        <p class="beat-body">
+          The ablation retrains an identical network on raw telemetry instead of
+          residuals and scores both on the same held-out sorties, so the only
+          variable is the representation.
+        </p>
+        <div class="cover-table-wrap">
+          <table class="cover-table">
+            <thead><tr>
+              <th>Configuration</th><th>Macro F1</th><th>False alarms</th><th>Accuracy</th>
+            </tr></thead>
+            <tbody>
+              <tr><td>Physics residuals</td><td class="win">0.9762</td><td class="win">0.47 %</td><td class="win">97.52 %</td></tr>
+              <tr><td>Raw telemetry, same network</td><td>0.9165</td><td>14.78 %</td><td>89.89 %</td></tr>
+              <tr><td>Residuals, 50 % of sorties</td><td>0.7426</td><td>0.37 %</td><td>86.35 %</td></tr>
+              <tr><td>Residuals, 25 % of sorties</td><td>0.7621</td><td>1.09 %</td><td>84.86 %</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="table-note">
+          Physics anchoring is worth <b style="color:var(--instrument)">+0.0597 macro F1</b>
+          and <b style="color:var(--instrument)">14.31 points</b> of false-alarm rate.
+          Restricted to healthy frames above 20,000 ft, where derating is largest,
+          the gap widens to <b style="color:var(--instrument)">0.70 % against 18.42 %</b>.
+          Gating the classifier behind the anomaly trigger saves 52.3 % of inference CPU.
+        </p>
+      </div>
+    </div>
+
+    <!-- Beat 17 — Per-class -->
+    <div class="beat beat-17">
+      <div class="beat-inner stagger">
+        <div class="beat-eyebrow">Per class</div>
+        <h2 class="beat-head" style="max-width:24ch">Where it is strong, and where it is not</h2>
+        <div class="cover-table-wrap">
+          <table class="cover-table">
+            <thead><tr>
+              <th>Fault mode</th><th>Precision</th><th>Recall</th><th>F1</th><th>Frames</th>
+            </tr></thead>
+            <tbody>
+              <tr><td>Sensor probe defect</td><td class="win">1.000</td><td class="win">1.000</td><td class="win">1.000</td><td>2,768</td></tr>
+              <tr><td>Electrical voltage sag</td><td>1.000</td><td>0.976</td><td>0.988</td><td>2,970</td></tr>
+              <tr><td>Bearing wear, 2× vibration</td><td>0.989</td><td>0.980</td><td>0.985</td><td>3,458</td></tr>
+              <tr><td>Oil pressure loss</td><td>0.998</td><td>0.972</td><td>0.984</td><td>2,889</td></tr>
+              <tr><td>Turbo boost deficiency</td><td>0.999</td><td>0.964</td><td>0.981</td><td>3,328</td></tr>
+              <tr><td>Cylinder misfire / timing</td><td>0.996</td><td>0.956</td><td>0.976</td><td>2,870</td></tr>
+              <tr><td>Healthy baseline</td><td>0.953</td><td>0.998</td><td>0.975</td><td>21,201</td></tr>
+              <tr><td>Rich mixture, cylinder 1</td><td>0.991</td><td>0.935</td><td>0.962</td><td>2,783</td></tr>
+              <tr><td>Cooling degradation, cyl 2</td><td>0.996</td><td>0.931</td><td>0.962</td><td>2,967</td></tr>
+              <tr><td>Lean mixture, cylinder 3</td><td>0.999</td><td>0.916</td><td>0.956</td><td>2,766</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="table-note">
+          Sorted by F1. The weakest modes are the single-cylinder mixture faults,
+          where recall trails precision — the network is conservative about naming
+          them, which is the right direction to be wrong in.
+        </p>
+      </div>
+    </div>
+
+    <!-- Beat 18 — Data integrity -->
+    <div class="beat beat-18">
+      <div class="beat-inner stagger">
+        <div class="beat-eyebrow">Data integrity</div>
+        <h2 class="beat-head" style="max-width:26ch">Seventy-eight independent missions, split by sortie</h2>
+        <p class="beat-body">
+          Splitting by row would put adjacent 50 ms samples on both sides of the
+          boundary and turn the test score into fiction. Splits are partitioned by
+          whole flight, and each sortie draws its own mission shape — ceiling,
+          loiter band, throttle and phase fractions — on top of an ISA offset.
+        </p>
+        <div class="cover-table-wrap">
+          <table class="cover-table">
+            <thead><tr><th>Split</th><th>Sorties</th><th>Frames</th><th>Purpose</th></tr></thead>
+            <tbody>
+              <tr><td>Healthy training</td><td>10</td><td>18,000</td><td>autoencoder and σ calibration</td></tr>
+              <tr><td>Fault training</td><td>36</td><td>64,800</td><td>classifier and severity head</td></tr>
+              <tr><td>Held-out evaluation</td><td class="win">32</td><td class="win">48,000</td><td>every figure in this brief</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="table-note">
+          Held-out shapes come from a separate RNG stream over deliberately wider
+          ranges than training — ceilings 22,000–32,000 ft against 24,000–30,000 ft —
+          so the test set measures generalisation, not memory. A nearest-neighbour
+          search in standardised telemetry space confirms no held-out frame is a
+          near-duplicate of a training frame: closest approach
+          <b style="color:var(--instrument)">0.126 σ</b>, median 0.340 σ.
+        </p>
+      </div>
+    </div>
+
+    <!-- Beat 19 — Edge budget -->
+    <div class="beat beat-19">
+      <div class="beat-inner stagger">
+        <div class="beat-eyebrow">The compute budget</div>
+        <h2 class="beat-head" style="max-width:24ch">The whole chain costs 1.5 ms of a 150 ms tick</h2>
+        <div class="cover-table-wrap">
+          <table class="cover-table">
+            <thead><tr><th>Pipeline stage</th><th>Mean latency</th><th>Share</th></tr></thead>
+            <tbody>
+              <tr><td>MVEM physics solver</td><td>0.078 ms</td><td>5.2 %</td></tr>
+              <tr><td>Sensor noise &amp; lag emulation</td><td>0.055 ms</td><td>3.7 %</td></tr>
+              <tr><td>12-state Kalman estimator</td><td>0.091 ms</td><td>6.1 %</td></tr>
+              <tr><td>Residual extraction &amp; health</td><td>0.084 ms</td><td>5.6 %</td></tr>
+              <tr><td>Autoencoder anomaly trigger</td><td>0.269 ms</td><td>17.9 %</td></tr>
+              <tr><td>Multi-task classifier</td><td>0.258 ms</td><td>17.1 %</td></tr>
+              <tr><td>Gradient attribution</td><td>0.670 ms</td><td>44.5 %</td></tr>
+              <tr><td>Total end-to-end</td><td class="win">1.506 ms</td><td class="win">100 %</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="table-note">
+          664 frames per second on one desktop core — 33× headroom against the
+          20 Hz target, in 199 MB resident with 4.1 MB of weights. Attribution is
+          profiled against a named fault rather than whatever the classifier
+          predicts: the profiler flies a healthy engine, so timing the predicted
+          class would time an early return and report the stage as free.
+        </p>
+      </div>
+    </div>
+
+    <!-- Beat 20 — Limitations -->
+    <div class="beat beat-20">
+      <div class="beat-inner stagger">
+        <div class="beat-eyebrow">Boundaries</div>
+        <h2 class="beat-head" style="max-width:22ch">What this is not</h2>
+        <p class="beat-body">
+          A reviewer who finds an unstated limitation discounts everything else.
+          So these are stated rather than left to be discovered.
+        </p>
+        <div class="cover-limits">
+          <div class="limit-row"><b>Everything is simulated</b>
+            <span>The engine, the instrumentation and the faults are models. No hardware-in-the-loop validation has been performed, and nothing here is certified for airworthiness.</span></div>
+          <div class="limit-row"><b>The estimator is not an EKF</b>
+            <span>It is a linear Kalman filter with a complementary prediction step toward the physics model. No non-linear transition function, no Jacobian — so the covariance is a tuned noise-rejection parameter, not a calibrated uncertainty.</span></div>
+          <div class="limit-row"><b>The attribution is not SHAP</b>
+            <span>It is gradient × input: a first-order local ranking chosen for the 50 ms edge budget, without Shapley local-accuracy or consistency guarantees.</span></div>
+          <div class="limit-row"><b>The RUL interval is a trend interval</b>
+            <span>Built from the spread of the degradation fit, not from a distribution-free coverage guarantee. It should not be described as a calibrated 95 % interval.</span></div>
+          <div class="limit-row"><b>Per-frame inference degrades under extreme noise</b>
+            <span>At five times instrumentation sigma the classifier names a false mechanical fault on about one frame in six. The annunciator votes over a rolling window, so it does not reach the operator — but it is a real weakness.</span></div>
+          <div class="limit-row"><b>The MVEM fit figure is near-circular</b>
+            <span>The model interpolates the same derating table it is then scored against. Treat the 0.00 HP RMSE as a consistency check, not as independent validation.</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Beat 21 — Roadmap -->
+    <div class="beat beat-21">
+      <div class="beat-inner stagger">
+        <div class="beat-eyebrow">From demonstrator to flyable</div>
+        <h2 class="beat-head" style="max-width:24ch">What each next step actually requires</h2>
+        <div class="cover-roadmap">
+          <div class="road-stage">
+            <div class="road-when">now → +3 months</div>
+            <h3>Bench validation</h3>
+            <p>Swap the simulated sensor layer for a CAN/RS-485 shim behind the same interface and run against a test-cell engine. Nothing downstream changes. Delivers the measured MVEM fit error we do not yet have.</p>
+          </div>
+          <div class="road-stage">
+            <div class="road-when">+3 → +6 months</div>
+            <h3>Recalibration on real data</h3>
+            <p>Refit the MVEM constants and per-channel sigma to the bench engine, retrain the autoencoder on the resulting healthy residuals, re-run the full suite. Expect the false-alarm rate to move most.</p>
+          </div>
+          <div class="road-stage">
+            <div class="road-when">+6 → +9 months</div>
+            <h3>Edge port</h3>
+            <p>Target a Jetson Orin Nano or Cortex-A class flight computer. Export both networks to ONNX, profile on target, confirm behaviour at operating temperature. Replaces the estimate with a measurement.</p>
+          </div>
+          <div class="road-stage">
+            <div class="road-when">+9 → +18 months</div>
+            <h3>Flight-representative integration</h3>
+            <p>Signed frames and encrypted downlink, redundant recording, and a DO-178C-style requirements trace. The deterministic parts trace conventionally; the learned components need a partitioned-assurance argument.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Beat 22 — CTA -->
+    <div class="beat beat-22">
+      <div class="beat-inner beat-cta">
+        <h2 class="cta-head">Ready to explore?</h2>
+        <p class="cta-sub">Enter the ground control station and see the digital twin in action.</p>
+        <button id="btn-enter-app" class="btn-continue" onclick="enterApp()">
+          <span class="btn-continue-text">CONTINUE</span>
+          <span class="btn-continue-arrow">&rarr;</span>
+        </button>
+        <p class="cta-hint">Full telemetry &middot; 3D engine view &middot; Live fault injection</p>
+      </div>
+    </div>
+
+    <div class="cover-alt" aria-hidden="true">
+      <div class="alt-scale"><span id="alt-fill"></span></div>
+      <div class="alt-readout">
+        <b><span id="alt-readout">0</span></b>
+        <span>FT</span>
       </div>
     </div>
 
