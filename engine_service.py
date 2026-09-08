@@ -85,6 +85,17 @@ class EngineTwinRuntime:
         self.override_altitude = 28500.0
         self.override_oat = -42.5
 
+        # Commanded values are targets, not teleports. The sliders are slewed
+        # toward them at rates a MALE airframe can actually fly, because an
+        # instantaneous altitude step is not a manoeuvre — it is a discontinuity,
+        # and the twin correctly reports it as one. Sensors carry first-order lag
+        # (EGT tau = 2.0 s) while the MVEM baseline does not, so a step command
+        # opens a residual gap that the classifier reads as a real turbo fault.
+        # Slewing keeps the sandbox inside the physics the twin was built for.
+        self._slew_altitude = 28500.0
+        self._slew_throttle = 72.0
+        self._slew_oat = -42.5
+
         # Latest State Snapshot
         self.latest_state: Optional[DigitalTwinState] = None
         self.latest_alert: Optional[Dict[str, Any]] = None
@@ -104,6 +115,38 @@ class EngineTwinRuntime:
         self.rul_engine.reset()
         self.latest_alert = None
         self.active_fault_name = "HEALTHY"
+
+    # Sandbox slew limits, chosen from what the airframe can actually do rather
+    # than from what the sliders can express.
+    MAX_CLIMB_FPS = 50.0        # 3,000 ft/min, a brisk but real MALE climb rate
+    MAX_THROTTLE_PPS = 25.0     # %/s
+    MAX_OAT_CPS = 6.0           # deg C/s, roughly what the climb rate implies
+
+    def _slew_toward_commanded(self, dt_s: float):
+        """Moves the sandbox state toward the commanded setpoints at flyable rates.
+
+        Rates are per second of *simulation* time, so the 2x/5x/10x controls
+        speed the climb up with everything else. At 1x, 3,000 ft/min is what a
+        MALE airframe actually does; at 10x the sandbox reaches loiter altitude
+        in about a minute of wall clock without ever commanding a step change.
+        """
+        dt_s = dt_s * max(0.2, self.time_scale)
+        def approach(current: float, target: float, rate: float) -> float:
+            step = rate * dt_s
+            delta = target - current
+            if abs(delta) <= step:
+                return target
+            return current + (step if delta > 0 else -step)
+
+        self._slew_altitude = approach(
+            self._slew_altitude, max(0.0, min(35000.0, self.override_altitude)),
+            self.MAX_CLIMB_FPS)
+        self._slew_throttle = approach(
+            self._slew_throttle, max(0.0, min(100.0, self.override_throttle)),
+            self.MAX_THROTTLE_PPS)
+        self._slew_oat = approach(
+            self._slew_oat, max(-60.0, min(50.0, self.override_oat)),
+            self.MAX_OAT_CPS)
 
     def warm_up(self, seconds: float = 15.0, dt_s: float = 0.05):
         """
@@ -131,11 +174,12 @@ class EngineTwinRuntime:
         # The ISA atmosphere is recomputed at the commanded altitude so that
         # manifold pressure, turbo derating and power all respond for real.
         if self.manual_override:
-            flight.throttle_pct = max(0.0, min(100.0, self.override_throttle))
-            flight.altitude_ft = max(0.0, min(35000.0, self.override_altitude))
+            self._slew_toward_commanded(dt_s)
+            flight.throttle_pct = self._slew_throttle
+            flight.altitude_ft = self._slew_altitude
             flight.altitude_m = FlightProfile.feet_to_meters(flight.altitude_ft)
             _, p_bar, rho = FlightProfile.get_isa_atmosphere(flight.altitude_m)
-            flight.ambient_temp_c = max(-60.0, min(50.0, self.override_oat))
+            flight.ambient_temp_c = self._slew_oat
             flight.ambient_pressure_bar = p_bar
             flight.air_density_kgpm3 = rho
             flight.phase = "MANUAL_SANDBOX"
@@ -493,7 +537,18 @@ async def flight_override_endpoint(req: FlightOverrideRequest):
     the scripted mission. Used to demonstrate that a healthy engine stays at
     r = 0 across the whole envelope, which a fixed-threshold EIS cannot do.
     """
+    was_manual = twin_runtime.manual_override
     twin_runtime.manual_override = bool(req.enabled)
+
+    # Taking manual control picks up the aircraft where the mission left it,
+    # rather than snapping to whatever the sliders happened to be showing.
+    if twin_runtime.manual_override and not was_manual:
+        state = twin_runtime.latest_state
+        if state is not None:
+            twin_runtime._slew_altitude = float(state.altitude_ft)
+            twin_runtime._slew_throttle = float(state.throttle_pct)
+            twin_runtime._slew_oat = float(state.ambient_temp_c)
+
     if req.throttle_pct is not None:
         twin_runtime.override_throttle = float(req.throttle_pct)
     if req.altitude_ft is not None:
@@ -506,6 +561,8 @@ async def flight_override_endpoint(req: FlightOverrideRequest):
         "throttle_pct": twin_runtime.override_throttle,
         "altitude_ft": twin_runtime.override_altitude,
         "ambient_temp_c": twin_runtime.override_oat,
+        "current_altitude_ft": round(twin_runtime._slew_altitude, 1),
+        "note": "commanded values are slewed at flyable rates, not applied instantly",
     }
 
 @app.post("/api/sim/reset")

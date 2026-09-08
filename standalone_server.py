@@ -70,6 +70,15 @@ class StandaloneEngineRuntime:
         self.override_altitude = 28500.0
         self.override_oat = -42.5
 
+        # Commanded values are targets, slewed at flyable rates rather than
+        # applied instantly. An instantaneous altitude step is a discontinuity,
+        # not a manoeuvre: sensors carry first-order lag while the MVEM baseline
+        # does not, so a step opens a residual gap the classifier reads as a
+        # real turbo fault. See engine_service.EngineTwinRuntime for the note.
+        self._slew_altitude = 28500.0
+        self._slew_throttle = 72.0
+        self._slew_oat = -42.5
+
         self.latest_state: Optional[DigitalTwinState] = None
         self.latest_alert: Optional[Dict] = None
         self.latest_frame: Optional[Dict[str, Any]] = None
@@ -102,6 +111,38 @@ class StandaloneEngineRuntime:
             self.active_fault_name = "HEALTHY"
             self._warmup_thermal_equilibrium()
 
+    # Sandbox slew limits, from what the airframe can do rather than what the
+    # sliders can express.
+    MAX_CLIMB_FPS = 50.0        # 3,000 ft/min
+    MAX_THROTTLE_PPS = 25.0     # %/s
+    MAX_OAT_CPS = 6.0           # deg C/s
+
+    def _slew_toward_commanded(self, dt_s: float):
+        """Moves the sandbox state toward the commanded setpoints at flyable rates.
+
+        Rates are per second of *simulation* time, so the 2x/5x/10x controls
+        speed the climb up with everything else. At 1x, 3,000 ft/min is what a
+        MALE airframe actually does; at 10x the sandbox reaches loiter altitude
+        in about a minute of wall clock without ever commanding a step change.
+        """
+        dt_s = dt_s * max(0.2, self.time_scale)
+        def approach(current, target, rate):
+            step = rate * dt_s
+            delta = target - current
+            if abs(delta) <= step:
+                return target
+            return current + (step if delta > 0 else -step)
+
+        self._slew_altitude = approach(
+            self._slew_altitude, max(0.0, min(35000.0, self.override_altitude)),
+            self.MAX_CLIMB_FPS)
+        self._slew_throttle = approach(
+            self._slew_throttle, max(0.0, min(100.0, self.override_throttle)),
+            self.MAX_THROTTLE_PPS)
+        self._slew_oat = approach(
+            self._slew_oat, max(-60.0, min(50.0, self.override_oat)),
+            self.MAX_OAT_CPS)
+
     def step(self, dt_s: float = 0.05) -> DigitalTwinState:
         with self.lock:
             self.sim_time_s += dt_s * self.time_scale
@@ -112,10 +153,12 @@ class StandaloneEngineRuntime:
             
             # Apply Manual Flight Sandbox Override if enabled
             if self.manual_override:
-                flight.throttle_pct = max(0.0, min(100.0, self.override_throttle))
-                flight.altitude_ft = max(0.0, min(35000.0, self.override_altitude))
-                flight.ambient_temp_c = max(-60.0, min(50.0, self.override_oat))
+                self._slew_toward_commanded(dt_s)
+                flight.throttle_pct = self._slew_throttle
+                flight.altitude_ft = self._slew_altitude
+                flight.ambient_temp_c = self._slew_oat
                 alt_m = flight.altitude_ft * 0.3048
+                flight.altitude_m = alt_m
                 t_c, p_bar, rho = FlightProfile.get_isa_atmosphere(alt_m)
                 flight.ambient_pressure_bar = p_bar
                 flight.air_density_kgpm3 = rho
@@ -500,7 +543,14 @@ class DigitalTwinHTTPHandler(SimpleHTTPRequestHandler):
             try:
                 data = json.loads(body.decode("utf-8"))
                 enabled = bool(data.get("enabled", True))
+                was_manual = twin_runtime.manual_override
                 twin_runtime.manual_override = enabled
+                if enabled and not was_manual and twin_runtime.latest_state is not None:
+                    # Pick the aircraft up where the mission left it.
+                    st = twin_runtime.latest_state
+                    twin_runtime._slew_altitude = float(st.altitude_ft)
+                    twin_runtime._slew_throttle = float(st.throttle_pct)
+                    twin_runtime._slew_oat = float(st.ambient_temp_c)
                 if "throttle_pct" in data:
                     twin_runtime.override_throttle = float(data["throttle_pct"])
                 if "altitude_ft" in data:

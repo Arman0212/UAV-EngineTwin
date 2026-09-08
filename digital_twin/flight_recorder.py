@@ -253,6 +253,7 @@ def analyse_session(session_id: str, log_dir: Optional[Path] = None) -> Dict[str
     events: List[Dict[str, Any]] = []
     current_cls: Optional[str] = None
     anomaly_first_t: Optional[float] = None
+    raw_classes: List[tuple] = []      # (t, per-frame class, ai block, health)
 
     for fr in frames:
         t = float(fr.get("timestamp_s", 0.0))
@@ -279,7 +280,38 @@ def analyse_session(session_id: str, log_dir: Optional[Path] = None) -> Dict[str
         if ai.get("anomaly_detected") and anomaly_first_t is None:
             anomaly_first_t = t
 
-        cls = ai.get("fault_class", "HEALTHY")
+        raw_classes.append((t, ai.get("fault_class", "HEALTHY"), ai, overall))
+
+    # Debounce before building the timeline.
+    #
+    # Per-frame classification flickers: at 20 Hz a single ambiguous frame
+    # between two stable stretches would otherwise open and close a 0.05 s
+    # "event", and a real sortie produces dozens of them. That is not a report an
+    # operator can read. A class change is only accepted once it has persisted
+    # for DEBOUNCE_S, which is the same rolling-vote discipline the live
+    # annunciator uses — applied here to the log rather than to the display.
+    DEBOUNCE_S = 1.0
+    min_frames = max(1, int(round(DEBOUNCE_S / dt))) if dt > 0 else 1
+
+    stable: List[tuple] = []
+    i = 0
+    committed = "HEALTHY"
+    while i < len(raw_classes):
+        cls = raw_classes[i][1]
+        j = i
+        while j < len(raw_classes) and raw_classes[j][1] == cls:
+            j += 1
+        run_len = j - i
+        # A run long enough to be real becomes the committed class; a shorter one
+        # is absorbed into whatever was already on screen.
+        if run_len >= min_frames or i == 0:
+            committed = cls
+        for k in range(i, j):
+            t_k, _, ai_k, health_k = raw_classes[k]
+            stable.append((t_k, committed, ai_k, health_k))
+        i = j
+
+    for t, cls, ai, overall in stable:
         if cls != current_cls:
             # Transition: close the previous event and open a new one.
             if events:
