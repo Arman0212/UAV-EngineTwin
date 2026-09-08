@@ -26,9 +26,9 @@ def main():
     print("=" * 70)
     print("  - Telemetry Engine: 20 Hz Real-Time Integration")
     print("  - Physics Core: Mean Value Engine Model (MVEM) Calibrated to VRDE 2.2L")
-    print("  - State Fusion: 12-State Extended Kalman Filter (EKF)")
+    print("  - State Fusion: 12-State Physics-Anchored Kalman Estimator")
     print("  - AI Prognostics: Autoencoder Anomaly Trigger + TCN Classifier + RUL")
-    print("  - Explainability: Fast Local SHAP Feature Attribution Engine")
+    print("  - Explainability: Local Gradient Attribution Engine")
     print("  - Operator Dashboard: http://127.0.0.1:8000")
     print("=" * 70)
 

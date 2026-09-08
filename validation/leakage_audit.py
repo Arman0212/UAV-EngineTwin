@@ -1,10 +1,11 @@
 """
 ENGINE-TWIN: Dedicated Data Leakage & Integrity Audit Suite (SIH26054)
 Audits:
-1. Run-level train/test separation (Zero run_id overlap)
-2. Temporal leakage check (Zero adjacent time-slice contamination)
-3. Feature preprocessing leakage check (Zero future data snooping)
-4. Class balance & representation check across all splits
+1. Run-level train/test separation (zero run_id overlap)
+2. Temporal integrity (test sorties are whole, monotonic missions)
+3. Cross-split near-duplicate search in standardised telemetry space
+4. Provenance tagging on every sample
+5. Class balance & representation across splits
 """
 import sys
 from pathlib import Path
@@ -51,6 +52,55 @@ def audit_data_leakage():
         t_diffs = np.diff(grp["time_s"])
         assert np.all(t_diffs > 0), f"Temporal anomaly in test run {rid}"
     print("  -> [PASS] All test sorties are full, continuous, independent flight sorties.")
+
+    # 2b. Near-duplicate check across the split boundary.
+    #
+    # Disjoint run_ids are necessary but not sufficient. If two sorties happened
+    # to be generated under near-identical conditions, adjacent frames from a
+    # training run and a test run could still be almost the same vector, which
+    # inflates held-out scores exactly the way row-wise splitting does. This
+    # measures the closest approach between the two splits in raw telemetry space.
+    print("\n  • Auditing Cross-Split Near-Duplicate Frames:")
+    channels = ["rpm", "manifold_pressure_bar", "fuel_flow_lph", "oil_pressure_bar",
+                "oil_temp_c", "cht_1_c", "cht_2_c", "cht_3_c", "cht_4_c",
+                "egt_1_c", "egt_2_c", "egt_3_c", "egt_4_c",
+                "vibration_rms_g", "bus_voltage_v"]
+
+    df_train_all = pd.concat([df_healthy, df_faults], ignore_index=True)
+    rng = np.random.default_rng(20260908)
+    n_probe = min(2000, len(df_test))
+    probe_idx = rng.choice(len(df_test), size=n_probe, replace=False)
+
+    train_mat = df_train_all[channels].to_numpy(dtype=np.float64)
+    test_mat = df_test[channels].to_numpy(dtype=np.float64)[probe_idx]
+
+    # Standardise on training statistics so no single wide-range channel (EGT)
+    # dominates the distance and hides closeness on all the others.
+    mu = train_mat.mean(axis=0)
+    sd = train_mat.std(axis=0)
+    sd[sd < 1e-9] = 1.0
+    train_n = (train_mat - mu) / sd
+    test_n = (test_mat - mu) / sd
+
+    # Chunked nearest-neighbour search: the full pairwise matrix would be
+    # ~100k x 2k floats, which is needlessly large for a single statistic.
+    min_dists = np.full(len(test_n), np.inf)
+    CHUNK = 4000
+    for start in range(0, len(train_n), CHUNK):
+        block = train_n[start:start + CHUNK]
+        d = np.linalg.norm(test_n[:, None, :] - block[None, :, :], axis=2)
+        min_dists = np.minimum(min_dists, d.min(axis=1))
+
+    dup_threshold = 0.10          # in standardised units, across 15 channels
+    n_dup = int((min_dists < dup_threshold).sum())
+    print(f"    - Held-out frames probed:             {n_probe:,}")
+    print(f"    - Closest train/test frame distance:  {min_dists.min():.4f} sigma")
+    print(f"    - Median nearest-neighbour distance:  {np.median(min_dists):.4f} sigma")
+    print(f"    - Frames within {dup_threshold} sigma of a training frame: {n_dup}")
+    assert n_dup == 0, (
+        f"{n_dup} held-out frames are near-duplicates of training frames "
+        f"(closest {min_dists.min():.4f} sigma) — held-out scores would be inflated")
+    print("  -> [PASS] No held-out frame is a near-duplicate of any training frame.")
 
     # 3. Check Provenance Tags
     all_provenance = set(df_healthy["provenance"]).union(set(df_faults["provenance"])).union(set(df_test["provenance"]))

@@ -80,6 +80,13 @@ python main.py
 The launcher opens <http://127.0.0.1:8000> for you. On Windows, `run_demo.bat`
 does the same thing with a double-click.
 
+**No internet is required to run it.** Tailwind, Chart.js, Three.js, OrbitControls
+and the webfont are all vendored under [`dashboard/vendor/`](dashboard/vendor/)
+and served from the twin's own host, because a ground station that loses its
+charts and its 3D view when the venue WiFi is blocked is not a ground station.
+[`tools/fetch_vendor_assets.py`](tools/fetch_vendor_assets.py) refreshes those
+copies and is the only script in the project that reaches the network.
+
 If FastAPI and Uvicorn are missing, `main.py` quietly falls back to
 [`standalone_server.py`](standalone_server.py), which serves the whole twin on
 the standard library alone. NumPy and PyTorch are still needed for the physics
@@ -91,9 +98,11 @@ To confirm the install is sound:
 python run_all_tests.py
 ```
 
-Eight suites, one consolidated report — physics, AI layer, leakage audit, stress
-testing, baseline comparison, ablation, multi-engine transfer, and edge
-profiling.
+Nine suites, one consolidated report — physics, AI layer, end-to-end fault
+propagation, leakage audit, stress testing, baseline comparison, ablation,
+multi-engine transfer, and edge profiling. Every suite exits non-zero on failure,
+including the fault-propagation QA, so a green run means all nine actually
+passed. Allow about two and a half minutes; the ablation retrains four networks.
 
 ---
 
@@ -118,12 +127,27 @@ neighbours entirely nominal, and reports *sensor probe defect — engine healthy
 Health barely moves. The mission continues.
 
 **4 — Ask it why.** Hit `Bearing 2X Vib` and open the evidence drawer. The
-diagnosis comes with its SHAP attribution: which residual channels drove it, in
+diagnosis comes with its attribution: which residual channels drove it, in
 what proportion, and an inspection window in flight hours rather than a bare
 percentage.
 
-[`tools/auto_demo_showcase.py`](tools/auto_demo_showcase.py) runs this sequence
-unattended if you need it hands-free.
+**5 — Land, then debrief.** Hit `Debrief`. Every sortie since the server started
+has been written to disk by the flight data recorder. Pick one and the panel
+shows its post-flight report: time spent in each health band and mission phase,
+per-subsystem health minima, the fault timeline with the residual channels that
+drove each diagnosis, and the gap between the unsupervised trigger firing and the
+classifier committing to a name. Hit `Replay` and the sortie streams back through
+the same telemetry path the live twin uses — the whole dashboard, 3D view
+included, replays without knowing the difference.
+
+**6 — Fly it yourself.** Hit `Sandbox`, switch to manual, and drag altitude from
+sea level to 30,000 ft at full throttle. Power derates 200 HP → 110 HP and
+manifold pressure falls 2.38 → 1.54 bar, exactly the published VRDE curve. Health
+stays at 100 % and the diagnosis stays `HEALTHY` the whole way. That is the
+argument in one gesture: every one of those readings would trip a fixed redline.
+
+[`tools/auto_demo_showcase.py`](tools/auto_demo_showcase.py) runs the fault
+sequence unattended if you need it hands-free.
 
 ---
 
@@ -145,9 +169,10 @@ times a second:
    ADC quantization and sample rate. EGT probes are slow and coarse (σ = 3.5 °C,
    τ = 2.0 s, 5 Hz); the RPM pickup is fast and clean (σ = 8 rpm, τ = 0.05 s,
    50 Hz).
-5. **EKF predict/update** fuses the measurement into a 12-state estimate. If the
-   datalink drops packets, the filter coasts on physics instead of producing a
-   spurious residual spike.
+5. **The state estimator** fuses the measurement into a 12-state estimate. If the
+   datalink drops packets, it coasts on the physics baseline instead of producing
+   a spurious residual spike. It is a linear Kalman filter with a
+   complementary prediction step, not an EKF — see the note below.
 6. **Residuals** are computed and handed to everything downstream.
 7. **Health indices** map residuals to bounded 0–100 % scores per subsystem.
 8. **Anomaly trigger** — the autoencoder reconstructs the residual vector. If
@@ -156,8 +181,9 @@ times a second:
 9. **Sensor validator** decides, before anything else runs, whether this is a
    bad probe or a bad engine.
 10. **Classifier** returns a calibrated fault class and a continuous severity.
-11. **SHAP and RUL** attach the evidence and the remaining-life interval.
-12. **Broadcast** — the full twin state goes out over the WebSocket.
+11. **Attribution and RUL** attach the evidence and the remaining-life interval.
+12. **Broadcast** — the full twin state goes out over the WebSocket, and the same
+    frame is appended to the sortie log by the flight data recorder.
 
 Budget is 150 ms. The whole chain costs about 1 ms of CPU. No GPU.
 
@@ -176,13 +202,15 @@ Budget is 150 ms. The whole chain costs about 1 ms of CPU. No GPU.
 
 **Twin state** — [`digital_twin/`](digital_twin/)
 
-- [`ekf_estimator.py`](digital_twin/ekf_estimator.py) — 12-state Extended Kalman
-  Filter over `[RPM, MAP, Oil_P, Oil_T, CHT₁₋₄, EGT₁₋₄]`
+- [`state_estimator.py`](digital_twin/state_estimator.py) — 12-state
+  physics-anchored Kalman estimator over `[RPM, MAP, Oil_P, Oil_T, CHT₁₋₄, EGT₁₋₄]`
+- [`flight_recorder.py`](digital_twin/flight_recorder.py) — flight data recorder
+  and post-flight analysis: every sortie to JSONL, replayable and reportable
 - [`health_index.py`](digital_twin/health_index.py) — subsystem scoring as
   `100·exp(−α·|r|)`, weighted into an overall index, banded
   `NOMINAL / ADVISORY / CAUTION / WARNING / CRITICAL` at 85 / 70 / 50 / 25
 - [`twin_state.py`](digital_twin/twin_state.py) — the engine represented at five
-  levels simultaneously: physical truth, raw sensor, EKF estimate, healthy
+  levels simultaneously: physical truth, raw sensor, filtered estimate, healthy
   baseline, and AI health layer
 
 **Diagnosis** — [`models/`](models/)
@@ -201,7 +229,7 @@ Budget is 150 ms. The whole chain costs about 1 ms of CPU. No GPU.
 
 **Explanation** — [`xai/`](xai/)
 
-- [`shap_explainer.py`](xai/shap_explainer.py) — local attribution over the
+- [`attribution.py`](xai/attribution.py) — gradient × input attribution over the
   15 residual channels, under a millisecond
 - [`alert_generator.py`](xai/alert_generator.py) — assembles diagnosis, physics
   evidence, life interval and sensor integrity into one operator card with an
@@ -214,6 +242,15 @@ and stress suites. [`tools/`](tools/) has profiling, plotting and transfer
 utilities. [`configs/`](configs/) holds the engine parameter sets.
 [`ENGINE_TWIN_MASTER_PIPELINE.ipynb`](ENGINE_TWIN_MASTER_PIPELINE.ipynb) walks
 the whole thing end to end in one notebook.
+
+**Two naming corrections, stated up front.** The state estimator is a *linear*
+Kalman filter whose prediction step blends toward the MVEM's own integrated
+state — there is no non-linear transition function and no Jacobian, so calling it
+an EKF would be wrong. And the attribution is *gradient × input*, not Shapley
+values; it gives a defensible ranking, not an additive decomposition with
+SHAP's guarantees. Both modules say so in their docstrings, at length. They work
+well and are the right engineering choice for a 50 ms edge budget; they just are
+not the things those two acronyms name.
 
 **Temperature scaling deserves a note.** An uncalibrated network will report
 99 % confidence on a marginal case, and an operator who learns that the number
@@ -257,9 +294,20 @@ The service listens on `127.0.0.1:8000`.
 | `GET` | `/api/state` | full twin state, once |
 | `POST` | `/api/fault/inject` | inject a fault |
 | `POST` | `/api/fault/clear` | back to healthy |
+| `POST` | `/api/flight/override` | manual throttle / altitude / OAT |
 | `POST` | `/api/sim/reset` | restart from t = 0 |
 | `POST` | `/api/sim/speed` | time scale, clamped 0.2×–10× |
+| `GET` | `/api/sessions` | recorded sorties, newest first |
+| `GET` | `/api/sessions/{id}` | post-flight report for one sortie |
+| `GET` | `/api/sessions/{id}/frames` | raw recorded frames, paged |
+| `POST` | `/api/replay/start` | replay a sortie through the live stream |
+| `POST` | `/api/replay/stop` | back to live telemetry |
 | `WS` | `/ws/telemetry` | 20 Hz state broadcast |
+| `GET` | `/api/stream` | same broadcast over SSE |
+
+The twin runs on its own background task, so sortie time advances whether or not
+a browser is attached, `/api/state` is populated immediately, and a second
+dashboard tab observes the same sortie rather than stepping it a second time.
 
 Injecting a fault takes a class name, a severity in 0.0–1.0, and a ramp time in
 seconds (`0` for an abrupt step). An unknown class returns HTTP 400.
@@ -289,7 +337,7 @@ asyncio.run(listen())
 ```
 
 Each frame carries the flight state, the raw sensor channels, the MVEM
-expectation for each of them, the EKF estimate, the residual vector, seven
+expectation for each of them, the filtered estimate, the residual vector, seven
 health scores, and the AI block (anomaly score and threshold, fault class,
 calibrated confidence, severity, sensor-fault flag, RUL mean and bounds, top
 contributing channels, and a recommended action). The full schema is
@@ -304,18 +352,33 @@ calibrated MVEM by [`generate_dataset.py`](data/generate_dataset.py). Each row
 carries 39 columns: flight state, every sensor channel, physics ground truth
 (`true_power_hp`, `true_torque_nm`, `true_bsfc_g_kwh`), labels, and provenance.
 
-| File | Rows | Used for |
-|:--|--:|:--|
-| `train_healthy.csv` | 12,000 | autoencoder training and σ calibration |
-| `train_faults.csv` | 43,200 | classifier and severity head |
-| `test_scenarios.csv` | 22,000 | held-out evaluation |
+| File | Sorties | Rows | Used for |
+|:--|--:|--:|:--|
+| `train_healthy.csv` | 10 | 18,000 | autoencoder training and σ calibration |
+| `train_faults.csv` | 36 | 64,800 | classifier and severity head |
+| `test_scenarios.csv` | 32 | 48,000 | held-out evaluation |
+
+**Every sortie is an independent mission.** The mission *shape* — cruise ceiling,
+loiter altitude and band, throttle settings, and the fraction of the sortie spent
+in each phase — is drawn per run, on top of an ISA offset and a per-run seed. The
+held-out shapes come from a separate RNG stream with deliberately *wider* ranges
+than training (ceilings 22,000–32,000 ft against 24,000–30,000 ft), so the test
+set probes generalisation rather than replaying one mission under new noise. Each
+fault class gets four independent training sorties and three held-out ones.
 
 Splits are partitioned by `run_id` — whole flights, never individual rows. That
 distinction matters: split by row and adjacent 50 ms samples land on both sides
 of the boundary, and your test accuracy becomes fiction.
-[`validation/leakage_audit.py`](validation/leakage_audit.py) checks for `run_id`
-overlap, adjacent-slice contamination, preprocessing-stage future snooping, and
-class representation across splits.
+[`validation/leakage_audit.py`](validation/leakage_audit.py) checks `run_id`
+overlap, temporal integrity, class representation, and runs a nearest-neighbour
+search in standardised telemetry space to confirm no held-out frame is a
+near-duplicate of a training frame (closest approach on the committed data:
+0.126 σ, median 0.340 σ).
+
+Note that `data/generate_dataset.py` is the *only* thing that rewrites the
+committed CSVs. The test suite generates into a temporary directory, because
+overwriting them mid-run would silently leave the shipped checkpoints scored
+against data they were never trained on.
 
 Rebuild the data with `python data/generate_dataset.py`. Retrain with
 `python train_and_export_models.py`, which trains both networks, calibrates the
@@ -327,32 +390,43 @@ checkpoints to `models/saved_models/`.
 
 ## How well it works
 
-Measured on the 22,000 held-out frames, spanning takeoff through 30,000 ft
-loiter and back down. Reproduce with `python validation/benchmark.py` — it
+Measured on 48,000 held-out frames from 32 independent sorties, spanning takeoff
+through 32,000 ft loiter and back down. Reproduce with `python validation/benchmark.py` — it
 prints this table itself.
 
 | | Fixed-threshold EIS | Black-box ML on raw telemetry | **EngineTwin** |
 |:--|:---:|:---:|:---:|
-| Accuracy | 59.49 % | 83.68 % | **93.47 %** |
-| Macro F1 | 0.2842 | 0.8778 | **0.9414** |
-| Detection latency | 25.51 s | 5.96 s | **2.30 s** |
-| False alarms on healthy sorties | 0.00 % | 27.65 % | **2.18 %** |
-| CPU inference | 0.083 ms | 0.004 ms | **1.023 ms** |
+| Accuracy | 53.65 % | 86.93 % | **97.64 %** |
+| Macro F1 | 0.2463 | 0.8696 | **0.9770** |
+| Detection latency | 28.26 s | 8.00 s | **2.87 s** |
+| False alarms on healthy sorties | 0.00 % | 11.74 % | **1.42 %** |
+| CPU inference | 0.035 ms | 0.001 ms | **0.397 ms** |
 | Sensor vs. engine | false abort | confounded | **decoupled** |
-| Root cause | none | feature importance | **SHAP cards** |
-| RUL bounds | none | none | **95 % intervals** |
+| Root cause | none | feature importance | **attribution cards** |
+| RUL bounds | none | none | **trend interval** |
 
 Two columns need reading carefully. The EIS scores a perfect 0.00 % false-alarm
-rate, which sounds excellent until you notice its macro F1 is 0.28 — the
+rate, which sounds excellent until you notice its macro F1 is 0.25 — the
 thresholds are set so wide that it misses nearly everything real. The black-box
-model has the opposite problem: strong in-distribution accuracy, and a 27.65 %
+model has the opposite problem: strong in-distribution accuracy, and an 11.74 %
 false-alarm rate because high-altitude telemetry looks anomalous to a model with
-no physics baseline for derating. That gap between 27.65 % and 2.18 % is the
-entire argument for the residual representation, and
-[`validation/ablation.py`](validation/ablation.py) isolates it directly.
+no physics baseline for derating.
 
-The 1 ms figure is the full chain — physics, EKF, both networks, SHAP, RUL —
-against a 150 ms budget. Profile it on your own hardware with
+[`validation/ablation.py`](validation/ablation.py) isolates that effect directly,
+by training the *same* network on raw channels instead of residuals and scoring
+both on the same held-out sorties:
+
+| Configuration | Macro F1 | False alarms | Accuracy |
+|:--|:---:|:---:|:---:|
+| Physics residuals | **0.9762** | **0.47 %** | **97.52 %** |
+| Raw telemetry, identical network | 0.9165 | 14.78 % | 89.89 % |
+
+Restricted to healthy frames above 20,000 ft — where derating is largest — the
+gap widens to **0.70 % against 18.42 %**. That is the entire argument for the
+residual representation, measured rather than asserted.
+
+The 1.5 ms figure is the full chain — physics, estimator, both networks,
+attribution, RUL — against a 150 ms budget. Profile it on your own hardware with
 [`tools/edge_benchmark_profiler.py`](tools/edge_benchmark_profiler.py).
 
 The MVEM itself is checked against published VRDE derating data: 200 HP at sea
@@ -367,20 +441,27 @@ Every number above comes out of a script in this repository.
 
 ```bash
 python test_simulation.py                  # MVEM, sensor dynamics, flight profiles
-python test_ai_layer.py                    # EKF convergence, autoencoder, classifier, RUL, SHAP
-python test_fault_pipeline_qa.py           # end-to-end detection, all nine failure modes
+python test_ai_layer.py                    # estimator convergence, autoencoder, classifier, RUL, XAI
+python test_fault_pipeline_qa.py           # end-to-end detection across the injectable fault modes
 python validation/benchmark.py             # the comparison table above
 python validation/ablation.py              # which architectural choice is load-bearing
 python validation/leakage_audit.py         # train/test separation integrity
-python validation/stress_testing.py        # +500 % noise, 10–30 s blackouts, 35,000 ft, −60 °C
+python validation/stress_testing.py        # +500 % noise, 30 s blackout, 35,000 ft, −60 °C
 python run_all_tests.py                    # all of it, one report
 ```
 
-The ablation suite is the interesting one if you are sceptical. It strips the
-architecture down one piece at a time — physics residuals vs. raw telemetry,
-two-stage gating vs. continuous inference, sensor decoupling on and off, and
-training on 25 % / 50 % / 100 % of the data — so you can see which claims
-survive and which were doing nothing.
+The ablation suite is the interesting one if you are sceptical. It retrains and
+re-scores on your machine — physics residuals vs. raw telemetry, two-stage gating
+vs. continuous inference, sensor decoupling on and off, and training on 25 % /
+50 % / 100 % of the sorties — so you can see which claims survive and which were
+doing nothing. It prints numbers it computed, not numbers we recorded; it takes
+about a minute because it is genuinely training four networks.
+
+It does not flatter us everywhere. On the current taxonomy the classifier already
+separates probe defects perfectly on its own, so the sensor validator buys **no
+measurable accuracy** — its value is that it is a physics rule rather than a
+learned boundary, so it holds for probe failures the network was never trained
+on. The ablation says so in its own output.
 
 ---
 
@@ -419,11 +500,68 @@ them.
 The MVEM is calibrated to a datasheet, not to a specific airframe's worn engine,
 and it does not currently adapt online as an engine ages. The RUL interval is
 constructed from the degradation trajectory rather than from a distribution-free
-coverage guarantee; conformal prediction would be the honest upgrade.
+coverage guarantee; conformal prediction would be the honest upgrade. It is
+reported as a trend interval, not a calibrated 95 % one.
+
+The sensor validator covers two archetypes — thermocouple open circuit and oil
+transducer dropout. Stuck-at, slow drift and noise bursts on the other thirteen
+channels are not covered, and the ablation shows the validator currently buys no
+accuracy the classifier does not already have.
+
+Under 5× instrumentation noise the per-frame classifier still names a false
+mechanical fault on about one frame in six ([`validation/stress_testing.py`](validation/stress_testing.py)
+measures it and asserts a documented bound). The ground station votes over a
+rolling window before annunciating, so this does not reach the operator — but it
+is a real weakness of per-frame inference under out-of-distribution noise, not a
+solved problem.
+
+The MVEM calibration RMSE against the published derating curve is reported as
+0.00 HP, and that figure is close to circular: the model interpolates the same
+lookup table it is scored against. Treat it as a consistency check, not as
+independent validation.
 
 Natural next steps, in order of usefulness: hardware-in-the-loop against a test
 cell, profiling on flight-representative edge compute, an expanded fault
-taxonomy, online baseline adaptation to per-airframe wear.
+taxonomy, online baseline adaptation to per-airframe wear, and conformal
+prediction for the RUL bounds.
+
+---
+
+## Deployment roadmap
+
+Where this goes from a demonstrator to something flyable, and what each step
+actually requires.
+
+**Stage 1 — Bench validation (now → +3 months).** Replace the simulated sensor
+layer with a CAN/RS-485 ingest shim behind the same `SensorReadings` interface,
+and run the twin against a test-cell engine on a dynamometer. Nothing downstream
+changes: the residual definition, the estimator and both networks already consume
+an interface, not a simulator. Deliverable is a measured MVEM fit error against a
+real engine, which is the number the current 0.00 HP figure cannot give.
+
+**Stage 2 — Recalibration on real data (+3 → +6 months).** Refit the MVEM
+constants and the per-channel σ values to the bench engine, retrain the
+autoencoder on the resulting healthy residuals, and re-run the full validation
+suite. Fault labels come from seeded bench faults where safe and from maintenance
+records otherwise. Expect the false-alarm rate to be the metric that moves most.
+
+**Stage 3 — Edge port (+6 → +9 months).** Target a Jetson Orin Nano or an
+ARM Cortex-A class flight computer. The full chain is 1.5 ms on a desktop core
+against a 150 ms budget, so the headroom is there, but the port needs measuring
+rather than extrapolating: export both networks to ONNX, profile on the target,
+and confirm behaviour at the airframe's operating temperature.
+
+**Stage 4 — Flight-representative integration (+9 → +18 months).** Secure
+telemetry (signed frames, encrypted downlink), redundant recording, and a
+DO-178C-style requirements trace for the deterministic parts of the pipeline. The
+learned components will need a partitioned-assurance argument; the physics
+baseline and the sensor validator are conventional software and can be traced
+normally. This stage is where certification effort dominates, not modelling.
+
+**Not on the roadmap without a customer decision:** federated learning across a
+fleet, which the problem statement lists as an innovation area but which needs a
+fleet, a data-sharing policy, and an answer on model provenance before it is an
+engineering task rather than a research one.
 
 ---
 

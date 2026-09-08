@@ -17,7 +17,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from simulation.flight_profile import FlightProfile, FlightState
 from simulation.mvem import MeanValueEngineModel
 from simulation.sensors import SensorModel, SensorReadings
-from digital_twin.ekf_estimator import ExtendedKalmanFilter
+from digital_twin.state_estimator import PhysicsAnchoredKalmanEstimator
 from digital_twin.health_index import HealthIndexEngine
 from models.anomaly_autoencoder import AnomalyDetector, RESIDUAL_CHANNELS
 from models.fault_classifier import FaultDiagnosisEngine
@@ -48,12 +48,13 @@ def run_stress_tests():
     sensors_noisy.sigma_oil_p *= 5.0
     sensors_noisy.sigma_map *= 5.0
 
-    ekf = ExtendedKalmanFilter()
+    ekf = PhysicsAnchoredKalmanEstimator()
     flight = FlightProfile().get_standard_mission_state(100.0, 3600.0)
 
     raw_errors = []
     ekf_errors = []
-    false_positives = 0
+    false_positives = 0     # stage-1 anomaly gate fires
+    false_diagnoses = 0     # stage-2 names a mechanical fault on a healthy engine
     num_steps = 300
 
     for _ in range(num_steps):
@@ -79,48 +80,118 @@ def run_stress_tests():
         is_anom, _, _, _ = ae.detect(res)
         if is_anom:
             false_positives += 1
+            # What reaches the operator is the *diagnosis*, not the gate. Count
+            # how often the stage-2 classifier goes on to name a mechanical
+            # fault on an engine that is in fact healthy.
+            pred_cls, _, _, _ = clf.diagnose(res)
+            if pred_cls != "HEALTHY":
+                false_diagnoses += 1
 
     raw_mae = float(np.mean(raw_errors[50:]))
     ekf_mae = float(np.mean(ekf_errors[50:]))
+    gate_rate = (false_positives / num_steps) * 100.0
+    diag_rate = (false_diagnoses / num_steps) * 100.0
+
     print(f"  • Raw Sensor EGT Error under 5x Noise: {raw_mae:.2f} C")
-    print(f"  • EKF Filtered State Error:            {ekf_mae:.2f} C ({(1.0 - ekf_mae/raw_mae)*100:.1f}% Noise Rejection)")
-    print(f"  • False Alarm Rate under 5x Noise:     {(false_positives/num_steps)*100:.1f}%")
-    assert ekf_mae < raw_mae * 0.60, "EKF failed noise rejection under stress"
-    print("  -> [PASS] EKF maintains stability under extreme 500% sensor noise.")
+    print(f"  • Estimator Filtered State Error:      {ekf_mae:.2f} C "
+          f"({(1.0 - ekf_mae/raw_mae)*100:.1f}% Noise Rejection)")
+    print(f"  • Stage-1 anomaly gate fires on:       {gate_rate:.1f}% of frames")
+    print(f"  • Stage-2 names a false mechanical fault on: {diag_rate:.1f}% of frames")
+
+    assert ekf_mae < raw_mae * 0.60, "Estimator failed noise rejection under stress"
+
+    # Be explicit about what a high gate rate here does and does not mean. At
+    # 5x sigma the residuals genuinely leave the healthy calibration envelope,
+    # so a gate that did NOT fire would be the defect: the trigger is calibrated
+    # on nominal instrumentation and is supposed to react when the instruments
+    # stop behaving like the datasheet. The number that matters operationally is
+    # the second one, because that is what reaches the operator's screen.
+    if gate_rate > 20.0:
+        print(f"  • NOTE: the gate is saturated at this noise level ({gate_rate:.1f}%). That is")
+        print("    expected — 5x sigma is outside the distribution it was calibrated on. The")
+        print("    trigger is supposed to react when the instruments stop behaving like their")
+        print("    datasheet; a gate that stayed quiet here would be the defect.")
+
+    # KNOWN LIMITATION, stated rather than tuned away.
+    #
+    # At 5x sigma the classifier does emit a false mechanical diagnosis on a
+    # material fraction of frames. That is a real weakness of per-frame
+    # inference under out-of-distribution instrumentation noise, and it is the
+    # reason the ground station votes over a rolling window before annunciating
+    # rather than displaying the raw per-frame class. The bound below is set at
+    # what the system measurably achieves, not at a number chosen to pass.
+    LIMIT_PCT = 25.0
+    print(f"  • Per-frame false-diagnosis rate at 5x noise: {diag_rate:.1f}% "
+          f"(documented limit {LIMIT_PCT:.0f}%)")
+    print("    This is a per-frame figure. The operator display votes over a rolling")
+    print("    window, so a transient misclassification does not reach the annunciator.")
+    assert diag_rate < LIMIT_PCT, (
+        f"Under 5x sensor noise the classifier named a false mechanical fault on "
+        f"{diag_rate:.1f}% of healthy frames, exceeding the documented {LIMIT_PCT:.0f}% limit")
+    print("  -> [PASS] Estimator rejects the noise; false-diagnosis rate within documented bound.")
 
     # -------------------------------------------------------------
     # 2. Stress Test 2: Long Telemetry Blackout (30 Seconds Datalink Loss)
     # -------------------------------------------------------------
     print("\n[STRESS TEST 2] 30-Second Complete Datalink Blackout...")
-    mvem.reset(idle=False)
-    ekf = ExtendedKalmanFilter()
-    
-    # Run 10s nominal
+    #
+    # The estimator is fed the *baseline* twin, never the true engine. That
+    # distinction is the whole test. Onboard, the only thing still available
+    # during a datalink loss is the twin's own integration of the flight
+    # command; the real engine state is exactly what has gone missing. Handing
+    # predict() the truth would make the drift bound below true by construction
+    # and would measure nothing.
+    mvem_true = MeanValueEngineModel(seed=7)     # the engine, unobservable in blackout
+    mvem_onboard = MeanValueEngineModel(seed=99)  # the twin's baseline, always available
+    mvem_true.reset(idle=False)
+    mvem_onboard.reset(idle=False)
+
+    # Give the real engine a 3% compressor efficiency shortfall the onboard model
+    # does not know about. Two identical MVEMs fed identical inputs stay bit-for-bit
+    # equal, so coasting on the baseline would track the truth perfectly and the
+    # test would prove nothing. A real airframe's engine is always slightly off its
+    # datasheet, and the question worth asking is how fast that mismatch compounds
+    # when the measurements that would correct it are gone.
+    mvem_true.turbo_efficiency = 0.97
+
+    ekf = PhysicsAnchoredKalmanEstimator()
+
+    # Run 10 s nominal with telemetry present
     for _ in range(200):
-        t_eng = mvem.step(flight, dt_s=0.05)
+        t_eng = mvem_true.step(flight, dt_s=0.05)
+        base = mvem_onboard.step(flight, dt_s=0.05)
         meas = sensors_noisy.sample(t_eng, flight, dt_s=0.05)
-        ekf.predict(t_eng, dt_s=0.05)
+        ekf.predict(base, dt_s=0.05)
         ekf.update(meas)
 
     # Begin 30-second blackout (600 steps with zero incoming measurements)
-    print("  • Simulating 30s telemetry loss: EKF dead-reckoning via MVEM physics propagation...")
+    print("  • Simulating 30s telemetry loss: estimator coasting on the onboard physics baseline...")
+    print("    (real engine carries a 3% compressor efficiency mismatch the model cannot see)")
     for _ in range(600):
-        t_eng = mvem.step(flight, dt_s=0.05)
-        # Prediction step only (no measurement update)
-        ekf.predict(t_eng, dt_s=0.05)
+        t_eng = mvem_true.step(flight, dt_s=0.05)
+        base = mvem_onboard.step(flight, dt_s=0.05)
+        # Prediction step only; no measurement update, and no access to t_eng.
+        ekf.predict(base, dt_s=0.05)
 
     est_after_blackout = ekf.get_estimated_state()
     error_rpm = abs(est_after_blackout["estimated_rpm"] - t_eng.rpm)
     error_map = abs(est_after_blackout["estimated_map_bar"] - t_eng.manifold_pressure_bar)
-    print(f"  • RPM Drift after 30s Blackout: {error_rpm:.1f} RPM")
-    print(f"  • MAP Drift after 30s Blackout: {error_map:.3f} bar")
-    assert error_rpm < 50.0 and error_map < 0.10, "Dead reckoning drifted excessively"
-    print("  -> [PASS] EKF successfully maintains internal state tracking through 30s communication blackout.")
+    print(f"  • RPM error vs true engine after 30s blackout: {error_rpm:.1f} RPM")
+    print(f"  • MAP error vs true engine after 30s blackout: {error_map:.3f} bar")
+    assert error_rpm < 50.0 and error_map < 0.10, (
+        f"Coasted estimate diverged from the true engine: "
+        f"{error_rpm:.1f} RPM / {error_map:.3f} bar")
+    print("  -> [PASS] Estimator tracks the true engine through a 30s blackout using physics alone.")
 
     # -------------------------------------------------------------
     # 3. Stress Test 3: Unseen Extreme Atmospheric Envelope (35,000 ft / -60 C)
     # -------------------------------------------------------------
     print("\n[STRESS TEST 3] Extreme Atmospheric Envelope (35,000 ft Altitude, -60 C OAT)...")
+    # Scope note: the physical engine and the baseline share parameters here, so
+    # the residual reduces to sensor noise alone. What this establishes is that at
+    # 0.238 bar ambient — 5,000 ft above anything in the training set — the noise
+    # floor still sits inside the anomaly threshold and the health index does not
+    # drift with altitude. It does not exercise model mismatch; Stress Test 2 does.
     mvem_phys = MeanValueEngineModel()
     mvem_base = MeanValueEngineModel()
     mvem_phys.reset(idle=False)
@@ -158,7 +229,9 @@ def run_stress_tests():
     print("  -> [PASS] Physics-anchored residual learning operates robustly at extreme 35,000 ft altitude.")
 
     print("\n" + "=" * 80)
-    print("  [SUCCESS] ALL ADVERSARIAL STRESS & FAILURE TESTS PASSED (100% RESILIENCE)")
+    print("  [PASS] All adversarial stress tests met their documented bounds.")
+    print("  Known limitation, restated: at 5x instrumentation noise the per-frame")
+    print("  classifier still emits false mechanical diagnoses (see Stress Test 1).")
     print("=" * 80)
 
 if __name__ == "__main__":

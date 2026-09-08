@@ -17,7 +17,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from simulation.flight_profile import FlightProfile, FlightState
 from simulation.mvem import MeanValueEngineModel
 from simulation.sensors import SensorModel
-from digital_twin.ekf_estimator import ExtendedKalmanFilter
+from digital_twin.state_estimator import PhysicsAnchoredKalmanEstimator
 from digital_twin.health_index import HealthIndexEngine
 
 CONFIG_PATH = PROJECT_ROOT / "configs" / "rotax_914_config.json"

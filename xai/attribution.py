@@ -1,6 +1,32 @@
 """
-Fast SHAP Feature Attribution Explainer (SIH26054 Section 17)
-Computes local feature importance rankings on normalized residual vectors in <20ms.
+Local Feature Attribution for Real-Time Diagnosis (SIH26054 Section 17)
+
+Ranks which of the 15 normalized residual channels drove the classifier toward
+the fault it named, so the operator card carries evidence rather than a bare
+label. Runs in well under a millisecond on CPU.
+
+METHOD, STATED PRECISELY
+------------------------
+This computes gradient x input attribution -- also called saliency -- not SHAP
+values. For the predicted class c it evaluates
+
+    a_i = | d(logit_c) / d(r_i)  *  r_i |
+
+over one backward pass, then normalises the a_i to sum to 100%.
+
+That is not the same object as a Shapley value. SHAP attributions are the unique
+allocation satisfying local accuracy, missingness and consistency, and obtaining
+them requires evaluating the model over coalitions of features (KernelSHAP) or
+propagating reference activations (DeepSHAP) -- orders of magnitude more compute
+than one backward pass. Gradient x input is a first-order local approximation
+with no such guarantees: it can disagree with Shapley values in sign and in
+ranking when the network is strongly non-linear near the input.
+
+It is used here because the budget is a 50 ms tick on edge compute, the network
+is shallow (15 -> 64 -> 32), and the attribution is presented to the operator as
+a ranked evidence list rather than as an additive decomposition -- a use that
+needs a defensible ordering, not exact credit allocation. Where exact Shapley
+values are wanted offline, shap.DeepExplainer runs against this same classifier.
 """
 from typing import Dict, List, Any, Tuple, Optional
 import numpy as np
@@ -28,9 +54,10 @@ CHANNEL_DISPLAY_NAMES = {
     "bus_voltage": "Avionics Bus Voltage"
 }
 
-class FastSHAPExplainer:
+class GradientAttributionExplainer:
     """
-    Gradient-based / Kernel surrogate feature attribution for real-time diagnostic transparency.
+    Gradient x input attribution over the residual vector. See the module
+    docstring for why this is not SHAP and when that distinction matters.
     """
     def __init__(self, classifier_model: Optional[FaultClassifierNet] = None):
         self.classifier = classifier_model
@@ -52,7 +79,8 @@ class FastSHAPExplainer:
         # Vectorize residuals
         x_raw = np.array([residual_dict.get(ch, 0.0) for ch in RESIDUAL_CHANNELS], dtype=np.float32)
 
-        # 1. Direct Gradient * Input Attribution (Integrated Gradients / Saliency proxy)
+        # Gradient x input: one backward pass through the classifier logit
+        # for the named class, scaled by the residual that produced it.
         if self.classifier is not None:
             self.classifier.eval()
             x_t = torch.tensor(x_raw.reshape(1, -1), requires_grad=True, device=self.device)

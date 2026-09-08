@@ -202,7 +202,7 @@ document.addEventListener("DOMContentLoaded", () => {
  * looks. At 0.38 over an 8 s ramp the health index sits near 73-76% overall
  * with the boost subsystem around 45-50%, and the classifier holds the
  * correct diagnosis on 97-100% of frames - stable enough that the diagnosis
- * panel, SHAP attribution, recommended action and 3D highlight all agree.
+ * panel, attribution, recommended action and 3D highlight all agree.
  * Lower severities leave the classifier flapping against HEALTHY; higher
  * ones read as a failed engine rather than a degrading one.
  */
@@ -355,7 +355,7 @@ function updateBadge(text) {
 //   - health percentages are shown as a rolling median (2 s)
 //   - the diagnosed class is a modal vote over 3 s, and the rest of the
 //     inference is taken from the most recent frame carrying that class,
-//     so severity, confidence and SHAP stay coherent with the class shown
+//     so severity, confidence and attribution stay coherent with the class shown
 //   - RUL is a rolling median with its regime spread surfaced as uncertainty
 //
 // Raw continuous readings — anomaly index, reconstruction error, and every
@@ -400,6 +400,10 @@ function votedAiState(ai) {
 // ------------------------------------------------------------------
 function updateDashboard(state) {
   if (!state || state.status === "initializing") return;
+
+  // Live or replayed frames are otherwise identical, so this is the only
+  // place the dashboard cares which it is rendering.
+  updateReplayBadge(state);
 
   // --- Mission context tape --------------------------------------
   const totalSec = Math.floor(state.timestamp_s || 0);
@@ -695,7 +699,7 @@ function updateRul(ai) {
 }
 
 // ------------------------------------------------------------------
-// 7. SHAP ATTRIBUTION — ranked horizontal bars, top five
+// 7. LOCAL ATTRIBUTION — ranked horizontal bars, top five
 // ------------------------------------------------------------------
 function updateShapDrawer(shapItems) {
   const container = document.getElementById("container-shap");
@@ -1201,7 +1205,7 @@ const autoDemoPhases = [
 
   { fault: "OIL_PRESSURE_LOSS", inject: false, duration: 7,
     title: "4/6 Diagnosis",
-    note: "Classifier isolates the root cause; SHAP ranks the evidence." },
+    note: "Classifier isolates the root cause; attribution ranks the evidence." },
 
   { fault: "OIL_PRESSURE_LOSS", inject: false, duration: 7,
     title: "5/6 RUL collapse",
@@ -1308,4 +1312,155 @@ function resetSimulation() {
   const prevEl = document.getElementById("txt-rul-previous");
   if (prevEl) prevEl.hidden = true;
   addEventLog("SYS", "Simulation reset to initial flight condition.");
+}
+
+// ------------------------------------------------------------------
+// 14. DEBRIEF — POST-FLIGHT ANALYSIS & MISSION REPLAY
+//
+// Sorties are recorded server-side by the flight data recorder. Replay is
+// driven by the backend and arrives over the same telemetry transport as
+// live flight, so nothing else in this file needs to know which it is
+// watching — the frames carry a `source` field for the status badge only.
+// ------------------------------------------------------------------
+let debriefSessions = [];
+let selectedSessionId = null;
+
+function toggleDebrief() {
+  const panel = document.getElementById("panel-debrief");
+  const btn = document.getElementById("btn-debrief-open");
+  if (!panel) return;
+  panel.hidden = !panel.hidden;
+  if (btn) {
+    btn.innerText = panel.hidden ? "Debrief ▾" : "Debrief ▴";
+    btn.classList.toggle("is-active", !panel.hidden);
+  }
+  if (!panel.hidden) refreshSessions();
+}
+
+function fmtDuration(s) {
+  if (s === null || s === undefined) return "—";
+  const m = Math.floor(s / 60);
+  const r = Math.round(s % 60);
+  return m > 0 ? `${m}m ${r}s` : `${r}s`;
+}
+
+async function refreshSessions() {
+  const sel = document.getElementById("sel-session");
+  if (!sel) return;
+  try {
+    const res = await fetch('/api/sessions');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    debriefSessions = data.sessions || [];
+
+    if (debriefSessions.length === 0) {
+      sel.innerHTML = '<option value="">— no sorties recorded yet —</option>';
+      setDebriefSummary("The recorder starts with the server. Fly for a few seconds, then refresh.");
+      return;
+    }
+
+    sel.innerHTML = debriefSessions.map(s => {
+      const active = (s.session_id === data.active) ? " · recording" : "";
+      const faults = (s.fault_classes && s.fault_classes.length)
+        ? ` · ${s.fault_classes.length} fault${s.fault_classes.length > 1 ? "s" : ""}`
+        : " · clean";
+      return `<option value="${s.session_id}">${s.session_id} — ${fmtDuration(s.duration_s)}${faults}${active}</option>`;
+    }).join("");
+
+    // Keep the operator's selection across refreshes where possible.
+    if (selectedSessionId && debriefSessions.some(s => s.session_id === selectedSessionId)) {
+      sel.value = selectedSessionId;
+    } else {
+      selectedSessionId = sel.value;
+    }
+    onSessionSelected();
+  } catch (e) {
+    sel.innerHTML = '<option value="">— recorder unavailable —</option>';
+    setDebriefSummary("Could not reach the flight data recorder.");
+  }
+}
+
+function setDebriefSummary(html) {
+  const box = document.getElementById("box-debrief-summary");
+  if (box) box.innerHTML = html;
+}
+
+async function onSessionSelected() {
+  const sel = document.getElementById("sel-session");
+  if (!sel || !sel.value) return;
+  selectedSessionId = sel.value;
+  setDebriefSummary("Analysing…");
+
+  try {
+    const res = await fetch(`/api/sessions/${encodeURIComponent(selectedSessionId)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const r = await res.json();
+
+    const bands = Object.entries(r.time_in_band_s || {})
+      .map(([k, v]) => `${k} ${fmtDuration(v)}`).join(" · ") || "—";
+
+    const events = (r.fault_events || []).length
+      ? r.fault_events.slice(0, 4).map(e =>
+          `<span class="text-dim">${e.start_s}s</span> ${e.fault_class}` +
+          (e.is_sensor_fault ? " <span class='text-dim'>(probe)</span>" : "") +
+          ` <span class="text-dim">${fmtDuration(e.duration_s)}</span>`
+        ).join(" &nbsp;|&nbsp; ")
+      : "<span class='text-dim'>no faults diagnosed</span>";
+
+    const latency = (r.trigger_to_diagnosis_s !== null && r.trigger_to_diagnosis_s !== undefined)
+      ? `${r.trigger_to_diagnosis_s}s trigger→diagnosis`
+      : "no anomaly";
+
+    setDebriefSummary(
+      `<div><span class="text-dim">Duration</span> ${fmtDuration(r.duration_s)} · ` +
+      `<span class="text-dim">Frames</span> ${r.frame_count.toLocaleString()} · ` +
+      `<span class="text-dim">Altitude</span> ${Math.round(r.altitude_ft_min).toLocaleString()}–${Math.round(r.altitude_ft_max).toLocaleString()} ft · ` +
+      `<span class="text-dim">Health</span> min ${r.health_min_pct}% / mean ${r.health_mean_pct}% · ` +
+      `<span class="text-dim">Worst</span> ${r.worst_band} · ${latency}</div>` +
+      `<div style="margin-top:2px"><span class="text-dim">Time in band</span> ${bands}</div>` +
+      `<div style="margin-top:2px"><span class="text-dim">Events</span> ${events}</div>`
+    );
+  } catch (e) {
+    setDebriefSummary("Could not load the post-flight report for this sortie.");
+  }
+}
+
+async function startReplay() {
+  if (!selectedSessionId) return;
+  try {
+    const res = await fetch('/api/replay/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: selectedSessionId, speed: 1.0 })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const d = await res.json();
+    addEventLog("SYS", `Replaying sortie ${selectedSessionId} (${d.frames} frames).`);
+  } catch (e) {
+    addEventLog("SYS", "Replay could not be started.");
+  }
+}
+
+async function stopReplay() {
+  try {
+    await fetch('/api/replay/stop', { method: 'POST' });
+    addEventLog("SYS", "Returned to live telemetry.");
+  } catch (e) {}
+}
+
+// Called from updateDashboard on every frame; cheap and idempotent.
+function updateReplayBadge(state) {
+  const el = document.getElementById("txt-replay-status");
+  if (!el) return;
+  if (state && state.source === "REPLAY" && state.replay) {
+    const r = state.replay;
+    const pct = r.total_frames ? Math.round((r.cursor / r.total_frames) * 100) : 0;
+    el.innerText = state.replay_complete
+      ? `Replay complete · ${r.session_id}`
+      : `Replay ${pct}% · ${r.session_id}`;
+    el.setAttribute("data-state", "caution");
+  } else {
+    el.innerText = "Live";
+    el.removeAttribute("data-state");
+  }
 }

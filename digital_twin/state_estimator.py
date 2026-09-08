@@ -1,9 +1,38 @@
 """
-Extended Kalman Filter (EKF) State Estimator for Aero Piston Engine Digital Twin.
-Fuses dynamic non-linear MVEM physics predictions with noisy multi-channel telemetry.
+Physics-Anchored Kalman State Estimator for the Aero Piston Engine Digital Twin.
+
+Fuses the MVEM physics prediction with noisy multi-channel telemetry to produce a
+smoothed 12-state estimate, and coasts on physics alone when the datalink drops.
 
 State Vector (dim=12):
 x = [RPM, MAP, P_oil, T_oil, CHT1, CHT2, CHT3, CHT4, EGT1, EGT2, EGT3, EGT4]^T
+
+WHAT THIS IS, PRECISELY
+-----------------------
+This is a *linear* Kalman filter with a complementary prediction step, not an
+Extended Kalman Filter, and the distinction matters enough to state plainly:
+
+  - An EKF propagates the state through a non-linear transition function
+    f(x, u) and linearises it with a Jacobian F = df/dx evaluated at the current
+    estimate. This estimator does neither.
+  - The prediction step blends the current estimate toward the MVEM's own
+    integrated state, x <- (1 - beta) * x + beta * x_mvem, with F = I. The
+    non-linear engine dynamics live inside the MVEM, which integrates them
+    properly; this filter inherits that solution rather than re-linearising it.
+  - The measurement update is the standard linear Kalman correction with
+    H = I, since every one of the twelve states is directly instrumented.
+
+The design is deliberate. The MVEM is already a validated non-linear integrator,
+so re-deriving a Jacobian of it would add numerical fragility for no accuracy the
+physics model does not already provide. What this buys is what the twin actually
+needs: measurement noise rejection, and graceful coasting on the physics baseline
+through telemetry dropouts.
+
+The cost is honest too. Because F = I, the covariance does not propagate the true
+dynamics, so P is a tuned noise-rejection knob rather than a calibrated
+uncertainty. Anything that needs statistically meaningful state covariance --
+consistency tests, gated data association -- would require a real EKF or a UKF
+over the MVEM. That is a known limitation, not an oversight.
 """
 import numpy as np
 from typing import Dict, List, Optional, Tuple, Any
@@ -12,13 +41,18 @@ from simulation.mvem import MeanValueEngineModel, EngineState
 from simulation.flight_profile import FlightState
 from simulation.sensors import SensorReadings
 
-class ExtendedKalmanFilter:
+class PhysicsAnchoredKalmanEstimator:
     """
-    12-State EKF for Aero Engine State Estimation & Sensor Smoothing.
+    12-State linear Kalman estimator with a physics-anchored prediction step.
     """
-    def __init__(self):
+    def __init__(self, physics_blend: float = 0.30):
+        """
+        :param physics_blend: weight given to the MVEM state each prediction
+            step. Higher tracks the physics faster and trusts the sensors less.
+        """
         self.state_dim = 12
         self.meas_dim = 12
+        self.physics_blend = physics_blend
 
         # State Vector: [RPM, MAP, Oil_P, Oil_T, CHT1..4, EGT1..4]
         self.x = np.array([
@@ -55,7 +89,12 @@ class ExtendedKalmanFilter:
 
     def predict(self, mvem_prediction: EngineState, dt_s: float = 0.05):
         """
-        EKF Time Update (Prediction Step) using non-linear MVEM state dynamics.
+        Time update. Blends the estimate toward the MVEM's integrated state.
+
+        Called without a matching update() -- which is what happens during a
+        telemetry blackout -- this converges the estimate onto the physics
+        baseline rather than letting it drift, which is the behaviour the twin
+        wants when the datalink is gone.
         """
         # Physics state vector from MVEM
         x_mvem = np.array([
@@ -73,16 +112,18 @@ class ExtendedKalmanFilter:
             mvem_prediction.egt_c[3],
         ], dtype=np.float64)
 
-        # Non-linear state propagation
-        self.x = 0.70 * self.x + 0.30 * x_mvem
+        # Complementary propagation toward the physics solution
+        beta = self.physics_blend
+        self.x = (1.0 - beta) * self.x + beta * x_mvem
 
-        # Jacobian F_k approximated as identity + linear drift
+        # F is identity: the non-linear dynamics are integrated by the MVEM, so
+        # no Jacobian is formed here. See the module docstring.
         F = np.eye(self.state_dim)
         self.P = F @ self.P @ F.T + self.Q * dt_s
 
     def update(self, sensor_readings: SensorReadings):
         """
-        EKF Measurement Update (Correction Step) fusing sensor observation vector z.
+        Measurement update. Standard linear Kalman correction, H = I.
         """
         z = np.array([
             sensor_readings.rpm,

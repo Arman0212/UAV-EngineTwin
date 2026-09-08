@@ -35,3 +35,6 @@ Thumbs.db
 
 # Antigravity metadata
 *.metadata.json
+
+# Recorded sorties (flight data recorder output)
+data/flight_logs/

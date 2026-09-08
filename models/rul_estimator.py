@@ -49,12 +49,30 @@ class RULEstimator:
                 uncertainty_level="LOW"
             )
 
-        # 2. Abrupt Emergency Step Fault
         times = np.array([pt[0] for pt in self.health_history])
         healths = np.array([pt[1] for pt in self.health_history])
         time_span_s = max(1.0, times[-1] - times[0])
         total_drop = healths[0] - healths[-1]
 
+        # 2a. Already past the critical limit.
+        #
+        # This guard has to come first. Once health has collapsed and settled on
+        # the floor, the trend window is flat, so the slope fit below reads
+        # "very slow drift" and would report ~120 hours remaining on an engine
+        # that is already beyond its condemnation threshold — while the alert
+        # banner says RTB immediately. An operator given both numbers believes
+        # neither, so the floor is reported as the floor.
+        if current_health_pct <= self.critical_thresh:
+            return RULPrediction(
+                regime="EXPIRED",
+                rul_hours_mean=0.0,
+                rul_hours_min=0.0,
+                rul_hours_max=0.0,
+                degradation_rate_pct_per_hr=round(float(abs(total_drop) * (3600.0 / time_span_s)), 2),
+                uncertainty_level="LOW"
+            )
+
+        # 2b. Abrupt Emergency Step Fault
         if total_drop > 40.0 and time_span_s < 15.0:
             return RULPrediction(
                 regime="ABRUPT",

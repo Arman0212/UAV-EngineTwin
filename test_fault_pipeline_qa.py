@@ -1,7 +1,7 @@
 """
 End-to-End QA Validation Test for ENGINE-TWIN Fault Injection & Propagation Pipeline.
 Verifies every fault button:
-CLICK -> INJECT -> TELEMETRY DRIFT -> EKF -> RESIDUALS -> AI DIAGNOSIS -> SHAP XAI -> RUL -> RESET
+CLICK -> INJECT -> TELEMETRY DRIFT -> ESTIMATOR -> RESIDUALS -> AI DIAGNOSIS -> ATTRIBUTION -> RUL -> RESET
 """
 import time
 import numpy as np
@@ -88,7 +88,7 @@ def run_qa_pipeline_test():
         print(f"  Param [{param_key}]: {expected_before} -> {measured_val:.2f} ({desc})")
         print(f"  AI Diagnosis: {diag} (Confidence: {conf:.1f}%)")
         print(f"  Anomaly Index: {anom_idx:.2f} / 1.00 (MSE: {state.ai_prognostics.anomaly_raw_mse})")
-        print(f"  SHAP Top Driver: {top_shap_str}")
+        print(f"  Top attribution: {top_shap_str}")
         print(f"  RUL Window: {rul_min:.1f} – {rul_max:.1f} Flight Hrs")
 
         # Verify Detection
@@ -106,7 +106,7 @@ def run_qa_pipeline_test():
             "Diagnosis": diag,
             "Confidence": f"{conf:.1f}%",
             "Anomaly Index": f"{anom_idx:.2f}",
-            "Top SHAP Feature": top_shap_str,
+            "Top Attribution": top_shap_str,
             "Status": status_str
         })
 
@@ -128,7 +128,23 @@ def run_qa_pipeline_test():
     for r in results_table:
         print(f"{r['Fault']:<26} | {r['Param Response']:<12} | {r['Diagnosis']:<24} | {r['Confidence']:<6} | {r['Anomaly Index']:<5} | {r['Status']}")
     print("=" * 80)
-    print("ALL 8 FAULT MODES PROPAGATE PHYSICAL TELEMETRY, TRIGGER AI DIAGNOSIS, AND RECOVER CLEANLY!")
+
+    failures = [r["Fault"] for r in results_table if r["Status"] == "FAIL"]
+    n_total = len(results_table)
+    n_pass = n_total - len(failures)
+    print(f"{n_pass}/{n_total} fault modes propagated physical telemetry and were "
+          f"correctly diagnosed; system recovered to healthy baseline.")
+
+    if failures:
+        print("\nFAILED MODES:")
+        for f in failures:
+            print(f"  - {f}")
+        # A mode that the pipeline does not detect is a real result, not a
+        # formatting detail. Exiting non-zero keeps run_all_tests.py honest.
+        raise AssertionError(
+            f"{len(failures)} of {n_total} fault modes were not detected: "
+            + ", ".join(failures)
+        )
 
 if __name__ == "__main__":
     run_qa_pipeline_test()

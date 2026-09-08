@@ -3,10 +3,10 @@ ENGINE-TWIN: Real-Time Digital Twin Streaming Backend Service (SIH26054)
 FastAPI + WebSockets service running:
 - 20 Hz continuous MVEM physics integration
 - Datasheet sensor simulation with noise & dynamics
-- Extended Kalman Filter (EKF) state estimation
+- Physics-anchored 12-state Kalman estimation
 - Normalized physics residual calculation
 - AI Anomaly Detection + Multi-Task Fault Classification + RUL Prognostics
-- Fast SHAP feature attribution + Operator Alert Generation
+- Gradient-based local attribution + Operator Alert Generation
 - High-frequency WebSocket broadcast to interactive 3D dashboard
 """
 import os
@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 # Ensure project root is in path
@@ -30,13 +30,16 @@ from simulation.mvem import MeanValueEngineModel, EngineState
 from simulation.sensors import SensorModel, SensorReadings
 from simulation.fault_injector import FaultInjector, FaultType, FaultConfig
 from digital_twin.health_index import HealthIndexEngine
-from digital_twin.ekf_estimator import ExtendedKalmanFilter
+from digital_twin.state_estimator import PhysicsAnchoredKalmanEstimator
 from digital_twin.twin_state import DigitalTwinState, SubsystemHealth, AIHealthState, StateLevel
+from digital_twin.flight_recorder import (
+    FlightRecorder, list_sessions, analyse_session, load_frames,
+)
 from models.sensor_validator import SensorValidator
 from models.anomaly_autoencoder import AnomalyDetector
 from models.fault_classifier import FaultDiagnosisEngine
 from models.rul_estimator import RULEstimator
-from xai.shap_explainer import FastSHAPExplainer
+from xai.attribution import GradientAttributionExplainer
 from xai.alert_generator import AlertGenerator
 
 app = FastAPI(title="ENGINE-TWIN Real-Time Digital Twin Server")
@@ -54,7 +57,7 @@ class EngineTwinRuntime:
         self.mvem_baseline = MeanValueEngineModel()      # Healthy Digital Twin baseline
         self.sensors = SensorModel(seed=42)
         self.injector = FaultInjector(self.mvem_physical, self.sensors)
-        self.ekf = ExtendedKalmanFilter()
+        self.ekf = PhysicsAnchoredKalmanEstimator()
         self.health_engine = HealthIndexEngine()
         self.sensor_validator = SensorValidator()
         self.rul_engine = RULEstimator()
@@ -66,17 +69,30 @@ class EngineTwinRuntime:
 
         self.anomaly_detector = AnomalyDetector(str(ae_path) if ae_path.exists() else None)
         self.fault_classifier = FaultDiagnosisEngine(str(clf_path) if clf_path.exists() else None)
-        self.shap_explainer = FastSHAPExplainer(self.fault_classifier.model if self.fault_classifier.is_trained else None)
+        self.shap_explainer = GradientAttributionExplainer(self.fault_classifier.model if self.fault_classifier.is_trained else None)
 
         self.sim_time_s = 0.0
         self.time_scale = 1.0
         self.is_running = True
         self.total_mission_duration_s = 3600.0
 
+        # Manual flight sandbox: when enabled the mission profile is overridden
+        # by the operator's throttle/altitude/OAT settings, and the ISA
+        # atmosphere is recomputed for the commanded altitude so the turbo
+        # actually sees the thinner air rather than only the label changing.
+        self.manual_override = False
+        self.override_throttle = 72.0
+        self.override_altitude = 28500.0
+        self.override_oat = -42.5
+
         # Latest State Snapshot
         self.latest_state: Optional[DigitalTwinState] = None
         self.latest_alert: Optional[Dict[str, Any]] = None
+        self.latest_frame: Optional[Dict[str, Any]] = None
         self.active_fault_name: str = "HEALTHY"
+
+        # Flight data recorder (attached by the service on startup)
+        self.recorder: Optional[FlightRecorder] = None
 
     def reset(self):
         self.sim_time_s = 0.0
@@ -84,17 +100,45 @@ class EngineTwinRuntime:
         self.mvem_baseline.reset(idle=False)
         self.sensors = SensorModel(seed=int(time.time()))
         self.injector = FaultInjector(self.mvem_physical, self.sensors)
-        self.ekf = ExtendedKalmanFilter()
+        self.ekf = PhysicsAnchoredKalmanEstimator()
         self.rul_engine.reset()
         self.latest_alert = None
         self.active_fault_name = "HEALTHY"
 
-    def step(self, dt_s: float = 0.05) -> DigitalTwinState:
+    def warm_up(self, seconds: float = 15.0, dt_s: float = 0.05):
+        """
+        Runs the twin forward before any client attaches.
+
+        From a cold start the EKF covariance, the cylinder thermal states and the
+        oil circuit need roughly ten seconds to settle; until they do, the
+        residuals are large and the health index reads CRITICAL on a perfectly
+        healthy engine. Warming up off-screen means the dashboard's first frame
+        shows the engine as it actually is.
+        """
+        steps = int(seconds / dt_s)
+        for _ in range(steps):
+            self.step(dt_s=dt_s, record=False)
+        self.rul_engine.reset()
+
+    def step(self, dt_s: float = 0.05, record: bool = True) -> DigitalTwinState:
         self.sim_time_s += dt_s * self.time_scale
         t = self.sim_time_s
 
         # 1. Flight State
         flight = self.flight_gen.get_standard_mission_state(t, self.total_mission_duration_s)
+
+        # 1b. Manual flight sandbox override, if the operator has taken control.
+        # The ISA atmosphere is recomputed at the commanded altitude so that
+        # manifold pressure, turbo derating and power all respond for real.
+        if self.manual_override:
+            flight.throttle_pct = max(0.0, min(100.0, self.override_throttle))
+            flight.altitude_ft = max(0.0, min(35000.0, self.override_altitude))
+            flight.altitude_m = FlightProfile.feet_to_meters(flight.altitude_ft)
+            _, p_bar, rho = FlightProfile.get_isa_atmosphere(flight.altitude_m)
+            flight.ambient_temp_c = max(-60.0, min(50.0, self.override_oat))
+            flight.ambient_pressure_bar = p_bar
+            flight.air_density_kgpm3 = rho
+            flight.phase = "MANUAL_SANDBOX"
 
         # 2. Update Fault Injection Progress
         self.injector.update(t)
@@ -106,7 +150,7 @@ class EngineTwinRuntime:
         # 4. Simulate Healthy Digital Twin Physics Baseline
         mvem_expected = self.mvem_baseline.step(flight, dt_s=dt_s)
 
-        # 5. Extended Kalman Filter Estimation
+        # 5. Physics-anchored Kalman state estimation
         self.ekf.predict(mvem_expected, dt_s=dt_s)
         self.ekf.update(sensor_meas)
         ekf_est = self.ekf.get_estimated_state()
@@ -165,7 +209,7 @@ class EngineTwinRuntime:
         # 10. RUL Prognostics
         rul_pred = self.rul_engine.update(t, subsystem_health.overall_health)
 
-        # 11. XAI SHAP Attribution
+        # 11. XAI local attribution (gradient x input)
         shap_exps = self.shap_explainer.explain(residuals, fault_class)
 
         # 12. Operator Alert Generation
@@ -240,9 +284,146 @@ class EngineTwinRuntime:
             provenance="SIMULATED"
         )
         self.latest_state = state
+
+        # Build the broadcast frame once and reuse it for the WebSocket, the SSE
+        # stream, /api/state and the recorder, so every consumer sees the same
+        # bytes and recording costs one serialisation rather than two.
+        frame = state.to_dict()
+        frame["active_alert"] = self.latest_alert
+        self.latest_frame = frame
+
+        if record and self.recorder is not None:
+            self.recorder.record(frame)
+
         return state
 
+
 twin_runtime = EngineTwinRuntime()
+
+# -------------------------------------------------------------
+# Simulation driver
+#
+# The twin advances on its own background task rather than inside a client's
+# WebSocket handler. That keeps sortie time independent of who is watching:
+# /api/state is populated with no browser attached, and opening a second
+# dashboard tab observes the same sortie instead of stepping it a second time.
+# -------------------------------------------------------------
+SIM_DT_S = 0.05          # 20 Hz twin update
+BROADCAST_HZ = 20.0
+
+class ReplayController:
+    """
+    Drives the broadcast from a recorded sortie instead of the live twin.
+
+    Replay is deliberately a property of the *stream*, not of the twin: the live
+    simulation keeps running underneath, so leaving replay returns the operator
+    to a mission in progress rather than to a cold engine.
+    """
+    def __init__(self):
+        self.frames: List[Dict[str, Any]] = []
+        self.session_id: Optional[str] = None
+        self.cursor: int = 0
+        self.speed: float = 1.0
+        self.playing: bool = False
+
+    def load(self, session_id: str, speed: float = 1.0) -> int:
+        frames = load_frames(session_id)
+        if not frames:
+            raise ValueError(f"No frames recorded for sortie '{session_id}'")
+        self.frames = frames
+        self.session_id = session_id
+        self.cursor = 0
+        self.speed = max(0.2, min(10.0, speed))
+        self.playing = True
+        return len(frames)
+
+    def stop(self):
+        self.playing = False
+        self.frames = []
+        self.session_id = None
+        self.cursor = 0
+
+    def tick(self):
+        """
+        Advances the playhead one broadcast period.
+
+        Only the simulation loop calls this. Consumers read the frame at the
+        current cursor without moving it, so replay runs at wall-clock speed
+        regardless of how many dashboards, SSE clients or pollers are attached.
+        """
+        if not self.playing or not self.frames:
+            return
+        self.cursor += max(1, int(round(self.speed)))
+        if self.cursor >= len(self.frames):
+            self.cursor = len(self.frames) - 1
+            self.playing = False       # hold on the last frame at end of sortie
+
+    def current(self) -> Optional[Dict[str, Any]]:
+        if not self.frames:
+            return None
+        idx = max(0, min(self.cursor, len(self.frames) - 1))
+        frame = self.frames[idx]
+        if not self.playing and idx >= len(self.frames) - 1:
+            return frame | {"replay_complete": True}
+        return frame
+
+    def status(self) -> Dict[str, Any]:
+        return {
+            "playing": self.playing,
+            "session_id": self.session_id,
+            "cursor": self.cursor,
+            "total_frames": len(self.frames),
+            "speed": self.speed,
+        }
+
+replay = ReplayController()
+
+
+def current_frame() -> Optional[Dict[str, Any]]:
+    """The frame every consumer should send right now: replay if active, else live."""
+    if replay.frames:
+        frame = replay.current()
+        if frame is not None:
+            return frame | {"source": "REPLAY", "replay": replay.status()}
+    if twin_runtime.latest_frame is not None:
+        return twin_runtime.latest_frame | {"source": "LIVE"}
+    return None
+
+
+async def simulation_loop():
+    """Advances the twin at a fixed 20 Hz for the life of the process."""
+    period = 1.0 / BROADCAST_HZ
+    next_tick = time.perf_counter()
+    while True:
+        try:
+            twin_runtime.step(dt_s=SIM_DT_S)
+            replay.tick()                            # playhead moves on the clock, not per reader
+        except Exception as e:                      # a bad frame must not kill the sortie
+            print(f"[sim] step error: {e}")
+        next_tick += period
+        delay = next_tick - time.perf_counter()
+        if delay < -period:                          # fell behind; resynchronise
+            next_tick = time.perf_counter()
+            delay = 0.0
+        await asyncio.sleep(max(0.0, delay))
+
+
+@app.on_event("startup")
+async def on_startup():
+    twin_runtime.warm_up(seconds=15.0, dt_s=SIM_DT_S)
+    twin_runtime.recorder = FlightRecorder()
+    print(f"[recorder] sortie {twin_runtime.recorder.session_id} recording to "
+          f"{twin_runtime.recorder.session_dir}")
+    asyncio.create_task(simulation_loop())
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    if twin_runtime.recorder is not None:
+        summary = twin_runtime.recorder.close()
+        print(f"[recorder] sortie {summary.session_id} closed: "
+              f"{summary.frame_count} frames, {summary.duration_s:.1f}s")
+
 
 # -------------------------------------------------------------
 # REST API Endpoints
@@ -251,6 +432,16 @@ class FaultInjectRequest(BaseModel):
     fault_type: str
     severity: float = 1.0
     ramp_duration_s: float = 8.0
+
+class FlightOverrideRequest(BaseModel):
+    enabled: bool = True
+    throttle_pct: Optional[float] = None
+    altitude_ft: Optional[float] = None
+    ambient_temp_c: Optional[float] = None
+
+class ReplayRequest(BaseModel):
+    session_id: str
+    speed: float = 1.0
 
 @app.get("/")
 async def get_dashboard_root():
@@ -262,8 +453,9 @@ async def get_dashboard_root():
 
 @app.get("/api/state")
 async def get_current_state():
-    if twin_runtime.latest_state:
-        return twin_runtime.latest_state.to_dict()
+    frame = current_frame()
+    if frame is not None:
+        return frame
     return {"status": "initializing"}
 
 @app.post("/api/fault/inject")
@@ -294,9 +486,32 @@ async def clear_fault_endpoint():
     twin_runtime.active_fault_name = "HEALTHY"
     return {"status": "SUCCESS", "message": "Engine reset to healthy baseline."}
 
+@app.post("/api/flight/override")
+async def flight_override_endpoint(req: FlightOverrideRequest):
+    """
+    Manual flight sandbox: pin throttle, altitude and OAT instead of following
+    the scripted mission. Used to demonstrate that a healthy engine stays at
+    r = 0 across the whole envelope, which a fixed-threshold EIS cannot do.
+    """
+    twin_runtime.manual_override = bool(req.enabled)
+    if req.throttle_pct is not None:
+        twin_runtime.override_throttle = float(req.throttle_pct)
+    if req.altitude_ft is not None:
+        twin_runtime.override_altitude = float(req.altitude_ft)
+    if req.ambient_temp_c is not None:
+        twin_runtime.override_oat = float(req.ambient_temp_c)
+    return {
+        "status": "SUCCESS",
+        "manual_override": twin_runtime.manual_override,
+        "throttle_pct": twin_runtime.override_throttle,
+        "altitude_ft": twin_runtime.override_altitude,
+        "ambient_temp_c": twin_runtime.override_oat,
+    }
+
 @app.post("/api/sim/reset")
 async def reset_simulation_endpoint():
     twin_runtime.reset()
+    twin_runtime.warm_up(seconds=15.0, dt_s=SIM_DT_S)
     return {"status": "SUCCESS", "message": "Simulation restarted."}
 
 @app.post("/api/sim/speed")
@@ -305,7 +520,56 @@ async def set_simulation_speed(speed: float = 1.0):
     return {"status": "SUCCESS", "time_scale": twin_runtime.time_scale}
 
 # -------------------------------------------------------------
-# WebSocket Telemetry Stream (20 Hz Broadcast)
+# Post-Flight Analysis & Mission Replay
+# -------------------------------------------------------------
+@app.get("/api/sessions")
+async def list_recorded_sessions():
+    """Lists recorded sorties, newest first."""
+    return {"sessions": list_sessions(), "active": (
+        twin_runtime.recorder.session_id if twin_runtime.recorder else None)}
+
+@app.get("/api/sessions/{session_id}")
+async def get_session_analysis(session_id: str):
+    """Post-flight report for one sortie: banding, phases, and the fault timeline."""
+    report = analyse_session(session_id)
+    if not report.get("found"):
+        raise HTTPException(status_code=404, detail=f"No such sortie: {session_id}")
+    return report
+
+@app.get("/api/sessions/{session_id}/frames")
+async def get_session_frames(session_id: str, start: int = 0, limit: int = 500):
+    """Raw recorded frames, paged, for offline plotting or export."""
+    frames = load_frames(session_id)
+    if not frames:
+        raise HTTPException(status_code=404, detail=f"No such sortie: {session_id}")
+    limit = max(1, min(5000, limit))
+    start = max(0, start)
+    return {
+        "session_id": session_id,
+        "total_frames": len(frames),
+        "start": start,
+        "frames": frames[start:start + limit],
+    }
+
+@app.post("/api/replay/start")
+async def start_replay(req: ReplayRequest):
+    try:
+        n = replay.load(req.session_id, req.speed)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {"status": "SUCCESS", "session_id": req.session_id, "frames": n}
+
+@app.post("/api/replay/stop")
+async def stop_replay():
+    replay.stop()
+    return {"status": "SUCCESS", "message": "Returned to live telemetry."}
+
+@app.get("/api/replay/status")
+async def replay_status():
+    return replay.status()
+
+# -------------------------------------------------------------
+# Telemetry Streams (20 Hz Broadcast)
 # -------------------------------------------------------------
 @app.websocket("/ws/telemetry")
 async def websocket_telemetry_endpoint(websocket: WebSocket):
@@ -313,19 +577,33 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
     print("Dashboard client connected to telemetry stream.")
     try:
         while True:
-            state = twin_runtime.step(dt_s=0.05)
-            payload = state.to_dict()
-            if twin_runtime.latest_alert:
-                payload["active_alert"] = twin_runtime.latest_alert
-            else:
-                payload["active_alert"] = None
-
-            await websocket.send_text(json.dumps(payload))
-            await asyncio.sleep(0.05) # 20 Hz update cadence
+            frame = current_frame()
+            if frame is not None:
+                await websocket.send_text(json.dumps(frame))
+            await asyncio.sleep(1.0 / BROADCAST_HZ)
     except WebSocketDisconnect:
         print("Dashboard client disconnected.")
     except Exception as e:
         print(f"WebSocket streaming error: {e}")
+
+@app.get("/api/stream")
+async def sse_telemetry_stream():
+    """
+    Server-Sent Events fallback, for browsers or proxies that block WebSockets.
+    The dashboard falls back to this automatically, then to HTTP polling.
+    """
+    async def event_generator():
+        while True:
+            frame = current_frame()
+            if frame is not None:
+                yield f"data: {json.dumps(frame)}\n\n"
+            await asyncio.sleep(1.0 / BROADCAST_HZ)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 if __name__ == "__main__":
     import uvicorn

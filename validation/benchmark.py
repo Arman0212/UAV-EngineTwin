@@ -3,7 +3,7 @@ Empirical Baseline Comparison Benchmark (SIH26054 Section 27.2)
 Compares:
 1. Method A: Fixed-Threshold EIS Instrument (Garmin/EDM-930 style)
 2. Method B: Basic Black-Box ML Classifier (Random Forest on raw telemetry without physics model)
-3. Method C: Proposed ENGINE-TWIN (MVEM Residuals + EKF + Two-Stage Autoencoder/TCN + RUL + XAI)
+3. Method C: Proposed ENGINE-TWIN (MVEM Residuals + Kalman Estimator + Two-Stage AE/MLP + RUL + XAI)
 
 Evaluates on held-out test scenarios:
 - Fault Detection Accuracy (%)
@@ -125,7 +125,7 @@ def run_benchmark():
     # -------------------------------------------------------------
     # 3. Method C: Proposed ENGINE-TWIN
     # -------------------------------------------------------------
-    print("[3/3] Benchmarking Method C: Proposed ENGINE-TWIN (Physics Residuals + EKF + XAI)...")
+    print("[3/3] Benchmarking Method C: Proposed ENGINE-TWIN (Physics Residuals + Kalman Estimator + XAI)...")
     ae = AnomalyDetector(str(SAVED_MODELS_DIR / "anomaly_autoencoder.pt"))
     clf = FaultDiagnosisEngine(str(SAVED_MODELS_DIR / "fault_classifier.pt"))
 
@@ -191,8 +191,11 @@ def run_benchmark():
     print(f"{'False Alarm Rate (Healthy)':<32} | {eis_far:14.2f} %  | {rf_far:14.2f} %  | {twin_far:14.2f} %")
     print(f"{'CPU Inference Latency':<32} | {t_eis_ms:14.3f} ms | {t_rf_ms:14.3f} ms | {t_twin_ms:14.3f} ms")
     print(f"{'Sensor vs Engine Check':<32} | {'NO (False Abort)':<18} | {'NO (Confounded)':<18} | {'YES (Physics Decoupled)':<18}")
-    print(f"{'Explainability (XAI)':<32} | {'NONE (Threshold)':<18} | {'Feature Imp Only':<18} | {'SHAP Operator Cards':<18}")
-    print(f"{'RUL Uncertainty Bounds':<32} | {'NONE':<18} | {'NONE (Clf only)':<18} | {'YES (95% Interval)':<18}")
+    print(f"{'Explainability (XAI)':<32} | {'NONE (Threshold)':<18} | {'Feature Imp Only':<18} | {'Attribution Cards':<18}")
+    # "95% interval" would overstate this. The RUL bounds come from the spread of
+    # the degradation-trend fit, not from a distribution-free coverage guarantee,
+    # so they are reported as what they are: a bounded interval, not a calibrated one.
+    print(f"{'RUL Uncertainty Bounds':<32} | {'NONE':<18} | {'NONE (Clf only)':<18} | {'YES (trend interval)':<18}")
     print("=" * 85)
 
 if __name__ == "__main__":

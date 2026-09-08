@@ -157,21 +157,21 @@ audit_data_leakage()""")
     # -------------------------------------------------------------
     # 7. EXTENDED KALMAN FILTER (EKF)
     # -------------------------------------------------------------
-    add_md("""## 6. 12-State Extended Kalman Filter (EKF) State Fusion
+    add_md("""## 6. 12-State Physics-Anchored Kalman Estimator
 Fuses noisy, lagging sensor telemetry with the thermodynamic MVEM physics expectations to compute the optimal smoothed state and covariance.""")
 
-    add_code("""from digital_twin.ekf_estimator import ExtendedKalmanFilter
+    add_code("""from digital_twin.state_estimator import PhysicsAnchoredKalmanEstimator
 
-ekf = ExtendedKalmanFilter()
+ekf = PhysicsAnchoredKalmanEstimator()
 mvem_exp = mvem.step(flight_to, dt_s=0.05)
 
 ekf.predict(mvem_exp, dt_s=0.05)
 ekf.update(raw_meas)
 ekf_est = ekf.get_estimated_state()
 
-print("--- 12-State EKF Fusion Performance ---")
+print("--- 12-State Kalman Estimator Performance ---")
 print(f"Raw Sensor EGT Cyl 1:   {raw_meas.egt_c[0]:.2f} C")
-print(f"EKF Estimated EGT Cyl 1:{ekf_est['estimated_egt_c'][0]:.2f} C")
+print(f"Estimated EGT Cyl 1:{ekf_est['estimated_egt_c'][0]:.2f} C")
 print(f"True Physical EGT Cyl 1:{eng_state.egt_c[0]:.2f} C")
 print(f"Noise Reduction Factor: >60% variance smoothed")""")
 
@@ -272,13 +272,13 @@ print(f"Uncertainty Bound Level:   {rul_pred.uncertainty_level}")""")
     # -------------------------------------------------------------
     # 12. REAL-TIME EXPLAINABLE AI (SHAP ATTRIBUTION)
     # -------------------------------------------------------------
-    add_md("""## 11. Real-Time Explainable AI (SHAP) & Operator Alerts
+    add_md("""## 11. Real-Time Explainable AI (Gradient Attribution) & Operator Alerts
 Computes local gradient-based SHAP feature attributions in <1.0 ms and builds standardized military-grade decision support cards.""")
 
-    add_code("""from xai.shap_explainer import FastSHAPExplainer
+    add_code("""from xai.attribution import GradientAttributionExplainer
 from xai.alert_generator import AlertGenerator
 
-shap_exp = FastSHAPExplainer(clf.model)
+shap_exp = GradientAttributionExplainer(clf.model)
 # Explain injected bearing vibration
 residuals_bearing = {"vibration_rms": 18.5, "oil_temp": 6.2, "rpm": 0.5, "manifold_pressure": -0.2}
 shap_results = shap_exp.explain(residuals_bearing, "BEARING_WEAR_VIBRATION")
@@ -295,7 +295,7 @@ print(f"[HEADLINE]:     {alert.headline}")
 print(f"[SUBSYSTEM]:    {alert.subsystem}")
 print(f"[RUL WINDOW]:   {alert.rul_window}")
 print(f"[DIRECTIVE]:    {alert.recommended_action}")
-print("\\nTop SHAP Attributions:")
+print("\\nTop Attributions:")
 for item in shap_results[:3]:
     print(f"  • {item['display_name']:<30}: {item['importance_pct']}% attribution ({item['direction']})")""")
 

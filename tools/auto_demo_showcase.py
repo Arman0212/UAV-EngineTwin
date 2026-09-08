@@ -110,7 +110,7 @@ def main():
     # PHASE 4: MECHANICAL BEARING WEAR & SHAP XAI (20 seconds)
     # -------------------------------------------------------------
     print("\n" + "#" * 80)
-    print("  [PHASE 4] MECHANICAL BEARING WEAR & SHAP EXPLAINABILITY")
+    print("  [PHASE 4] MECHANICAL BEARING WEAR & EXPLAINABILITY")
     print("#" * 80)
     print("  --> Injecting 2X Order Bearing Vibration...")
     post_json("/api/fault/clear", {})
@@ -126,7 +126,7 @@ def main():
             print(f"  T+{s['timestamp_s']:.1f}s | Vib RMS: {s['sensor_vib_rms_g']:.3f} g | Diagnosis: {ai.get('fault_class')} | RUL Window: [{ai.get('rul_hours_min', 0):.1f} – {ai.get('rul_hours_max', 0):.1f}] Flight Hrs")
             if shap_list:
                 factors = ", ".join([f"{item['display_name']} ({item['importance_pct']}%)" for item in shap_list[:2]])
-                print(f"      🔍 [SHAP XAI]: Top Contributing Factors -> {factors}")
+                print(f"      🔍 [XAI]: Top Contributing Factors -> {factors}")
 
     print("\n" + "=" * 80)
     print("  [SUCCESS] STAGE DEMONSTRATION SHOWCASE COMPLETED SUCCESSFULLY!")

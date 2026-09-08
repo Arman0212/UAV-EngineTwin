@@ -38,7 +38,7 @@ class AIHealthState:
     rul_hours_mean: float = 500.0      # RUL point estimate
     rul_hours_min: float = 450.0       # RUL Lower bound (95% confidence interval)
     rul_hours_max: float = 550.0       # RUL Upper bound (95% confidence interval)
-    top_contributing_channels: List[Dict[str, Any]] = field(default_factory=list) # SHAP top channels
+    top_contributing_channels: List[Dict[str, Any]] = field(default_factory=list) # ranked attribution channels
     recommended_action: str = "Continue nominal mission profile."
 
 @dataclass

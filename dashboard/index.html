@@ -4,16 +4,20 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ENGINE-TWIN | DRDO MALE UAV Aero Piston Engine Ground Control Station</title>
-  <!-- TailwindCSS CDN (layout utilities only — all colour comes from theme.css) -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Chart.js & Three.js CDNs -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <!--
+    All third-party assets are vendored under dashboard/vendor/ and served from
+    this host. The ground station has to come up on a closed network with no
+    internet route, so nothing here may depend on a CDN being reachable.
+    Refresh them with: python tools/fetch_vendor_assets.py
+  -->
+  <!-- Tailwind (layout utilities only — all colour comes from theme.css) -->
+  <script src="/static/vendor/tailwind.min.js"></script>
+  <!-- Chart.js & Three.js -->
+  <script src="/static/vendor/chart.umd.min.js"></script>
+  <script src="/static/vendor/three.min.js"></script>
+  <script src="/static/vendor/OrbitControls.js"></script>
   <!-- Monospace throughout: certified-display convention -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="/static/vendor/jetbrains.css">
   <!-- GLASS COCKPIT THEME: single source of truth for colour and type -->
   <link rel="stylesheet" href="/static/theme.css">
 </head>
@@ -44,6 +48,7 @@
     <!-- Station controls -->
     <div class="flex items-center gap-1.5">
       <button id="btn-sandbox-open" onclick="toggleSandbox()" class="btn" title="Developer flight sandbox controls">Sandbox ▾</button>
+      <button id="btn-debrief-open" onclick="toggleDebrief()" class="btn" title="Post-flight analysis and mission replay">Debrief ▾</button>
       <button id="btn-audio" onclick="toggleAudio()" class="btn" title="Toggle aural alerts">
         <span id="lbl-audio">Audio: muted</span>
       </button>
@@ -87,6 +92,40 @@
       <div class="flex items-center gap-2">
         <button id="btn-sandbox-toggle" onclick="toggleManualSandbox()" class="btn">Mode: auto mission</button>
         <button onclick="toggleSandbox()" class="btn" title="Collapse sandbox">Close ▴</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       DEBRIEF — post-flight analysis and mission replay.
+       Every sortie is recorded to disk by the flight data recorder. This
+       panel lists them, shows the post-flight report for the selected
+       sortie, and streams it back through the same telemetry path the
+       live twin uses, so the whole dashboard replays unchanged.
+       ==================================================================== -->
+  <div id="panel-debrief" class="chrome rule-b px-3 py-2 flex-shrink-0 z-20" hidden>
+    <div class="flex items-start justify-between gap-6">
+      <div class="flex items-start gap-6 min-w-0 flex-1">
+        <span class="label flex-shrink-0">Debrief <span class="text-dim">(post-flight)</span></span>
+
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <label class="label-sm" for="sel-session">Sortie</label>
+          <select id="sel-session" class="btn" style="min-width:20rem" onchange="onSessionSelected()">
+            <option value="">— loading —</option>
+          </select>
+          <button onclick="refreshSessions()" class="btn" title="Rescan recorded sorties">Refresh</button>
+        </div>
+
+        <div id="box-debrief-summary" class="text-muted min-w-0 flex-1" style="font-size:0.72rem; line-height:1.5">
+          Select a recorded sortie to see its post-flight report.
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <span id="txt-replay-status" class="badge">Live</span>
+        <button id="btn-replay-start" onclick="startReplay()" class="btn">▶ Replay</button>
+        <button id="btn-replay-stop" onclick="stopReplay()" class="btn">■ Live</button>
+        <button onclick="toggleDebrief()" class="btn" title="Collapse debrief">Close ▴</button>
       </div>
     </div>
   </div>
@@ -261,11 +300,11 @@
         </div>
       </div>
 
-      <!-- SHAP attribution — ranked horizontal bars, top five -->
+      <!-- Local attribution — ranked horizontal bars, top five -->
       <div id="panel-shap" class="panel flex-1 min-h-0">
         <div class="panel-head">
           <span class="panel-title">Root-cause attribution</span>
-          <span class="panel-note">Top 5 · SHAP</span>
+          <span class="panel-note">Top 5 · attribution</span>
         </div>
         <div id="container-shap" class="panel-body overflow-y-auto flex flex-col gap-2">
           <div class="empty-note">All channels within tolerance.</div>

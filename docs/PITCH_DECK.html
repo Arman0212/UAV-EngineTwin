@@ -126,7 +126,7 @@
         <div class="bg-sky-950/40 border border-sky-700 p-3 rounded">
           <div class="text-sky-400 font-mono text-xs">STATE 3</div>
           <div class="text-white font-bold text-sm mt-1">Estimated</div>
-          <div class="text-sky-300 text-xs mt-1">12-State EKF Fusion</div>
+          <div class="text-sky-300 text-xs mt-1">12-State Kalman Estimator</div>
         </div>
         <div class="bg-slate-900 border border-slate-800 p-3 rounded">
           <div class="text-slate-500 font-mono text-xs">STATE 4</div>
@@ -140,7 +140,7 @@
         </div>
       </div>
       <div class="bg-slate-900/60 border border-slate-800 p-4 rounded text-sm text-slate-300">
-        <strong class="text-sky-400">Dead Reckoning during Datalink Loss:</strong> If communication drops for up to 30 seconds, the 12-state EKF continues propagating internal thermodynamics with zero state drift, ensuring unbroken flight tracking.
+        <strong class="text-sky-400">Dead Reckoning during Datalink Loss:</strong> If communication drops for up to 30 seconds, the 12-state estimator continues propagating internal thermodynamics from the physics baseline, ensuring unbroken flight tracking.
       </div>
     </section>
 
@@ -197,7 +197,7 @@
     <!-- SLIDE 7 -->
     <section class="slide w-full max-w-5xl justify-center">
       <div class="text-purple-400 font-mono text-xs tracking-widest uppercase mb-1">Explainable AI (XAI)</div>
-      <h2 class="text-3xl font-bold text-white mb-4">Fast Local SHAP Attribution & Decision Cards</h2>
+      <h2 class="text-3xl font-bold text-white mb-4">Local Gradient Attribution & Decision Cards</h2>
       <div class="bg-slate-900 border border-slate-800 p-5 rounded-lg">
         <div class="text-white font-bold text-sm mb-3">Instant Root-Cause Breakdown (&lt;0.51 ms Latency)</div>
         <div class="space-y-2 mb-4">

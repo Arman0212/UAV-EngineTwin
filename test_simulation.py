@@ -7,6 +7,7 @@ Tests:
 4. Fault injection dynamics and multi-channel physical responses.
 """
 import sys
+import tempfile
 from pathlib import Path
 import math
 import numpy as np
@@ -154,8 +155,19 @@ if __name__ == "__main__":
     test_vrde_altitude_derating()
     test_sensor_model()
     test_fault_injection()
-    print("\n[TEST 5] Generating Full Datasets...")
-    generate_all_datasets()
+    print("\n[TEST 5] Generating Full Datasets (to a temporary directory)...")
+    # Generate into a scratch directory rather than data/datasets/. Writing the
+    # committed CSVs here would silently replace the data the checkpoints in
+    # models/saved_models/ were trained on, so every downstream benchmark in the
+    # same run would score the shipped models against data they never saw.
+    # Rebuilding the committed datasets is an explicit action:
+    #     python data/generate_dataset.py
+    with tempfile.TemporaryDirectory(prefix="enginetwin_ds_") as tmp:
+        generate_all_datasets(output_dir=Path(tmp))
+        produced = sorted(p.name for p in Path(tmp).glob("*.csv"))
+        assert produced == ["test_scenarios.csv", "train_faults.csv", "train_healthy.csv"], \
+            f"Dataset generator produced unexpected files: {produced}"
+        print(f"  -> PASSED: generator produced {', '.join(produced)}")
     print("\n========================================================")
     print("ALL STEP 1 VERIFICATION TESTS PASSED SUCCESSFULLY!")
     print("========================================================")

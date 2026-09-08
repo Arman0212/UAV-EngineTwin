@@ -38,13 +38,14 @@ def main():
 
     suites = [
         ("Step 1: Physics Engine, ISA Atmosphere & Sensor Dynamics", "test_simulation.py"),
-        ("Step 2: AI Anomaly, EKF Fusion, Fault Classifier, RUL & XAI", "test_ai_layer.py"),
-        ("Step 3: Dedicated Data Leakage & Provenance Integrity Audit", "validation/leakage_audit.py"),
-        ("Step 4: Adversarial Stress & Failure Engineering Suite", "validation/stress_testing.py"),
-        ("Step 5: Empirical Baseline Comparison (EIS vs ML vs ENGINE-TWIN)", "validation/benchmark.py"),
-        ("Step 6: Architectural Ablation Study (Physics vs Raw ML)", "validation/ablation.py"),
-        ("Step 7: Multi-Engine Scalability Proof (Rotax 914 Flat-Four)", "tools/test_multi_engine_transfer.py"),
-        ("Step 8: Edge Hardware AI Compute & Memory Resource Profiler", "tools/edge_benchmark_profiler.py")
+        ("Step 2: AI Anomaly, State Estimator, Fault Classifier, RUL & XAI", "test_ai_layer.py"),
+        ("Step 3: End-to-End Fault Propagation QA (all injectable modes)", "test_fault_pipeline_qa.py"),
+        ("Step 4: Dedicated Data Leakage & Provenance Integrity Audit", "validation/leakage_audit.py"),
+        ("Step 5: Adversarial Stress & Failure Engineering Suite", "validation/stress_testing.py"),
+        ("Step 6: Empirical Baseline Comparison (EIS vs ML vs ENGINE-TWIN)", "validation/benchmark.py"),
+        ("Step 7: Architectural Ablation Study (Physics vs Raw ML)", "validation/ablation.py"),
+        ("Step 8: Multi-Engine Scalability Proof (Rotax 914 Flat-Four)", "tools/test_multi_engine_transfer.py"),
+        ("Step 9: Edge Hardware AI Compute & Memory Resource Profiler", "tools/edge_benchmark_profiler.py")
     ]
 
     results = []

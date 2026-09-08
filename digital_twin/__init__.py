@@ -4,12 +4,12 @@ Extended Kalman Filter state estimation, 5-state synchronization, and health ind
 """
 from .twin_state import DigitalTwinState, SubsystemHealth, StateLevel
 from .health_index import HealthIndexEngine
-from .ekf_estimator import ExtendedKalmanFilter
+from .state_estimator import PhysicsAnchoredKalmanEstimator
 
 __all__ = [
     "DigitalTwinState",
     "SubsystemHealth",
     "StateLevel",
     "HealthIndexEngine",
-    "ExtendedKalmanFilter",
+    "PhysicsAnchoredKalmanEstimator",
 ]

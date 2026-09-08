@@ -12,6 +12,7 @@ import threading
 from pathlib import Path
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
+from typing import Optional, Dict, Any, List
 
 # Ensure project root is in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -22,13 +23,16 @@ from simulation.mvem import MeanValueEngineModel, EngineState
 from simulation.sensors import SensorModel, SensorReadings
 from simulation.fault_injector import FaultInjector, FaultType, FaultConfig
 from digital_twin.health_index import HealthIndexEngine
-from digital_twin.ekf_estimator import ExtendedKalmanFilter
+from digital_twin.state_estimator import PhysicsAnchoredKalmanEstimator
 from digital_twin.twin_state import DigitalTwinState, SubsystemHealth, AIHealthState, StateLevel
+from digital_twin.flight_recorder import (
+    FlightRecorder, list_sessions, analyse_session, load_frames,
+)
 from models.sensor_validator import SensorValidator
 from models.anomaly_autoencoder import AnomalyDetector
 from models.fault_classifier import FaultDiagnosisEngine
 from models.rul_estimator import RULEstimator
-from xai.shap_explainer import FastSHAPExplainer
+from xai.attribution import GradientAttributionExplainer
 from xai.alert_generator import AlertGenerator
 
 DASHBOARD_DIR = PROJECT_ROOT / "dashboard"
@@ -40,7 +44,7 @@ class StandaloneEngineRuntime:
         self.mvem_baseline = MeanValueEngineModel()
         self.sensors = SensorModel(seed=42)
         self.injector = FaultInjector(self.mvem_physical, self.sensors)
-        self.ekf = ExtendedKalmanFilter()
+        self.ekf = PhysicsAnchoredKalmanEstimator()
         self.health_engine = HealthIndexEngine()
         self.sensor_validator = SensorValidator()
         self.rul_engine = RULEstimator()
@@ -52,7 +56,7 @@ class StandaloneEngineRuntime:
 
         self.anomaly_detector = AnomalyDetector(str(ae_path) if ae_path.exists() else None)
         self.fault_classifier = FaultDiagnosisEngine(str(clf_path) if clf_path.exists() else None)
-        self.shap_explainer = FastSHAPExplainer(self.fault_classifier.model if self.fault_classifier.is_trained else None)
+        self.shap_explainer = GradientAttributionExplainer(self.fault_classifier.model if self.fault_classifier.is_trained else None)
 
         self.sim_time_s = 1000.0
         self.elapsed_sortie_s = 0.0
@@ -68,6 +72,8 @@ class StandaloneEngineRuntime:
 
         self.latest_state: Optional[DigitalTwinState] = None
         self.latest_alert: Optional[Dict] = None
+        self.latest_frame: Optional[Dict[str, Any]] = None
+        self.recorder: Optional[FlightRecorder] = None
         self.active_fault_name = "HEALTHY"
         self.lock = threading.Lock()
 
@@ -90,7 +96,7 @@ class StandaloneEngineRuntime:
             self.mvem_baseline.reset(idle=False)
             self.sensors = SensorModel(seed=int(time.time()))
             self.injector = FaultInjector(self.mvem_physical, self.sensors)
-            self.ekf = ExtendedKalmanFilter()
+            self.ekf = PhysicsAnchoredKalmanEstimator()
             self.rul_engine.reset()
             self.latest_alert = None
             self.active_fault_name = "HEALTHY"
@@ -244,19 +250,97 @@ class StandaloneEngineRuntime:
                 provenance="SIMULATED"
             )
             self.latest_state = state
+
+            frame = state.to_dict()
+            frame["active_alert"] = self.latest_alert
+            self.latest_frame = frame
+            if self.recorder is not None:
+                self.recorder.record(frame)
+
             return state
 
 twin_runtime = StandaloneEngineRuntime()
+twin_runtime.recorder = FlightRecorder()
+print(f"[recorder] sortie {twin_runtime.recorder.session_id} recording to "
+      f"{twin_runtime.recorder.session_dir}")
+
+
+class StandaloneReplay:
+    """Playhead over a recorded sortie; advanced only by the simulation thread."""
+    def __init__(self):
+        self.frames: List[Dict[str, Any]] = []
+        self.session_id: Optional[str] = None
+        self.cursor = 0
+        self.speed = 1.0
+        self.playing = False
+
+    def load(self, session_id: str, speed: float = 1.0) -> int:
+        frames = load_frames(session_id)
+        if not frames:
+            raise ValueError(f"No frames recorded for sortie '{session_id}'")
+        self.frames, self.session_id = frames, session_id
+        self.cursor, self.speed, self.playing = 0, max(0.2, min(10.0, speed)), True
+        return len(frames)
+
+    def stop(self):
+        self.frames, self.session_id = [], None
+        self.cursor, self.playing = 0, False
+
+    def tick(self):
+        if not self.playing or not self.frames:
+            return
+        self.cursor += max(1, int(round(self.speed)))
+        if self.cursor >= len(self.frames):
+            self.cursor = len(self.frames) - 1
+            self.playing = False
+
+    def status(self) -> Dict[str, Any]:
+        return {"playing": self.playing, "session_id": self.session_id,
+                "cursor": self.cursor, "total_frames": len(self.frames),
+                "speed": self.speed}
+
+    def current(self) -> Optional[Dict[str, Any]]:
+        if not self.frames:
+            return None
+        idx = max(0, min(self.cursor, len(self.frames) - 1))
+        return self.frames[idx]
+
+
+replay = StandaloneReplay()
+
+
+def current_frame() -> Optional[Dict[str, Any]]:
+    """Replay frame if a sortie is loaded, otherwise the live twin."""
+    if replay.frames:
+        frame = replay.current()
+        if frame is not None:
+            return dict(frame, source="REPLAY", replay=replay.status())
+    if twin_runtime.latest_frame is not None:
+        return dict(twin_runtime.latest_frame, source="LIVE")
+    return None
+
 
 # Background Simulation Thread (20 Hz)
 def simulation_loop():
     while twin_runtime.is_running:
         twin_runtime.step(dt_s=0.05)
+        replay.tick()
         time.sleep(0.05)
 
 class DigitalTwinHTTPHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(DASHBOARD_DIR), **kwargs)
+
+    def _send_json(self, payload, code: int = 200):
+        """Single place that writes a JSON response, so every route agrees on
+        headers, content length and encoding."""
+        body = json.dumps(payload).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(body)
 
     def log_message(self, format, *args):
         # Suppress routine 20 Hz GET polling logs to keep console clean
@@ -275,42 +359,87 @@ class DigitalTwinHTTPHandler(SimpleHTTPRequestHandler):
                 self.wfile.write(f.read())
             return
 
-        elif parsed.path == "/static/app.js":
-            self.send_response(200)
-            self.send_header("Content-Type", "application/javascript")
-            self.end_headers()
-            with open(DASHBOARD_DIR / "app.js", "rb") as f:
-                self.wfile.write(f.read())
-            return
+        elif parsed.path.startswith("/static/"):
+            # Serve anything under dashboard/, including the vendored Tailwind,
+            # Chart.js, Three.js and webfont files. Enumerating individual files
+            # here used to mean a new asset 404'd until someone remembered to add
+            # a branch, which is how an offline dashboard silently loses its charts.
+            rel = parsed.path[len("/static/"):]
+            target = (DASHBOARD_DIR / rel).resolve()
+            try:
+                # Reject traversal outside the dashboard directory.
+                target.relative_to(DASHBOARD_DIR.resolve())
+            except ValueError:
+                self.send_error(403, "Forbidden")
+                return
+            if not target.is_file():
+                self.send_error(404, "Not Found")
+                return
 
-        elif parsed.path == "/static/theme.css":
-            self.send_response(200)
-            self.send_header("Content-Type", "text/css")
-            self.end_headers()
-            with open(DASHBOARD_DIR / "theme.css", "rb") as f:
-                self.wfile.write(f.read())
-            return
+            ctype = {
+                ".js": "application/javascript",
+                ".css": "text/css",
+                ".html": "text/html; charset=utf-8",
+                ".json": "application/json",
+                ".woff2": "font/woff2",
+                ".woff": "font/woff",
+                ".ttf": "font/ttf",
+                ".svg": "image/svg+xml",
+                ".png": "image/png",
+            }.get(target.suffix.lower(), "application/octet-stream")
 
-        elif parsed.path == "/static/engine_view3d.js":
+            data = target.read_bytes()
             self.send_response(200)
-            self.send_header("Content-Type", "application/javascript")
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(data)))
             self.end_headers()
-            with open(DASHBOARD_DIR / "engine_view3d.js", "rb") as f:
-                self.wfile.write(f.read())
+            self.wfile.write(data)
             return
 
         elif parsed.path == "/api/state":
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.end_headers()
-            if twin_runtime.latest_state:
-                payload = twin_runtime.latest_state.to_dict()
-                payload["active_alert"] = twin_runtime.latest_alert
-                payload["active_fault"] = twin_runtime.active_fault_name
-                self.wfile.write(json.dumps(payload).encode("utf-8"))
+            frame = current_frame()
+            if frame is not None:
+                payload = dict(frame, active_fault=twin_runtime.active_fault_name)
             else:
-                self.wfile.write(b'{"status":"initializing"}')
+                payload = {"status": "initializing"}
+            self._send_json(payload)
+            return
+
+        elif parsed.path == "/api/sessions":
+            self._send_json({
+                "sessions": list_sessions(),
+                "active": twin_runtime.recorder.session_id if twin_runtime.recorder else None,
+            })
+            return
+
+        elif parsed.path == "/api/replay/status":
+            self._send_json(replay.status())
+            return
+
+        elif parsed.path.startswith("/api/sessions/"):
+            rest = parsed.path[len("/api/sessions/"):]
+            if rest.endswith("/frames"):
+                session_id = rest[:-len("/frames")]
+                q = parse_qs(parsed.query)
+                start = max(0, int(q.get("start", ["0"])[0]))
+                limit = max(1, min(5000, int(q.get("limit", ["500"])[0])))
+                frames = load_frames(session_id)
+                if not frames:
+                    self._send_json({"error": f"No such sortie: {session_id}"}, code=404)
+                    return
+                self._send_json({
+                    "session_id": session_id,
+                    "total_frames": len(frames),
+                    "start": start,
+                    "frames": frames[start:start + limit],
+                })
+                return
+
+            report = analyse_session(rest)
+            if not report.get("found"):
+                self._send_json({"error": f"No such sortie: {rest}"}, code=404)
+                return
+            self._send_json(report)
             return
 
         elif parsed.path == "/api/stream":
@@ -323,10 +452,9 @@ class DigitalTwinHTTPHandler(SimpleHTTPRequestHandler):
             self.end_headers()
             try:
                 while True:
-                    if twin_runtime.latest_state:
-                        payload = twin_runtime.latest_state.to_dict()
-                        payload["active_alert"] = twin_runtime.latest_alert
-                        payload["active_fault"] = twin_runtime.active_fault_name
+                    frame = current_frame()
+                    if frame is not None:
+                        payload = dict(frame, active_fault=twin_runtime.active_fault_name)
                         msg = f"data: {json.dumps(payload)}\n\n"
                         self.wfile.write(msg.encode("utf-8"))
                         self.wfile.flush()
@@ -394,6 +522,22 @@ class DigitalTwinHTTPHandler(SimpleHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(json.dumps(resp).encode("utf-8"))
+            return
+
+        elif parsed.path == "/api/replay/start":
+            try:
+                data = json.loads(body.decode("utf-8"))
+                n = replay.load(str(data["session_id"]), float(data.get("speed", 1.0)))
+                resp = {"status": "SUCCESS", "session_id": data["session_id"], "frames": n}
+                code = 200
+            except (ValueError, KeyError) as e:
+                resp, code = {"status": "ERROR", "message": str(e)}, 404
+            self._send_json(resp, code=code)
+            return
+
+        elif parsed.path == "/api/replay/stop":
+            replay.stop()
+            self._send_json({"status": "SUCCESS", "message": "Returned to live telemetry."})
             return
 
         elif parsed.path == "/api/fault/clear":

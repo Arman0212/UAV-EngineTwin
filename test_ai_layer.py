@@ -6,7 +6,7 @@ Tests:
 3. Sensor-vs-Engine Fault Discriminator Integrity.
 4. Trained PyTorch Anomaly Autoencoder & Fault Classifier Inference.
 5. RUL Uncertainty Interval Estimation.
-6. SHAP Feature Attribution & Structured Operator Alert Generation.
+6. Local Gradient Attribution & Structured Operator Alert Generation.
 """
 import sys
 from pathlib import Path
@@ -23,13 +23,13 @@ from simulation.mvem import MeanValueEngineModel, EngineState
 from simulation.sensors import SensorModel, SensorReadings
 from simulation.fault_injector import FaultInjector, FaultType, FaultConfig
 from digital_twin.health_index import HealthIndexEngine
-from digital_twin.ekf_estimator import ExtendedKalmanFilter
+from digital_twin.state_estimator import PhysicsAnchoredKalmanEstimator
 from digital_twin.twin_state import DigitalTwinState, StateLevel
 from models.sensor_validator import SensorValidator
 from models.anomaly_autoencoder import AnomalyDetector
 from models.fault_classifier import FaultDiagnosisEngine
 from models.rul_estimator import RULEstimator
-from xai.shap_explainer import FastSHAPExplainer
+from xai.attribution import GradientAttributionExplainer
 from xai.alert_generator import AlertGenerator
 
 SAVED_MODELS_DIR = PROJECT_ROOT / "models" / "saved_models"
@@ -39,7 +39,7 @@ def test_ekf_filtering():
     mvem = MeanValueEngineModel()
     mvem.reset(idle=False)
     sensors = SensorModel(seed=42)
-    ekf = ExtendedKalmanFilter()
+    ekf = PhysicsAnchoredKalmanEstimator()
     flight = FlightProfile().get_standard_mission_state(100.0, 3600.0)
 
     raw_errors = []
@@ -60,9 +60,9 @@ def test_ekf_filtering():
     raw_mae = float(np.mean(raw_errors[50:]))
     ekf_mae = float(np.mean(ekf_errors[50:]))
 
-    print(f"  -> Raw Sensor EGT MAE: {raw_mae:.2f} C | EKF Filtered State MAE: {ekf_mae:.2f} C")
-    assert ekf_mae < raw_mae, "EKF did not reduce measurement noise error"
-    print("  -> PASSED: EKF successfully filters measurement noise and tracks true physical state.")
+    print(f"  -> Raw Sensor EGT MAE: {raw_mae:.2f} C | Estimator Filtered State MAE: {ekf_mae:.2f} C")
+    assert ekf_mae < raw_mae, "Estimator did not reduce measurement noise error"
+    print("  -> PASSED: Estimator successfully filters measurement noise and tracks true physical state.")
 
 def test_health_scoring():
     print("\n[TEST 2] Testing Physics-Anchored Health Index Engine...")
@@ -123,7 +123,7 @@ def test_sensor_validator():
     print("  -> PASSED: Sensor validator prevents false engine abort on faulty probe.")
 
 def test_ai_models_and_xai():
-    print("\n[TEST 4] Testing Anomaly Detector, Fault Classifier & SHAP XAI Engine...")
+    print("\n[TEST 4] Testing Anomaly Detector, Fault Classifier & Attribution XAI Engine...")
     ae_path = SAVED_MODELS_DIR / "anomaly_autoencoder.pt"
     clf_path = SAVED_MODELS_DIR / "fault_classifier.pt"
 
@@ -132,7 +132,7 @@ def test_ai_models_and_xai():
 
     ae = AnomalyDetector(str(ae_path))
     clf = FaultDiagnosisEngine(str(clf_path))
-    explainer = FastSHAPExplainer(clf.model)
+    explainer = GradientAttributionExplainer(clf.model)
     rul_eng = RULEstimator()
 
     # 1. Healthy Residual Vector
@@ -158,11 +158,11 @@ def test_ai_models_and_xai():
     assert is_anom, "Autoencoder failed to flag high vibration anomaly"
     assert pred_cls == "BEARING_WEAR_VIBRATION", f"Classifier misdiagnosed: {pred_cls}"
 
-    # Verify SHAP top contributing feature
-    print("  -> SHAP Root-Cause Attribution Breakdown:")
+    # Verify top contributing feature
+    print("  -> Root-Cause Attribution Breakdown (gradient x input):")
     for exp in shap_exps:
         print(f"     * {exp['display_name']}: {exp['deviation_text']} (Impact: {exp['importance_pct']}%)")
-    assert len(shap_exps) > 0 and shap_exps[0]["channel_key"] == "vibration_rms", "SHAP failed to highlight vibration as top factor"
+    assert len(shap_exps) > 0 and shap_exps[0]["channel_key"] == "vibration_rms", "Attribution failed to highlight vibration as top factor"
 
     # 3. RUL Prognosis Simulation
     rul_eng.reset()
@@ -195,7 +195,7 @@ def test_ai_models_and_xai():
     print(f"     [RUL Action]:  {alert.rul_forecast_text}")
     print(f"     [Directive]:   {alert.recommended_action}")
     assert alert is not None and alert.level == "WARNING", "Alert generation failed"
-    print("  -> PASSED: AI Anomaly, Diagnosis, RUL, SHAP, and Alert pipelines validated end-to-end.")
+    print("  -> PASSED: AI Anomaly, Diagnosis, RUL, Attribution, and Alert pipelines validated end-to-end.")
 
 if __name__ == "__main__":
     test_ekf_filtering()

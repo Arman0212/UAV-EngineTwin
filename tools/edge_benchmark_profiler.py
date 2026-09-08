@@ -3,7 +3,7 @@ ENGINE-TWIN: Edge Hardware & Compute Profiler (SIH26054 Section 19, 23)
 Profiles:
 1. Peak & Steady-State RAM Memory Footprint (MB)
 2. CPU Utilization & Single-Thread Throughput (Frames Per Second / FPS)
-3. Latency breakdown per pipeline component (MVEM vs EKF vs Autoencoder vs Classifier vs SHAP)
+3. Latency breakdown per pipeline component (MVEM vs estimator vs autoencoder vs classifier vs attribution)
 4. Feasibility on Edge Flight Compute Hardware (e.g. Jetson Orin Nano / ARM Cortex-A53 / x86 SBC)
 """
 import sys
@@ -21,15 +21,19 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from simulation.flight_profile import FlightProfile, FlightState
 from simulation.mvem import MeanValueEngineModel
 from simulation.sensors import SensorModel
-from digital_twin.ekf_estimator import ExtendedKalmanFilter
+from digital_twin.state_estimator import PhysicsAnchoredKalmanEstimator
 from digital_twin.health_index import HealthIndexEngine
 from models.sensor_validator import SensorValidator
 from models.anomaly_autoencoder import AnomalyDetector
 from models.fault_classifier import FaultDiagnosisEngine
 from models.rul_estimator import RULEstimator
-from xai.shap_explainer import FastSHAPExplainer
+from xai.attribution import GradientAttributionExplainer
 
 SAVED_MODELS_DIR = PROJECT_ROOT / "models" / "saved_models"
+
+# Attribution is profiled against a named fault so the gradient path actually
+# runs. See the note at the XAI timing block below.
+XAI_PROFILE_CLASS = "OIL_PRESSURE_LOSS"
 
 def profile_edge_performance():
     print("=" * 80)
@@ -43,14 +47,14 @@ def profile_edge_performance():
     flight_gen = FlightProfile()
     mvem = MeanValueEngineModel()
     sensors = SensorModel(seed=42)
-    ekf = ExtendedKalmanFilter()
+    ekf = PhysicsAnchoredKalmanEstimator()
     health_engine = HealthIndexEngine()
     validator = SensorValidator()
     rul_eng = RULEstimator()
 
     ae = AnomalyDetector(str(SAVED_MODELS_DIR / "anomaly_autoencoder.pt"))
     clf = FaultDiagnosisEngine(str(SAVED_MODELS_DIR / "fault_classifier.pt"))
-    shap_exp = FastSHAPExplainer(clf.model)
+    shap_exp = GradientAttributionExplainer(clf.model)
 
     mem_after_mb = process.memory_info().rss / (1024 * 1024)
     model_mem_mb = mem_after_mb - mem_before_mb
@@ -121,9 +125,16 @@ def profile_edge_performance():
         pred_cls, conf, sev, _ = clf.diagnose(residuals)
         t_clf_list.append((time.perf_counter() - t0) * 1000.0)
 
-        # G. SHAP Local Attribution
+        # G. Local Attribution (XAI)
+        #
+        # Profiled against a named fault class, not against pred_cls. This loop
+        # flies a healthy engine, so pred_cls is HEALTHY on nearly every
+        # iteration, and the explainer returns immediately for HEALTHY without
+        # doing any work. Timing that early return reports the attribution as
+        # effectively free and understates the worst case, which is exactly the
+        # case that has to fit the budget: the tick where a fault has just fired.
         t0 = time.perf_counter()
-        _ = shap_exp.explain(residuals, pred_cls)
+        _ = shap_exp.explain(residuals, XAI_PROFILE_CLASS)
         t_shap_list.append((time.perf_counter() - t0) * 1000.0)
 
     # Compute Means
@@ -145,11 +156,11 @@ def profile_edge_performance():
     print("-" * 80)
     print(f"  {'1. MVEM Thermodynamic Physics Solver':<45} | {mean_mvem:10.3f} ms   | {(mean_mvem/total_pipeline_latency_ms)*100:6.1f} %")
     print(f"  {'2. Sensor Noise & Lag Emulation':<45} | {mean_sensors:10.3f} ms   | {(mean_sensors/total_pipeline_latency_ms)*100:6.1f} %")
-    print(f"  {'3. 12-State Extended Kalman Filter (EKF)':<45} | {mean_ekf:10.3f} ms   | {(mean_ekf/total_pipeline_latency_ms)*100:6.1f} %")
+    print(f"  {'3. 12-State Physics-Anchored Kalman Est.':<45} | {mean_ekf:10.3f} ms   | {(mean_ekf/total_pipeline_latency_ms)*100:6.1f} %")
     print(f"  {'4. Residual Extraction & Health Scoring':<45} | {mean_res:10.3f} ms   | {(mean_res/total_pipeline_latency_ms)*100:6.1f} %")
     print(f"  {'5. PyTorch Autoencoder (Anomaly Trigger)':<45} | {mean_ae:10.3f} ms   | {(mean_ae/total_pipeline_latency_ms)*100:6.1f} %")
     print(f"  {'6. Multi-Task Fault Classifier & Severity':<45} | {mean_clf:10.3f} ms   | {(mean_clf/total_pipeline_latency_ms)*100:6.1f} %")
-    print(f"  {'7. Fast Local SHAP Root-Cause XAI':<45} | {mean_shap:10.3f} ms   | {(mean_shap/total_pipeline_latency_ms)*100:6.1f} %")
+    print(f"  {'7. Local Gradient Attribution (XAI)':<45} | {mean_shap:10.3f} ms   | {(mean_shap/total_pipeline_latency_ms)*100:6.1f} %")
     print("-" * 80)
     print(f"  {'TOTAL END-TO-END INFERENCE LATENCY':<45} | {total_pipeline_latency_ms:10.3f} ms   | 100.0 %")
     print(f"  {'MAXIMUM EDGE THROUGHPUT':<45} | {max_throughput_fps:10.1f} FPS  | (Target = 20 Hz)")
