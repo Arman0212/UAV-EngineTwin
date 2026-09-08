@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EngineTwin Operator Handbook</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+  :root {
+    --ink:      #16161F;
+    --ink-2:    #4A4A5C;
+    --ink-3:    #7A7A8C;
+    --rule:     #D8D8E2;
+    --rule-soft:#EAEAF1;
+    --paper:    #FFFFFF;
+    --tint:     #F6F5FB;
+    --accent:   #5B4BD8;
+    --accent-2: #1F9C93;
+    --caution:  #B07515;
+    --warning:  #C0362F;
+    --ok:       #3B8A54;
+
+    --f-display: "Sora", "Helvetica Neue", Arial, sans-serif;
+    --f-body:    "Source Serif 4", Georgia, serif;
+    --f-mono:    "JetBrains Mono", ui-monospace, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--tint);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 10.5pt;
+    line-height: 1.6;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .page {
+    background: var(--paper);
+    max-width: 210mm;
+    margin: 0 auto;
+    padding: 20mm 18mm;
+  }
+
+  h1, h2, h3, h4 { font-family: var(--f-display); text-wrap: balance; }
+
+  /* ---------- cover ---------- */
+  .cover-sheet {
+    min-height: 245mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    border-top: 6px solid var(--accent);
+  }
+  .kicker {
+    font-family: var(--f-mono);
+    font-size: 8.5pt; font-weight: 700;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 16mm;
+  }
+  .cover-sheet h1 {
+    font-size: 40pt; font-weight: 700; line-height: 0.95;
+    letter-spacing: -0.03em; margin: 0 0 6mm;
+  }
+  .cover-sheet .sub {
+    font-size: 13pt; color: var(--ink-2); max-width: 30em; margin: 0 0 14mm;
+  }
+  .cover-meta {
+    display: grid; grid-template-columns: repeat(2, 1fr);
+    gap: 5mm 10mm; border-top: 1px solid var(--rule); padding-top: 6mm;
+    font-family: var(--f-mono); font-size: 8.5pt;
+  }
+  .cover-meta dt { color: var(--ink-3); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 1mm; }
+  .cover-meta dd { margin: 0; font-size: 10pt; }
+
+  /* ---------- structure ---------- */
+  h2 {
+    font-size: 19pt; font-weight: 700; letter-spacing: -0.02em;
+    margin: 0 0 4mm; padding-bottom: 2.5mm;
+    border-bottom: 2px solid var(--ink);
+  }
+  h2 .n {
+    font-family: var(--f-mono); font-size: 11pt; color: var(--accent);
+    margin-right: 4mm;
+  }
+  h3 {
+    font-size: 12.5pt; font-weight: 600; margin: 8mm 0 2.5mm;
+    color: var(--ink); letter-spacing: -0.01em;
+  }
+  h4 {
+    font-size: 10.5pt; font-weight: 600; margin: 5mm 0 1.5mm;
+    font-family: var(--f-display); color: var(--ink-2);
+  }
+  p { margin: 0 0 3.5mm; max-width: 34em; }
+  ul, ol { margin: 0 0 3.5mm; padding-left: 5mm; max-width: 34em; }
+  li { margin-bottom: 1.5mm; }
+  code, .mono { font-family: var(--f-mono); font-size: 9pt; }
+  code { background: var(--tint); padding: 0.5mm 1.2mm; border-radius: 2px; }
+  strong { font-weight: 600; }
+
+  section { page-break-before: always; }
+  section:first-of-type { page-break-before: avoid; }
+
+  /* ---------- tables ---------- */
+  table { width: 100%; border-collapse: collapse; margin: 3mm 0 5mm; page-break-inside: avoid; }
+  caption { caption-side: bottom; text-align: left; font-size: 8.5pt; color: var(--ink-3); padding-top: 2mm; }
+  th, td { text-align: left; padding: 2.2mm 3mm; border-bottom: 1px solid var(--rule-soft); vertical-align: top; font-size: 9.5pt; }
+  thead th {
+    font-family: var(--f-mono); font-size: 8pt; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3);
+    border-bottom: 1.5px solid var(--ink);
+  }
+  td.num, th.num { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+  tbody tr:nth-child(even) { background: var(--tint); }
+  td .mono { font-size: 8.5pt; }
+
+  /* ---------- callouts ---------- */
+  .note, .warn, .tip {
+    padding: 3.5mm 5mm; margin: 4mm 0; border-left: 3px solid var(--accent);
+    background: var(--tint); page-break-inside: avoid;
+  }
+  .note p:last-child, .warn p:last-child, .tip p:last-child { margin-bottom: 0; }
+  .warn { border-left-color: var(--warning); }
+  .tip  { border-left-color: var(--accent-2); }
+  .note b, .warn b, .tip b {
+    display: block; font-family: var(--f-display); font-size: 9.5pt;
+    font-weight: 600; margin-bottom: 1.5mm;
+  }
+  .warn b { color: var(--warning); }
+  .tip b  { color: var(--accent-2); }
+  .note b { color: var(--accent); }
+
+  /* ---------- control reference ---------- */
+  .ctrl {
+    display: grid; grid-template-columns: 46mm 1fr; gap: 4mm;
+    padding: 2.8mm 0; border-bottom: 1px solid var(--rule-soft);
+    page-break-inside: avoid;
+  }
+  .ctrl-name {
+    font-family: var(--f-mono); font-size: 9pt; font-weight: 700;
+    color: var(--ink);
+  }
+  .ctrl-name span { display: block; font-weight: 400; font-size: 8pt; color: var(--ink-3); margin-top: 0.8mm; }
+  .ctrl-desc { font-size: 9.5pt; }
+  .ctrl-desc p { margin: 0; max-width: none; }
+
+  /* ---------- step lists ---------- */
+  .steps { counter-reset: s; padding: 0; list-style: none; max-width: none; }
+  .steps > li {
+    counter-increment: s; position: relative; padding-left: 9mm; margin-bottom: 3mm;
+    page-break-inside: avoid;
+  }
+  .steps > li::before {
+    content: counter(s); position: absolute; left: 0; top: 0.2mm;
+    width: 6mm; height: 6mm; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    font-family: var(--f-mono); font-size: 8pt; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .pill {
+    display: inline-block; font-family: var(--f-mono); font-size: 7.5pt;
+    font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 0.8mm 2mm; border-radius: 2px; border: 1px solid currentColor;
+    vertical-align: 1px;
+  }
+  .p-ok { color: var(--ok); }
+  .p-cau { color: var(--caution); }
+  .p-warn { color: var(--warning); }
+  .p-acc { color: var(--accent); }
+
+  .two-col { column-count: 2; column-gap: 8mm; }
+  .two-col p, .two-col ul { max-width: none; }
+
+  .toc { list-style: none; padding: 0; max-width: none; }
+  .toc li {
+    display: flex; align-items: baseline; gap: 3mm;
+    padding: 1.8mm 0; border-bottom: 1px dotted var(--rule);
+    font-size: 10pt;
+  }
+  .toc .tn { font-family: var(--f-mono); font-size: 9pt; color: var(--accent); min-width: 8mm; }
+  .toc .tt { flex: 1; }
+  .toc .td { color: var(--ink-3); font-size: 8.5pt; font-family: var(--f-mono); }
+
+  .kbd {
+    font-family: var(--f-mono); font-size: 8.5pt;
+    border: 1px solid var(--rule); border-bottom-width: 2px;
+    border-radius: 3px; padding: 0.4mm 1.6mm; background: #fff;
+  }
+
+  .diagram {
+    font-family: var(--f-mono); font-size: 8pt; line-height: 1.45;
+    background: var(--tint); border: 1px solid var(--rule);
+    padding: 4mm 5mm; margin: 4mm 0; white-space: pre;
+    overflow-x: auto; page-break-inside: avoid;
+  }
+
+  @page { size: A4; margin: 14mm 0; }
+
+  @media print {
+    body { background: #fff; font-size: 10pt; }
+    .page { padding: 0 16mm; max-width: none; }
+    .no-print { display: none !important; }
+    h2, h3, h4 { page-break-after: avoid; }
+    .cover-sheet { min-height: 240mm; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- ===================== COVER ===================== -->
+<div class="cover-sheet">
+  <div class="kicker">Operator Handbook &middot; Revision 1.0</div>
+  <h1>EngineTwin<br>Ground Station</h1>
+  <p class="sub">
+    How the digital twin works, what every control on the console does, and how
+    to drive it — from a cold start to a post-flight debrief.
+  </p>
+  <dl class="cover-meta">
+    <div><dt>Problem statement</dt><dd>SIH26054 &middot; DRDO</dd></div>
+    <div><dt>Powerplant</dt><dd>VRDE 2.2 L turbocharged aero-diesel</dd></div>
+    <div><dt>Envelope</dt><dd>0 &ndash; 30,000 ft</dd></div>
+    <div><dt>Update rate</dt><dd>20 Hz &middot; 1.5 ms of a 150 ms budget</dd></div>
+    <div><dt>Access</dt><dd>http://127.0.0.1:8000</dd></div>
+    <div><dt>Provenance</dt><dd>All telemetry SIMULATED</dd></div>
+  </dl>
+</div>
+
+<!-- ===================== CONTENTS ===================== -->
+<section>
+  <h2><span class="n">00</span>Contents</h2>
+  <ul class="toc">
+    <li><span class="tn">01</span><span class="tt">What the system actually is</span><span class="td">the idea in one page</span></li>
+    <li><span class="tn">02</span><span class="tt">Starting it up</span><span class="td">install, launch, first screen</span></li>
+    <li><span class="tn">03</span><span class="tt">The cover journey</span><span class="td">22 chapters, then Continue</span></li>
+    <li><span class="tn">04</span><span class="tt">Console layout</span><span class="td">what is where, and why</span></li>
+    <li><span class="tn">05</span><span class="tt">Reading the graphs</span><span class="td">all three charts, line by line</span></li>
+    <li><span class="tn">06</span><span class="tt">The 3D engine model</span><span class="td">colouring, picking, inspector</span></li>
+    <li><span class="tn">07</span><span class="tt">Every control, explained</span><span class="td">complete reference</span></li>
+    <li><span class="tn">08</span><span class="tt">Predicting faults</span><span class="td">how a diagnosis is produced</span></li>
+    <li><span class="tn">09</span><span class="tt">Manual flight sandbox</span><span class="td">flying it yourself</span></li>
+    <li><span class="tn">10</span><span class="tt">Recording, debrief and replay</span><span class="td">the flight data recorder</span></li>
+    <li><span class="tn">11</span><span class="tt">Demonstration scripts</span><span class="td">what to show, in what order</span></li>
+    <li><span class="tn">12</span><span class="tt">The HTTP and WebSocket API</span><span class="td">driving it from code</span></li>
+    <li><span class="tn">13</span><span class="tt">Verifying the claims</span><span class="td">reproducing every number</span></li>
+    <li><span class="tn">14</span><span class="tt">Troubleshooting</span><span class="td">when something looks wrong</span></li>
+    <li><span class="tn">15</span><span class="tt">Known limitations</span><span class="td">stated, not buried</span></li>
+  </ul>
+</section>
+
+<!-- ===================== 01 ===================== -->
+<section>
+  <h2><span class="n">01</span>What the system actually is</h2>
+
+  <p>
+    A conventional engine instrument system watches each channel against a fixed
+    redline. On a light aircraft at 8,000 ft that works. On a MALE UAV climbing
+    to 30,000 ft on a twenty-hour sortie it fails in <em>both</em> directions at
+    once.
+  </p>
+
+  <h3>The two failures of a fixed threshold</h3>
+  <p>
+    Climb high enough and a <strong>healthy</strong> engine starts tripping
+    alarms. Manifold pressure falls as the turbocharger runs out of air, rated
+    power derates from 200 HP to 110 HP, exhaust temperatures drift. Nothing is
+    broken — the atmosphere changed. The operator learns to ignore the alarm.
+  </p>
+  <p>
+    Meanwhile a genuinely <strong>failing</strong> engine sits comfortably inside
+    every redline. An injector clogging on cylinder 3 pushes EGT&#8323; up by
+    40&nbsp;&deg;C, well under the 880&nbsp;&deg;C continuous limit, so nothing
+    trips — right up until it does.
+  </p>
+
+  <div class="note">
+    <b>The trap</b>
+    <p>A raw sensor reading carries two things at once: the state of the engine,
+    and the state of the flight. You cannot threshold your way out of that, and a
+    black-box model trained on raw telemetry inherits the same problem — it just
+    hides it behind a confidence score.</p>
+  </div>
+
+  <h3>What EngineTwin does instead</h3>
+  <p>
+    A Mean Value Engine Model (MVEM) runs in lockstep with the engine, fed the
+    same altitude, ambient conditions and throttle. It predicts what a
+    <em>healthy</em> engine would be doing right now. Diagnosis then happens on
+    the difference, normalised per channel:
+  </p>
+
+  <div class="diagram">r&#7522;  =  ( y_measured  &minus;  y_physics )  /  &sigma;_channel</div>
+
+  <p>
+    Fifteen channels — RPM, manifold pressure, fuel flow, oil pressure and
+    temperature, four CHT, four EGT, vibration RMS and bus voltage — reduce to one
+    vector of standard deviations from thermodynamic expectation.
+  </p>
+  <p>
+    Because the physics baseline has already absorbed altitude, throttle and
+    ambient temperature, a healthy engine sits at <strong>r &asymp; 0</strong>
+    everywhere in the envelope. The learning problem stops being &ldquo;recognise
+    this engine&rdquo; and becomes &ldquo;recognise a departure from
+    physics&rdquo; — a far smaller and far more transferable problem.
+  </p>
+
+  <div class="tip">
+    <b>The one sentence to remember</b>
+    <p>Every model downstream sees residuals. None of them ever sees a raw sensor
+    value. That single decision is what the whole system rests on.</p>
+  </div>
+
+  <h3>What it buys, measured</h3>
+  <table>
+    <thead><tr>
+      <th>Metric</th><th class="num">Fixed-threshold EIS</th>
+      <th class="num">Black-box ML</th><th class="num">EngineTwin</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>Classification accuracy</td><td class="num">53.65 %</td><td class="num">86.93 %</td><td class="num"><strong>97.64 %</strong></td></tr>
+      <tr><td>Macro F1</td><td class="num">0.2463</td><td class="num">0.8696</td><td class="num"><strong>0.9770</strong></td></tr>
+      <tr><td>Mean detection latency</td><td class="num">28.26 s</td><td class="num">8.00 s</td><td class="num"><strong>2.87 s</strong></td></tr>
+      <tr><td>False alarms on healthy sorties</td><td class="num">0.00 %</td><td class="num">11.74 %</td><td class="num"><strong>1.42 %</strong></td></tr>
+    </tbody>
+    <caption>48,000 held-out frames from 32 independent sorties. Reproduce with
+      <code>python validation/benchmark.py</code>.</caption>
+  </table>
+  <p>
+    Read the EIS column carefully. A perfect 0.00&nbsp;% false-alarm rate beside a
+    macro F1 of 0.25 is not a strength — the thresholds are set so wide that
+    almost nothing real trips them.
+  </p>
+</section>
+
+<!-- ===================== 02 ===================== -->
+<section>
+  <h2><span class="n">02</span>Starting it up</h2>
+
+  <h3>Requirements</h3>
+  <p>Python 3.10 or 3.11, and a browser with WebGL. Nothing else.</p>
+
+  <h3>First run</h3>
+  <ol class="steps">
+    <li><strong>Create an environment and install.</strong>
+      <div class="diagram">python -m venv .venv
+.venv\Scripts\activate          <span style="color:#7A7A8C"># Windows</span>
+source .venv/bin/activate       <span style="color:#7A7A8C"># macOS / Linux</span>
+pip install -r requirements.txt</div></li>
+
+    <li><strong>Launch.</strong> <code>python main.py</code>, or double-click
+      <code>run_demo.bat</code> on Windows. The launcher opens
+      <code>http://127.0.0.1:8000</code> automatically.</li>
+
+    <li><strong>Wait for warm-up.</strong> The twin runs forward 15 seconds
+      before accepting clients, so the cylinder thermal states and the estimator
+      have settled. Without it the first frame would read CRITICAL on a perfectly
+      healthy engine.</li>
+
+    <li><strong>You land on the cover.</strong> Scroll down through it, or press
+      <span class="kbd">End</span> to jump to the Continue button.</li>
+  </ol>
+
+  <div class="note">
+    <b>No internet required</b>
+    <p>Tailwind, Chart.js, Three.js and the webfont are all vendored under
+    <code>dashboard/vendor/</code> and served from the twin&rsquo;s own host. The
+    station comes up on a closed network. Refresh those copies only if you need
+    to, with <code>python tools/fetch_vendor_assets.py</code>.</p>
+  </div>
+
+  <h3>If FastAPI is missing</h3>
+  <p>
+    <code>main.py</code> falls back to <code>standalone_server.py</code>, which
+    serves the whole twin on the Python standard library alone. Telemetry then
+    arrives over Server-Sent Events instead of a WebSocket; the dashboard
+    switches transports by itself and nothing else changes. NumPy and PyTorch are
+    still required for the physics and the networks.
+  </p>
+
+  <h3>Where things live</h3>
+  <table>
+    <thead><tr><th>Path</th><th>Contains</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">simulation/</td><td>MVEM physics, sensor model, flight profiles, fault injector</td></tr>
+      <tr><td class="mono">digital_twin/</td><td>State estimator, health index, twin state, flight recorder</td></tr>
+      <tr><td class="mono">models/</td><td>Autoencoder, classifier, sensor validator, RUL estimator</td></tr>
+      <tr><td class="mono">xai/</td><td>Attribution and operator alert generation</td></tr>
+      <tr><td class="mono">dashboard/</td><td>The ground station: cover, console, 3D view, theme</td></tr>
+      <tr><td class="mono">validation/</td><td>Benchmark, ablation, leakage audit, stress tests</td></tr>
+      <tr><td class="mono">data/flight_logs/</td><td>Recorded sorties (created at run time, not in git)</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ===================== 03 ===================== -->
+<section>
+  <h2><span class="n">03</span>The cover journey</h2>
+
+  <p>
+    The cover is not a separate page. It and the console are two fixed layers of
+    one document, and scrolling drives the handover between them. Twenty-two
+    chapters carry the argument from the problem through the evidence to the
+    limitations.
+  </p>
+
+  <h3>Navigating it</h3>
+  <div class="ctrl">
+    <div class="ctrl-name">Scroll<span>wheel, trackpad, touch</span></div>
+    <div class="ctrl-desc"><p>Advances the journey. The rendered position eases
+      toward the scroll position rather than snapping to it, which is what makes
+      a wheel notch glide instead of step.</p></div>
+  </div>
+  <div class="ctrl">
+    <div class="ctrl-name">Altitude rail<span>left edge</span></div>
+    <div class="ctrl-desc"><p>Reads 0 to 30,000 ft across the journey. It is the
+      one piece of chrome that never leaves, and it ties the descent through the
+      page to the climb through the envelope.</p></div>
+  </div>
+  <div class="ctrl">
+    <div class="ctrl-name">CONTINUE<span>final chapter</span></div>
+    <div class="ctrl-desc"><p>Hands over to the console. The cover scales past you
+      and blurs out while the console un-blurs from behind it, over 750 ms.</p></div>
+  </div>
+  <div class="ctrl">
+    <div class="ctrl-name">&uarr; Cover<span>console header</span></div>
+    <div class="ctrl-desc"><p>Returns to the journey. Only visible once the
+      console is live.</p></div>
+  </div>
+
+  <div class="note">
+    <b>Why the page stops scrolling after Continue</b>
+    <p>Once the console is live the scroll track collapses to zero height. Both
+    layers are fixed, so nothing moves on screen — the page simply stops having
+    anywhere to scroll. Without this, a stray wheel gesture over a panel would
+    drag you back out to the cover in the middle of a fault.</p>
+  </div>
+
+  <h3>The twenty-two chapters</h3>
+  <div class="two-col">
+    <ol style="padding-left:5mm">
+      <li>Hero and masthead</li>
+      <li>Why threshold alarms fail at 28,000 ft</li>
+      <li>A reading carries two things at once</li>
+      <li>The residual equation</li>
+      <li>What happens in one 50 ms tick</li>
+      <li>One continuous climb, measured</li>
+      <li>Built for mission-critical operation</li>
+      <li>Performance at a glance</li>
+      <li>Six layers, one diagnostic chain</li>
+      <li>The five levels of the twin</li>
+      <li>What the MVEM integrates</li>
+      <li>The instrument model and its sigmas</li>
+      <li>The ten-class fault library</li>
+      <li>A dead probe is not a dead cylinder</li>
+      <li>Benchmark against the alternatives</li>
+      <li>The ablation: what is load-bearing</li>
+      <li>Per-class precision and recall</li>
+      <li>Seventy-eight independent missions</li>
+      <li>The 1.5 ms compute budget</li>
+      <li>What this is not</li>
+      <li>Deployment roadmap</li>
+      <li>Continue to the console</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== 04 ===================== -->
+<section>
+  <h2><span class="n">04</span>Console layout</h2>
+
+  <div class="diagram">+------------------------------------------------------------------+
+|  STATUS BAR   identity | mission tape | station controls          |
++------------------------------------------------------------------+
+|  [ SANDBOX ]  collapsible - manual flight controls               |
+|  [ DEBRIEF ]  collapsible - recorded sorties and replay          |
++---------------------+---------------------+----------------------+
+|  3D ENGINE MODEL    |  EXHAUST & HEAD     |  DIAGNOSIS           |
+|  cylinder strip     |  TEMPERATURE        |  condition, class,   |
+|  component inspector|                     |  confidence, severity|
++---------------------+---------------------+----------------------+
+|  SUBSYSTEM HEALTH   |  OIL PRESSURE &     |  ROOT-CAUSE          |
+|  7 scores           |  MANIFOLD BOOST     |  ATTRIBUTION         |
++---------------------+---------------------+----------------------+
+|  RECOMMENDED ACTION |  VIBRATION & POWER  |  EVENT LOG           |
++---------------------+---------------------+----------------------+
+|  FAULT INJECTION    8 one-click failure modes | auto demo | rate  |
++------------------------------------------------------------------+</div>
+
+  <h3>The three columns</h3>
+  <p>
+    <strong>Left</strong> is the engine as an object: the 3D model, per-cylinder
+    temperatures, subsystem health and the directive. <strong>Centre</strong> is
+    the engine as signals over time: three charts, each showing measurement
+    against physics. <strong>Right</strong> is the engine as a conclusion: what
+    the AI thinks, why it thinks it, and what happened when.
+  </p>
+
+  <h3>The status bar</h3>
+  <p>
+    Left is identity — station name, problem statement, powerplant. Centre is the
+    mission tape: mission time, flight phase, altitude, true airspeed, outside air
+    temperature and throttle. Right is the station controls and the telemetry
+    indicator.
+  </p>
+
+  <h3>Annunciation doctrine</h3>
+  <p>
+    Colour is never decoration on this console. Structure is neutral; only a
+    parameter out of tolerance is allowed to be saturated.
+  </p>
+  <table>
+    <thead><tr><th>Colour</th><th>Means</th><th>Where it may appear</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill p-acc">Violet</span></td><td>What physics says</td><td>Model-expected traces, 3D selection outline, inspector model column, focus rings</td></tr>
+      <tr><td><span class="pill p-cau">Amber</span></td><td>Out of tolerance</td><td>Caution band, panel left border, readout, log tag</td></tr>
+      <tr><td><span class="pill p-warn">Red</span></td><td>Hard limit exceeded</td><td>Warning band, panel left border, readout</td></tr>
+      <tr><td><span class="pill p-ok">Green</span></td><td>Healthy / live</td><td>Health badge and the telemetry-live indicator only</td></tr>
+      <tr><td>Neutral</td><td>Structure</td><td>Everything else: panels, rules, axes, inactive controls, nominal readouts</td></tr>
+    </tbody>
+  </table>
+
+  <div class="tip">
+    <b>Reading the panel borders</b>
+    <p>A panel signals an abnormal state with a coloured left border and nothing
+    else — never a coloured background, never a glow. If a panel edge is amber,
+    something inside it left tolerance.</p>
+  </div>
+</section>
+
+<!-- ===================== 05 ===================== -->
+<section>
+  <h2><span class="n">05</span>Reading the graphs</h2>
+
+  <p>
+    All three charts share one convention: <strong>solid lines are what the
+    sensors measured; dashed violet is what the physics model expected</strong>.
+    The distance between them is the residual, and the residual is the entire
+    diagnosis. If solid and dashed sit on top of each other, the engine is doing
+    what physics says it should — whatever the absolute numbers are.
+  </p>
+
+  <h3>Chart 1 &mdash; Exhaust &amp; head temperature</h3>
+  <table>
+    <thead><tr><th>Series</th><th>Style</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td>EGT 1&ndash;4</td><td>Four solid neutral traces, lightest to darkest</td><td>Exhaust gas temperature per cylinder. Told apart by lightness, never hue.</td></tr>
+      <tr><td>Model expected</td><td>Dashed violet</td><td>What the MVEM says EGT should be right now.</td></tr>
+    </tbody>
+  </table>
+  <p>
+    A trace turns amber above 880&nbsp;&deg;C and red above 950&nbsp;&deg;C, and
+    the chart carries tinted bands at those levels. A single EGT climbing away
+    from its three siblings is the signature of a mixture fault on that cylinder.
+    All four rising together is usually the flight condition, not a fault — which
+    is exactly what the dashed line will confirm.
+  </p>
+
+  <h3>Chart 2 &mdash; Oil pressure &amp; manifold boost</h3>
+  <table>
+    <thead><tr><th>Series</th><th>Axis</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td>Oil pressure</td><td>Left</td><td>Lubrication circuit pressure, bar. A <em>falling</em> parameter: low is the fault direction.</td></tr>
+      <tr><td>Oil P expected</td><td>Left, dashed violet</td><td>Model expectation for the same instant.</td></tr>
+      <tr><td>Manifold MAP</td><td>Right</td><td>Manifold absolute pressure, bar. Falls with altitude by design.</td></tr>
+      <tr><td>MAP expected</td><td>Right, dashed violet</td><td>Model expectation, which falls with it.</td></tr>
+    </tbody>
+  </table>
+  <div class="tip">
+    <b>The altitude test</b>
+    <p>Watch MAP during a climb. The solid line falls steeply — and the dashed
+    line falls with it, so the residual stays flat and no alarm fires. That is the
+    entire argument of the project, visible in one chart.</p>
+  </div>
+
+  <h3>Chart 3 &mdash; Order-tracked vibration &amp; power</h3>
+  <table>
+    <thead><tr><th>Series</th><th>Axis</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td>Vibration 2X RMS</td><td>Left</td><td>Vibration at twice crankshaft order, g RMS. Amber at 2.5 g, red at 4.0 g.</td></tr>
+      <tr><td>Power</td><td>Right, dashed violet</td><td>Model shaft power, HP.</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Bearing wear shows as slow growth in the 2X order, not as a step. Watching
+    this trace rise over a minute while power holds steady is the classic
+    developing-mechanical-fault picture.
+  </p>
+
+  <h3>Root-cause attribution &mdash; horizontal bars</h3>
+  <p>
+    Not a time series. When a fault is named, this panel ranks the top five
+    residual channels that drove the decision, with the percentage each
+    contributed and how many sigma it sits from expectation. Bars turn amber or
+    red as that channel's own residual leaves tolerance.
+  </p>
+  <div class="note">
+    <b>What this is, precisely</b>
+    <p>Gradient &times; input attribution, not Shapley values. It gives a
+    defensible <em>ranking</em> of which channels moved the decision, not an
+    additive decomposition with SHAP&rsquo;s guarantees. It was chosen because it
+    costs one backward pass and fits a 50 ms edge budget.</p>
+  </div>
+</section>
+
+<!-- ===================== 06 ===================== -->
+<section>
+  <h2><span class="n">06</span>The 3D engine model</h2>
+
+  <p>
+    The model is an instrument, not decoration. It is a procedural VRDE 2.2 L
+    four-cylinder turbocharged aero-diesel, and everything it shows is driven by
+    the live twin state.
+  </p>
+
+  <h3>How components are coloured</h3>
+  <p>
+    Each cylinder is shaded by its thermal deviation <em>from the model</em>,
+    measured in sigma — not by absolute temperature. A cold-day 700&nbsp;&deg;C
+    and a hot-day 760&nbsp;&deg;C both read as nominal; only a genuine departure
+    changes colour.
+  </p>
+  <table>
+    <thead><tr><th>Deviation</th><th>State</th><th>Appearance</th></tr></thead>
+    <tbody>
+      <tr><td class="num">&lt; 2.0 &sigma;</td><td><span class="pill p-ok">Nominal</span></td><td>Neutral metal</td></tr>
+      <tr><td class="num">2.0 &ndash; 4.0 &sigma;</td><td><span class="pill p-cau">Caution</span></td><td>Amber</td></tr>
+      <tr><td class="num">&ge; 4.0 &sigma;</td><td><span class="pill p-warn">Warning</span></td><td>Red</td></tr>
+    </tbody>
+  </table>
+  <p>
+    The oil sump, turbocharger and crankcase are coloured by their subsystem
+    health score instead, going amber below 85&nbsp;% and red below 50&nbsp;%.
+    When a fault is active, the implicated component is outlined and the outline
+    breathes slowly so it reads as a live annunciation.
+  </p>
+
+  <h3>Interacting with it</h3>
+  <div class="ctrl">
+    <div class="ctrl-name">Drag<span>left mouse</span></div>
+    <div class="ctrl-desc"><p>Orbits the camera. Dragging never changes the
+      selection — a click is distinguished from the end of a drag.</p></div>
+  </div>
+  <div class="ctrl">
+    <div class="ctrl-name">Scroll over model<span>wheel</span></div>
+    <div class="ctrl-desc"><p>Zooms, clamped between 1.6 and 16 units.</p></div>
+  </div>
+  <div class="ctrl">
+    <div class="ctrl-name">Hover<span>pointer</span></div>
+    <div class="ctrl-desc"><p>Lifts the component under the cursor with a violet
+      emissive tint and switches the cursor to a pointer.</p></div>
+  </div>
+  <div class="ctrl">
+    <div class="ctrl-name">Click<span>pointer</span></div>
+    <div class="ctrl-desc"><p>Selects the component, frames the camera on it,
+      outlines it in violet and opens the inspector. Clicking the same part again,
+      or empty space, clears the selection.</p></div>
+  </div>
+  <div class="ctrl">
+    <div class="ctrl-name"><span class="kbd">Esc</span><span>keyboard</span></div>
+    <div class="ctrl-desc"><p>Clears the selection.</p></div>
+  </div>
+
+  <h3>Selectable components</h3>
+  <p>
+    Cylinders 1&ndash;4, the four EGT probes, the turbocharger, the oil sump, the
+    crankcase and the propeller. <strong>Probes are separate components from their
+    cylinders</strong> — a dead thermocouple and a dead cylinder are different
+    findings, so the model lets you point at each independently.
+  </p>
+
+  <h3>The component inspector</h3>
+  <p>
+    Selecting a part opens a readout beneath the model with one row per channel:
+  </p>
+  <table>
+    <thead><tr><th>Column</th><th>Shows</th></tr></thead>
+    <tbody>
+      <tr><td>Channel</td><td>Which measurement this row describes</td></tr>
+      <tr><td>Measured</td><td>What the sensor read, in engineering units</td></tr>
+      <tr><td>Model</td><td>What physics expected — in violet, matching the dashed chart traces</td></tr>
+      <tr><td>Residual</td><td>The gap between them in sigma, amber past 3&sigma;, red past 6&sigma;</td></tr>
+    </tbody>
+  </table>
+  <p>
+    The model, the cylinder strip and the subsystem health tiles are three views
+    of one selection — selecting in any of them selects in all of them.
+  </p>
+</section>
+
+<!-- ===================== 07 ===================== -->
+<section>
+  <h2><span class="n">07</span>Every control, explained</h2>
+
+  <h3>Status bar</h3>
+  <div class="ctrl"><div class="ctrl-name">Sandbox &#9662;</div>
+    <div class="ctrl-desc"><p>Opens the manual flight panel. See section 09.</p></div></div>
+  <div class="ctrl"><div class="ctrl-name">Debrief &#9662;</div>
+    <div class="ctrl-desc"><p>Opens the post-flight panel. See section 10.</p></div></div>
+  <div class="ctrl"><div class="ctrl-name">&uarr; Cover</div>
+    <div class="ctrl-desc"><p>Returns to the cover journey. Only shown once the console is live.</p></div></div>
+  <div class="ctrl"><div class="ctrl-name">Brief &#8599;</div>
+    <div class="ctrl-desc"><p>Opens the standalone project brief in a new tab.</p></div></div>
+  <div class="ctrl"><div class="ctrl-name">Audio: muted</div>
+    <div class="ctrl-desc"><p>Toggles aural alerts. Off by default. When on, a
+      two-tone alert sounds as an annunciation escalates.</p></div></div>
+  <div class="ctrl"><div class="ctrl-name">Telemetry live &middot; 20 Hz</div>
+    <div class="ctrl-desc"><p>Not a control — a status indicator. It names the
+      transport in use: <span class="mono">WS</span> (WebSocket),
+      <span class="mono">SSE</span> or <span class="mono">HTTP</span> polling. The
+      dashboard falls back automatically in that order.</p></div></div>
+  <div class="ctrl"><div class="ctrl-name">Reset</div>
+    <div class="ctrl-desc"><p>Restarts the simulation from t&nbsp;=&nbsp;0, clears
+      any active fault, reseeds the sensor noise and re-runs the 15-second
+      warm-up. Also clears the RUL history and the event log buffers.</p></div></div>
+
+  <h3>Engine model panel</h3>
+  <div class="ctrl"><div class="ctrl-name">Orbit / Cyls / Turbo / Sump</div>
+    <div class="ctrl-desc"><p>Camera presets: full view, cylinder bank, turbocharger,
+      oil sump. The camera eases to the new position rather than cutting.</p></div></div>
+  <div class="ctrl"><div class="ctrl-name">Labels</div>
+    <div class="ctrl-desc"><p>Shows or hides the component name sprites
+      (CYL&nbsp;1&ndash;4, TURBO, SUMP, PROP).</p></div></div>
+  <div class="ctrl"><div class="ctrl-name">Cylinder strip<span>four cells below the model</span></div>
+    <div class="ctrl-desc"><p>Per-cylinder EGT and the deviation from expectation.
+      Clicking a cell selects that cylinder in the model.</p></div></div>
+  <div class="ctrl"><div class="ctrl-name">&#10005;<span>inspector</span></div>
+    <div class="ctrl-desc"><p>Clears the component selection and closes the inspector.</p></div></div>
+
+  <h3>Subsystem health tiles</h3>
+  <p>
+    Seven scores, each <span class="mono">100 &middot; exp(&minus;&alpha;&middot;|r|)</span>
+    over the relevant residuals, banded
+    <span class="pill p-ok">NOMINAL</span> 85&ndash;100,
+    ADVISORY 70&ndash;85,
+    <span class="pill p-cau">CAUTION</span> 50&ndash;70,
+    <span class="pill p-warn">WARNING</span> 25&ndash;50 and CRITICAL below 25.
+  </p>
+  <table>
+    <thead><tr><th>Tile</th><th>Covers</th><th>Clickable</th></tr></thead>
+    <tbody>
+      <tr><td>Overall</td><td>Weighted composite of all subsystems</td><td>&mdash;</td></tr>
+      <tr><td>Oil system</td><td>Oil pressure and temperature residuals</td><td>Selects the sump</td></tr>
+      <tr><td>Turbo / boost</td><td>Manifold pressure residual</td><td>Selects the turbocharger</td></tr>
+      <tr><td>Combustion</td><td>Four EGT and four CHT residuals</td><td>Selects cylinder 1</td></tr>
+      <tr><td>Vibration 2X</td><td>Vibration RMS residual</td><td>Selects the crankcase</td></tr>
+      <tr><td>Avionics bus</td><td>Bus voltage residual</td><td>&mdash;</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Fault injection strip</h3>
+  <p>
+    Eight one-click failure modes. Each injects its fault at the current
+    simulation time with a default severity of 1.0 and a short ramp. The active
+    button takes a coloured left border matching the severity of the fault.
+  </p>
+  <table>
+    <thead><tr><th>Button</th><th>Injects</th><th>Expect to see</th></tr></thead>
+    <tbody>
+      <tr><td>Healthy baseline</td><td class="mono">HEALTHY</td><td>Clears all faults; health returns to ~100&nbsp;%</td></tr>
+      <tr><td>Oil pressure loss</td><td class="mono">OIL_PRESSURE_LOSS</td><td>Oil pressure below 2 bar in under 3 s; sump red; RTB directive</td></tr>
+      <tr><td>Probe defect (EGT3)</td><td class="mono">SENSOR_FAULT_EGT3</td><td>EGT&#8323; falls to ambient; health barely moves; sensor-fault verdict</td></tr>
+      <tr><td>Bearing 2X vib</td><td class="mono">BEARING_WEAR_VIBRATION</td><td>2X vibration grows; crankcase amber; inspection window in hours</td></tr>
+      <tr><td>Turbo boost loss</td><td class="mono">TURBO_BOOST_DEFICIENCY</td><td>MAP deficit that deepens with altitude</td></tr>
+      <tr><td>Lean mixture cyl 3</td><td class="mono">LEAN_MIXTURE_CYL3</td><td>EGT&#8323; climbs away from its siblings</td></tr>
+      <tr><td>Cooling degradation</td><td class="mono">COOLING_DEGRADATION_CYL2</td><td>CHT&#8322; rises fast, EGT largely unaffected</td></tr>
+      <tr><td>Cylinder misfire</td><td class="mono">CYLINDER_MISFIRE_TIMING</td><td>RPM instability and a 0.5&times; vibration order</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Simulation rate</h3>
+  <div class="ctrl"><div class="ctrl-name">1x &middot; 2x &middot; 5x</div>
+    <div class="ctrl-desc"><p>Time scale. Multiplies how much simulated time
+      passes per real second, clamped server-side between 0.2&times; and
+      10&times;. Higher rates make slow-developing faults such as bearing wear
+      practical to demonstrate. The manual sandbox slews in simulation time, so
+      these also speed up a commanded climb.</p></div></div>
+
+  <h3>Auto demo</h3>
+  <div class="ctrl"><div class="ctrl-name">&#9654; Auto demo</div>
+    <div class="ctrl-desc"><p>Runs a scripted six-phase arc unattended, 40 seconds
+      total. Press again, or <strong>Stop</strong>, to end it early.</p></div></div>
+  <table>
+    <thead><tr><th class="num">Phase</th><th>Title</th><th class="num">Duration</th><th>What happens</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td>Healthy baseline</td><td class="num">8 s</td><td>Model tracks every channel inside &plusmn;1&sigma;</td></tr>
+      <tr><td class="num">2</td><td>Fault injection</td><td class="num">5 s</td><td>Oil pressure loss injected on a 1.0 s ramp</td></tr>
+      <tr><td class="num">3</td><td>Anomaly detection</td><td class="num">6 s</td><td>Reconstruction error crosses the calibrated threshold</td></tr>
+      <tr><td class="num">4</td><td>Diagnosis</td><td class="num">7 s</td><td>Classifier isolates the root cause; attribution ranks the evidence</td></tr>
+      <tr><td class="num">5</td><td>RUL collapse</td><td class="num">7 s</td><td>Prognostic horizon revised down; superseded range retained on screen</td></tr>
+      <tr><td class="num">6</td><td>Recovery</td><td class="num">7 s</td><td>Fault cleared; health and prognosis return to baseline</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ===================== 08 ===================== -->
+<section>
+  <h2><span class="n">08</span>Predicting faults &mdash; how a diagnosis is produced</h2>
+
+  <p>
+    Twenty times a second the service runs the following chain. Understanding the
+    order matters, because each stage is allowed to stop the ones after it.
+  </p>
+
+  <div class="diagram">flight profile -> MVEM integrate -> apply faults -> sensors sample
+      |
+      +-> estimator predict/update -> residuals r = (y - y_hat)/sigma
+              |
+              +-> health indices (always)
+              |
+              +-> anomaly trigger  --(below threshold)--> tick ends
+                      |
+                      +-> sensor validator --(probe fault)--> report and stop
+                              |
+                              +-> classifier -> severity
+                                      |
+                                      +-> attribution + RUL -> operator card</div>
+
+  <h3>Stage by stage</h3>
+  <ol class="steps">
+    <li><strong>Flight profile advances.</strong> ISA atmosphere gives ambient
+      pressure and temperature for the current altitude; the mission phase sets
+      throttle. Phases run TAXI_WARMUP, CLIMB_TO_ALTITUDE, HIGH_ALT_LOITER,
+      DESCENT, APPROACH_LANDING.</li>
+
+    <li><strong>MVEM integrates.</strong> Manifold filling, turbo boost with
+      altitude derating, crankshaft torque balance, four cylinder thermal states,
+      the oil circuit. This is ground truth.</li>
+
+    <li><strong>Faults are applied</strong>, if any are active, as parametric
+      perturbations of the physics or the instrumentation.</li>
+
+    <li><strong>Sensors sample</strong> that truth through per-channel noise,
+      first-order lag, quantisation and sample rate.</li>
+
+    <li><strong>The estimator</strong> fuses measurement and physics into a
+      12-state estimate. If the datalink drops, it coasts on physics instead of
+      producing a spurious residual spike.</li>
+
+    <li><strong>Residuals are computed</strong> against a <em>second</em> MVEM
+      that never saw the fault, and normalised per channel.</li>
+
+    <li><strong>Health indices</strong> map residuals to bounded 0&ndash;100&nbsp;%
+      scores. This happens every tick regardless of what follows.</li>
+
+    <li><strong>Anomaly trigger.</strong> An autoencoder trained only on healthy
+      residuals reconstructs the vector. If the error clears
+      <span class="mono">mean + 3&sigma;</span> of the healthy calibration
+      distribution, the rest of the stack wakes up. Otherwise the tick ends here —
+      which is why the classifier only runs on about 1.2&nbsp;% of frames.</li>
+
+    <li><strong>Sensor validator</strong> decides, before anything else, whether
+      this is a bad probe or a bad engine.</li>
+
+    <li><strong>Classifier</strong> returns a calibrated fault class and a
+      continuous severity.</li>
+
+    <li><strong>Attribution and RUL</strong> attach the evidence and the
+      remaining-life interval.</li>
+  </ol>
+
+  <div class="tip">
+    <b>Why the trigger comes before the classifier</b>
+    <p>The autoencoder is unsupervised — it flags <em>anything</em> unlike healthy
+    flight, including failure modes absent from the taxonomy. Gating the
+    classifier behind it also saves 52&nbsp;% of inference CPU, because during
+    nominal flight the expensive stage never runs.</p>
+  </div>
+
+  <h3>Reading a diagnosis</h3>
+  <table>
+    <thead><tr><th>Field</th><th>How to read it</th></tr></thead>
+    <tbody>
+      <tr><td>Condition</td><td>The named fault class, or HEALTHY. Coloured by severity.</td></tr>
+      <tr><td>Confidence</td><td>Temperature-scaled, so it means something. An uncalibrated network reports 99&nbsp;% on marginal cases; this one does not.</td></tr>
+      <tr><td>Severity</td><td>Continuous 0&ndash;1 from a separate regression head, independent of class confidence.</td></tr>
+      <tr><td>Anomaly index</td><td>0&ndash;1, derived from reconstruction error against the calibrated threshold.</td></tr>
+      <tr><td>RUL window</td><td>Remaining life in flight hours, as a range. See the caveat below.</td></tr>
+      <tr><td>Sensor fault flag</td><td>True when the validator attributes the anomaly to instrumentation rather than the engine.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="warn">
+    <b>The RUL number is a trend interval, not a calibrated one</b>
+    <p>It is built from the spread of the degradation-trajectory fit, not from a
+    distribution-free coverage guarantee. Do not describe it as a 95&nbsp;%
+    confidence interval. When health has already fallen below the 30&nbsp;%
+    condemnation threshold it reports zero, because reporting hours remaining on
+    an engine that is already past its limit — while the banner says return to
+    base — would leave an operator believing neither number.</p>
+  </div>
+
+  <h3>Predicting rather than reacting</h3>
+  <p>
+    To watch prediction rather than detection, inject a <em>slow</em> fault and
+    leave it running: bearing wear at 5&times; rate is the clearest. The 2X
+    vibration trace climbs gradually, overall health drifts down, and the RUL
+    window narrows step by step. The previous estimate stays on screen beneath the
+    current one, so the revision itself becomes evidence that the trend is real.
+  </p>
+</section>
+
+<!-- ===================== 09 ===================== -->
+<section>
+  <h2><span class="n">09</span>Manual flight sandbox</h2>
+
+  <p>
+    The sandbox lets you fly the aircraft yourself instead of following the
+    scripted mission. It is how you demonstrate the central claim: that a healthy
+    engine stays healthy across the whole envelope.
+  </p>
+
+  <h3>Controls</h3>
+  <div class="ctrl"><div class="ctrl-name">Mode: auto mission<span>toggle</span></div>
+    <div class="ctrl-desc"><p>Switches between the scripted profile and manual
+      control. In manual, the three sliders command the aircraft.</p></div></div>
+  <div class="ctrl"><div class="ctrl-name">Throttle<span>0 &ndash; 100 %</span></div>
+    <div class="ctrl-desc"><p>Commanded throttle. Slews at 25&nbsp;%/s.</p></div></div>
+  <div class="ctrl"><div class="ctrl-name">Altitude<span>0 &ndash; 35,000 ft</span></div>
+    <div class="ctrl-desc"><p>Commanded altitude. Slews at 3,000&nbsp;ft/min. The
+      ISA atmosphere is recomputed at the commanded altitude, so the turbocharger
+      genuinely sees thinner air.</p></div></div>
+  <div class="ctrl"><div class="ctrl-name">OAT<span>&minus;50 &ndash; +45 &deg;C</span></div>
+    <div class="ctrl-desc"><p>Outside air temperature. Slews at 6&nbsp;&deg;C/s.</p></div></div>
+
+  <div class="warn">
+    <b>The sliders are setpoints, not teleports</b>
+    <p>Commanded values are slewed at rates the airframe can actually fly. An
+    instantaneous altitude step is not a manoeuvre — it is a discontinuity, and
+    because the sensors carry first-order lag while the model baseline does not, a
+    step opens a residual gap the classifier correctly reads as a real turbo
+    fault. Slewing keeps the sandbox inside the physics the twin was built for.
+    Rates are per second of <em>simulation</em> time, so 5&times; and 10&times;
+    speed the climb up with everything else.</p>
+  </div>
+
+  <h3>The demonstration that matters</h3>
+  <ol class="steps">
+    <li>Open <strong>Sandbox</strong> and switch to <strong>Mode: manual
+      sandbox</strong>. The aircraft is picked up wherever the mission left it.</li>
+    <li>Set the rate to <strong>5x</strong> or <strong>10x</strong> so the climb
+      completes in about a minute of real time.</li>
+    <li>Set throttle to <strong>95&nbsp;%</strong> and altitude to
+      <strong>0&nbsp;ft</strong>. Let it settle.</li>
+    <li>Drag altitude to <strong>30,000&nbsp;ft</strong> and watch.</li>
+  </ol>
+  <table>
+    <thead><tr><th class="num">Altitude</th><th class="num">MAP</th><th class="num">Power</th><th class="num">Health</th><th>Diagnosis</th></tr></thead>
+    <tbody>
+      <tr><td class="num">0 ft</td><td class="num">2.36 bar</td><td class="num">187 HP</td><td class="num">95.3 %</td><td>HEALTHY</td></tr>
+      <tr><td class="num">10,025 ft</td><td class="num">2.36 bar</td><td class="num">184 HP</td><td class="num">99.7 %</td><td>HEALTHY</td></tr>
+      <tr><td class="num">20,050 ft</td><td class="num">1.99 bar</td><td class="num">141 HP</td><td class="num">96.5 %</td><td>HEALTHY</td></tr>
+      <tr><td class="num">30,000 ft</td><td class="num">1.54 bar</td><td class="num">110 HP</td><td class="num">97.9 %</td><td>HEALTHY</td></tr>
+    </tbody>
+    <caption>Measured from the running twin across a continuous climb. Power
+      derates 187 &rarr; 110 HP; health does not follow it down. Zero false
+      diagnoses across the climb.</caption>
+  </table>
+  <p>
+    Every one of those readings would trip a fixed redline. That is the argument,
+    in one gesture.
+  </p>
+</section>
+
+<!-- ===================== 10 ===================== -->
+<section>
+  <h2><span class="n">10</span>Recording, debrief and replay</h2>
+
+  <h3>What gets recorded</h3>
+  <p>
+    The flight data recorder starts with the server and records automatically —
+    there is no button to arm it. Every broadcast frame is appended to disk in
+    <code>data/flight_logs/&lt;sortie-id&gt;/</code>:
+  </p>
+  <table>
+    <thead><tr><th>File</th><th>Contents</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">meta.json</td><td>Sortie header: start time, duration, frame count, faults seen, minimum health, worst band</td></tr>
+      <tr><td class="mono">frames.jsonl</td><td>One serialised twin frame per line, in time order</td></tr>
+    </tbody>
+  </table>
+  <div class="note">
+    <b>Why JSONL</b>
+    <p>Frames are appended during flight with no rewrite, the log can be inspected
+    with ordinary tools, and a sortie interrupted by a hard shutdown still reads
+    back to its last complete line.</p>
+  </div>
+
+  <h3>Debrief controls</h3>
+  <div class="ctrl"><div class="ctrl-name">Sortie<span>dropdown</span></div>
+    <div class="ctrl-desc"><p>Lists recorded sorties, newest first, with duration
+      and fault count. The one currently recording is marked.</p></div></div>
+  <div class="ctrl"><div class="ctrl-name">Refresh</div>
+    <div class="ctrl-desc"><p>Rescans the log directory.</p></div></div>
+  <div class="ctrl"><div class="ctrl-name">&#9654; Replay</div>
+    <div class="ctrl-desc"><p>Streams the selected sortie back through the live
+      telemetry path.</p></div></div>
+  <div class="ctrl"><div class="ctrl-name">&#9632; Live</div>
+    <div class="ctrl-desc"><p>Returns to live telemetry. The simulation kept
+      running underneath, so you rejoin a mission in progress.</p></div></div>
+  <div class="ctrl"><div class="ctrl-name">Live / Replay n%<span>badge</span></div>
+    <div class="ctrl-desc"><p>Shows the current source and, during replay,
+      position through the sortie.</p></div></div>
+
+  <h3>The post-flight report</h3>
+  <p>Selecting a sortie produces a report answering what an operator asks after landing:</p>
+  <ul>
+    <li><strong>Duration, frame count and altitude range</strong> flown.</li>
+    <li><strong>Health minimum and mean</strong>, and the worst band reached.</li>
+    <li><strong>Time in each health band</strong> — how long the engine spent
+      NOMINAL, ADVISORY, CAUTION, WARNING and CRITICAL.</li>
+    <li><strong>Time in each mission phase.</strong></li>
+    <li><strong>Per-subsystem health minima</strong> across the whole sortie.</li>
+    <li><strong>Trigger-to-diagnosis latency</strong> — the gap between the
+      unsupervised trigger firing and the classifier committing to a name. This is
+      measurable from the log without ground truth.</li>
+    <li><strong>The diagnosis timeline</strong> — each event with its class, onset
+      time, duration, and the residual channels that drove it.</li>
+  </ul>
+
+  <div class="tip">
+    <b>The timeline is debounced</b>
+    <p>Per-frame classification flickers, and at 20 Hz a single ambiguous frame
+    would otherwise open and close a 0.05 s &ldquo;event&rdquo;. A class change is
+    only accepted once it has persisted for a second — the same rolling-vote
+    discipline the live annunciator uses, applied to the log.</p>
+  </div>
+
+  <h3>Replay behaves exactly like live</h3>
+  <p>
+    Replay is a property of the <em>stream</em>, not of the twin. Recorded frames
+    are pushed down the same transport the live twin uses, so the whole console —
+    telemetry strips, health matrix, 3D view, evidence drawer — replays without
+    modification. The playhead is advanced by the simulation clock rather than by
+    consumer reads, so replay runs at true speed no matter how many clients are
+    attached.
+  </p>
+</section>
+
+<!-- ===================== 11 ===================== -->
+<section>
+  <h2><span class="n">11</span>Demonstration scripts</h2>
+
+  <h3>Five minutes, unattended</h3>
+  <p>Press <strong>&#9654; Auto demo</strong> and let it run. Forty seconds,
+    six phases, hands-free. Best when you need to talk over it.</p>
+
+  <h3>Five minutes, driven</h3>
+  <ol class="steps">
+    <li><strong>Watch it loiter.</strong> High-altitude cruise. Every strip shows
+      the measurement tracking the physics baseline. Point out that the absolute
+      numbers look nothing like sea level, and nothing complains.</li>
+    <li><strong>Break the oil system.</strong> Hit <strong>Oil pressure loss</strong>.
+      Under three seconds later the trigger fires, the classifier names it, the
+      sump goes red on the model, and the directive reads return to base.</li>
+    <li><strong>Break a sensor instead.</strong> Clear, then hit <strong>Probe
+      defect (EGT3)</strong>. EGT&#8323; falls toward ambient — the case a redline
+      system aborts a healthy aircraft over. Health barely moves; the verdict is
+      sensor probe defect, engine healthy.</li>
+    <li><strong>Ask it why.</strong> Hit <strong>Bearing 2X vib</strong> and read
+      the attribution panel, or click the crankcase in the model to open the
+      inspector on the vibration channel.</li>
+    <li><strong>Fly the envelope.</strong> Section 09 — climb to 30,000 ft at
+      5&times; and watch power derate while health holds.</li>
+    <li><strong>Land and debrief.</strong> Open <strong>Debrief</strong>, pick the
+      sortie, read the report, then replay it.</li>
+  </ol>
+
+  <div class="tip">
+    <b>If you only have ninety seconds</b>
+    <p>Do step 3 and step 5. The probe defect shows what nothing else on the market
+    does, and the climb shows why the whole architecture exists.</p>
+  </div>
+</section>
+
+<!-- ===================== 12 ===================== -->
+<section>
+  <h2><span class="n">12</span>The HTTP and WebSocket API</h2>
+
+  <p>The service listens on <code>127.0.0.1:8000</code>. Everything the dashboard
+    does, you can do from code.</p>
+
+  <table>
+    <thead><tr><th>Method</th><th>Endpoint</th><th>Does</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">GET</td><td class="mono">/</td><td>The ground station</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">/api/state</td><td>Full twin state, once</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">/api/fault/inject</td><td>Inject a fault</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">/api/fault/clear</td><td>Back to healthy</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">/api/flight/override</td><td>Manual throttle / altitude / OAT</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">/api/sim/reset</td><td>Restart from t = 0</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">/api/sim/speed</td><td>Time scale, clamped 0.2&times;&ndash;10&times;</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">/api/sessions</td><td>Recorded sorties, newest first</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">/api/sessions/{id}</td><td>Post-flight report</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">/api/sessions/{id}/frames</td><td>Raw frames, paged</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">/api/replay/start</td><td>Replay a sortie</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">/api/replay/stop</td><td>Back to live</td></tr>
+      <tr><td class="mono">WS</td><td class="mono">/ws/telemetry</td><td>20 Hz state broadcast</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">/api/stream</td><td>Same broadcast over SSE</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Injecting a fault</h3>
+  <div class="diagram">curl -X POST http://127.0.0.1:8000/api/fault/inject \
+  -H "Content-Type: application/json" \
+  -d '{"fault_type": "TURBO_BOOST_DEFICIENCY",
+       "severity": 0.7,
+       "ramp_duration_s": 12.0}'</div>
+  <p>
+    Severity is 0.0&ndash;1.0 and ramp is in seconds — <code>0</code> for an abrupt
+    step. An unknown class returns HTTP 400.
+  </p>
+
+  <h3>Reading the stream</h3>
+  <div class="diagram">import asyncio, json, websockets
+
+async def listen():
+    async with websockets.connect("ws://127.0.0.1:8000/ws/telemetry") as ws:
+        while True:
+            s = json.loads(await ws.recv())
+            ai = s["ai_prognostics"]
+            print(f'{s["timestamp_s"]:7.1f}s  {s["altitude_ft"]:6.0f}ft  '
+                  f'health {s["health"]["overall_health"]:5.1f}%  '
+                  f'{ai["fault_class"]}')
+
+asyncio.run(listen())</div>
+  <p>
+    Each frame carries the flight state, every raw sensor channel, the model
+    expectation for each, the filtered estimate, the residual vector, seven health
+    scores and the AI block. The full schema is
+    <code>digital_twin/twin_state.py</code>.
+  </p>
+
+  <div class="note">
+    <b>The twin runs whether or not anyone is watching</b>
+    <p>Simulation advances on a background task, so <code>/api/state</code> is
+    populated with no browser attached and a second dashboard tab observes the same
+    sortie rather than stepping it a second time.</p>
+  </div>
+</section>
+
+<!-- ===================== 13 ===================== -->
+<section>
+  <h2><span class="n">13</span>Verifying the claims</h2>
+
+  <p>Every number in this handbook comes out of a script in the repository.</p>
+
+  <div class="diagram">python run_all_tests.py                    <span style="color:#7A7A8C"># all nine suites, ~2.5 min</span>
+
+python test_simulation.py                  <span style="color:#7A7A8C"># MVEM, sensors, flight profiles</span>
+python test_ai_layer.py                    <span style="color:#7A7A8C"># estimator, autoencoder, classifier, RUL</span>
+python test_fault_pipeline_qa.py           <span style="color:#7A7A8C"># end-to-end detection per fault mode</span>
+python validation/benchmark.py             <span style="color:#7A7A8C"># the comparison table in section 01</span>
+python validation/ablation.py              <span style="color:#7A7A8C"># which choice is load-bearing</span>
+python validation/leakage_audit.py         <span style="color:#7A7A8C"># train/test separation integrity</span>
+python validation/stress_testing.py        <span style="color:#7A7A8C"># 5x noise, 30 s blackout, 35,000 ft</span>
+python tools/edge_benchmark_profiler.py    <span style="color:#7A7A8C"># the latency budget</span></div>
+
+  <p>
+    Every suite exits non-zero on failure, so a green run means all nine genuinely
+    passed. The ablation is the interesting one if you are sceptical: it retrains
+    four networks on your machine and prints numbers it computed, rather than
+    numbers anyone recorded.
+  </p>
+
+  <h3>Rebuilding data and models</h3>
+  <div class="diagram">python data/generate_dataset.py        <span style="color:#7A7A8C"># 78 independent sorties</span>
+python train_and_export_models.py      <span style="color:#7A7A8C"># retrain, recalibrate threshold</span></div>
+  <div class="warn">
+    <b>Only one script rewrites the committed datasets</b>
+    <p><code>data/generate_dataset.py</code> is it. The test suite generates into a
+    temporary directory, because overwriting the CSVs mid-run would leave the
+    shipped checkpoints scored against data they were never trained on — which is
+    exactly the failure that once made the benchmark report the system losing to
+    its own baseline.</p>
+  </div>
+</section>
+
+<!-- ===================== 14 ===================== -->
+<section>
+  <h2><span class="n">14</span>Troubleshooting</h2>
+
+  <table>
+    <thead><tr><th>Symptom</th><th>Cause and fix</th></tr></thead>
+    <tbody>
+      <tr><td>Health reads very low right after start</td>
+          <td>The warm-up did not complete. Press <strong>Reset</strong> and wait; the twin runs 15 s forward before the first frame is meaningful.</td></tr>
+      <tr><td>3D model is letterboxed or blank</td>
+          <td>The viewport was measured before the console settled. Resize the window once, or press <strong>&uarr; Cover</strong> then <strong>Continue</strong>.</td></tr>
+      <tr><td>Charts and 3D view missing entirely</td>
+          <td>Vendored assets did not load. Confirm <code>dashboard/vendor/</code> is present; re-fetch with <code>python tools/fetch_vendor_assets.py</code>.</td></tr>
+      <tr><td>Badge says HTTP rather than WS</td>
+          <td>WebSocket blocked; the dashboard fell back to polling. Functionally identical, slightly coarser. Expected under the standalone server.</td></tr>
+      <tr><td>Sandbox sliders appear to do nothing</td>
+          <td>Mode is still <strong>auto mission</strong>. Toggle to manual. Also remember the slew rate — a large altitude change takes real time at 1&times;.</td></tr>
+      <tr><td>A fault is injected but nothing is diagnosed</td>
+          <td>Some faults ramp slowly by design. Give it the ramp duration plus a few seconds, or raise the simulation rate.</td></tr>
+      <tr><td>Diagnosis flickers between classes</td>
+          <td>Expected on marginal residuals. The annunciator votes over a rolling window before committing, so the displayed class is steadier than the per-frame one.</td></tr>
+      <tr><td>Debrief lists no sorties</td>
+          <td>The recorder starts with the server. Fly for a few seconds, then press <strong>Refresh</strong>.</td></tr>
+      <tr><td>Scrolling feels heavy on an old machine</td>
+          <td>Reduce the journey length: <code>--track</code> in <code>dashboard/theme.css</code>. Enabling the OS reduced-motion setting also disables parallax, blur and easing.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ===================== 15 ===================== -->
+<section>
+  <h2><span class="n">15</span>Known limitations</h2>
+
+  <p>
+    Stated here rather than left to be discovered. A reviewer who finds an
+    unstated limitation discounts everything else in the submission.
+  </p>
+
+  <h4>1 &mdash; Everything is simulated</h4>
+  <p>The engine, the instrumentation and the faults are models. No
+    hardware-in-the-loop validation has been performed, and nothing here is
+    certified for airworthiness or operational flight.</p>
+
+  <h4>2 &mdash; The estimator is not an EKF</h4>
+  <p>It is a linear Kalman filter with a complementary prediction step toward the
+    physics model, with <span class="mono">F = I</span> and
+    <span class="mono">H = I</span>. Because F is identity, the covariance is a
+    tuned noise-rejection parameter rather than a calibrated uncertainty. Anything
+    needing meaningful state covariance would require a true EKF or UKF.</p>
+
+  <h4>3 &mdash; The attribution is not SHAP</h4>
+  <p>It is gradient &times; input: a first-order local ranking without
+    Shapley&rsquo;s local-accuracy or consistency guarantees. Chosen for the edge
+    budget. <code>shap.DeepExplainer</code> runs offline against the same network
+    where exact values are wanted.</p>
+
+  <h4>4 &mdash; The RUL interval is a trend interval</h4>
+  <p>Constructed from the spread of the degradation fit, not from a
+    distribution-free coverage guarantee. Conformal prediction is the honest
+    upgrade.</p>
+
+  <h4>5 &mdash; The sensor validator covers two archetypes</h4>
+  <p>Thermocouple open circuit and oil transducer dropout. It isolates
+    93.3&nbsp;% of held-out probe-defect frames, not 100&nbsp;%. The ablation
+    further shows the trained classifier already separates probe defects on its
+    own, so the validator currently buys no measurable accuracy — its value is
+    that it is a physics rule rather than a learned boundary, and so holds for
+    probe failures absent from the training set.</p>
+
+  <h4>6 &mdash; Per-frame inference degrades under extreme noise</h4>
+  <p>At five times instrumentation sigma the classifier names a false mechanical
+    fault on about one frame in six. The annunciator votes over a rolling window
+    so this does not reach the operator, but it is a real weakness of per-frame
+    inference on out-of-distribution noise.</p>
+
+  <h4>7 &mdash; The MVEM fit figure is near-circular</h4>
+  <p>The model interpolates the same altitude derating table it is then scored
+    against, so the 0.00 HP RMSE is a consistency check on the interpolation, not
+    independent validation. Manifold pressure, which is not fitted to the table,
+    tracks less exactly.</p>
+
+  <h4>8 &mdash; The taxonomy is nine modes plus healthy</h4>
+  <p>Real engines fail in compound and cascading ways this taxonomy does not name,
+    though the unsupervised trigger will still flag them as anomalous — it just
+    will not name them.</p>
+
+  <div class="note">
+    <b>Where this goes next</b>
+    <p>Bench validation against a test-cell engine, recalibration on real data,
+    an edge port to flight-representative compute, then secure telemetry and a
+    requirements trace. The four stages and what each requires are chapter 21 of
+    the cover journey.</p>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

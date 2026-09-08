@@ -20,65 +20,67 @@
      One palette for the whole experience — the cover chapter, the scroll
      transition and the operator console all resolve from these tokens, so
      there is no seam where the visual language changes. Deep navy ground
-     rather than neutral black: the hue bias is toward the instrument accent,
-     which is what makes the greys read as chosen rather than defaulted.
+     Near-black with a violet bias rather than neutral grey: the surfaces lean
+     toward the accent, which is what makes them read as chosen. The three
+     annunciator hues are deliberately held far from the accent in hue space so
+     an alarm can never be mistaken for an interface element.
      ====================================================================== */
 
   /* --- Surfaces --------------------------------------------------------
      Four depths: void (behind everything), page, chrome/panel, raised. */
-  --bg-void:      #05080C;
-  --bg-page:      #0A1018;   /* primary background                         */
-  --bg-chrome:    #0F1823;   /* secondary background — bars, cover ground  */
-  --bg-panel:     #121C28;   /* panel surface                              */
-  --bg-elevated:  #1A2634;   /* raised tiles, inspector                    */
-  --border:       #243342;
-  --border-soft:  #18242F;
+  --bg-void:      #06060A;
+  --bg-page:      #0B0B12;   /* primary background                         */
+  --bg-chrome:    #12121C;   /* secondary background — bars, cover ground  */
+  --bg-panel:     #171725;   /* panel surface                              */
+  --bg-elevated:  #1F1F31;   /* raised tiles, inspector                    */
+  --border:       #2A2A40;
+  --border-soft:  #1C1C2C;
 
   /* --- Type ----------------------------------------------------------- */
-  --text-primary: #E9F0F7;
-  --text-muted:   #93A7BC;
-  --text-dim:     #64798F;
+  --text-primary: #EDEDF5;
+  --text-muted:   #9B9BB0;
+  --text-dim:     #8484A0;  /* lifted to clear AA on panel: axis ticks must be readable */
 
   /* --- Annunciation ----------------------------------------------------
      One annunciator scale across the whole project: the cover, the console,
      the 3D model and the printed brief use these same hues, so CAUTION on a
      page and CAUTION on the glass are the same colour. */
-  --caution:      #E8A33D;
-  --caution-dim:  #A9761F;
-  --warning:      #E2564B;
-  --ok:           #7DD37F;
+  --caution:      #F0A93B;
+  --caution-dim:  #A8761F;
+  --warning:      #E5484D;
+  --ok:           #6DD98A;
 
   /* --- Primary accent --------------------------------------------------
      Reserved for one meaning and no other: the physics model. The MVEM
      expectation traces, the 3D selection outline, the cover's key rules and
      every interactive focus state are this blue, so it always reads as
      "what physics says" and never competes with the annunciator scale. */
-  --instrument:       #4DA3FF;
-  --instrument-hover: #7CBEFF;
-  --instrument-dim:   #2B6AAE;
-  --instrument-band:  rgba(77, 163, 255, 0.10);
-  --instrument-glow:  rgba(77, 163, 255, 0.22);
+  --instrument:       #7C6CFF;
+  --instrument-hover: #9C90FF;
+  --instrument-dim:   #4B3FA8;
+  --instrument-band:  rgba(124, 108, 255, 0.10);
+  --instrument-glow:  rgba(124, 108, 255, 0.26);
 
   /* --- Secondary accent ------------------------------------------------
      Deliberately quiet. Used only for the residual/derived layer: chart
      baselines' companion, the cover's secondary rules, small metadata
      emphasis. Never for state. */
-  --accent-2:      #7FD4C1;
-  --accent-2-dim:  #47897B;
+  --accent-2:      #4ECDC4;
+  --accent-2-dim:  #2F8A84;
 
   /* Derived translucent bands for chart tolerance regions */
-  --caution-band: rgba(232, 163, 61, 0.13);
-  --warning-band: rgba(226, 86, 75, 0.13);
+  --caution-band: rgba(240, 169, 59, 0.13);
+  --warning-band: rgba(229, 72, 77, 0.13);
 
   /* Sensor trace ramp — structural, so neutral. Four cylinders need four
      separable traces; they are told apart by lightness, never by hue. When
      one leaves its envelope it turns amber and identifies itself. The ramp
      carries the same slight blue bias as the surfaces so it sits in the
      palette rather than on top of it. */
-  --trace-1: #E9F0F7;
-  --trace-2: #BCCBD9;
-  --trace-3: #92A5B7;
-  --trace-4: #6B7F92;
+  --trace-1: #EDEDF5;
+  --trace-2: #C4C4D4;
+  --trace-3: #9A9AAE;
+  --trace-4: #74748A;
 
   /* --- Motion ----------------------------------------------------------
      One easing curve and two durations for the whole site, so the cover
