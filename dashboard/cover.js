@@ -269,13 +269,23 @@
   /* ------------------------------------------------------------------
    * COVER -> APP TRANSITION
    * ---------------------------------------------------------------- */
+  let entering = false;
+
   window.enterApp = function enterApp() {
+    // Two controls call this — the skip button and the Continue button — and
+    // the phase does not flip until the animation ends, so without a guard a
+    // second press restarts the transition halfway through it.
+    if (entering || phase === 'app') return;
+    entering = true;
+
     const cover = document.getElementById('cover');
     const appShell = document.getElementById('app-shell');
-    if (!cover || !appShell) return;
+    if (!cover || !appShell) { entering = false; return; }
 
     const btn = document.getElementById('btn-enter-app');
+    const skip = document.getElementById('btn-skip-cover');
     if (btn) btn.disabled = true;
+    if (skip) skip.disabled = true;
 
     cover.classList.add('cover-exit');
     appShell.classList.add('app-entering');
@@ -286,6 +296,8 @@
       cover.classList.remove('cover-exit');
       appShell.classList.remove('app-entering');
       if (btn) btn.disabled = false;
+      if (skip) skip.disabled = false;
+      entering = false;
     }, 750);
   };
 
@@ -293,6 +305,7 @@
    * APP -> COVER RETURN
    * ---------------------------------------------------------------- */
   window.returnToCover = function returnToCover() {
+    entering = false;
     lockTrack(false);
     setPhase('cover');
 
@@ -322,6 +335,14 @@
   /* ------------------------------------------------------------------
    * EVENT WIRING
    * ---------------------------------------------------------------- */
+  // Escape skips the cover. Bound only while the cover is up, so it never
+  // competes with the 3D view clearing its selection on the same key.
+  window.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Escape' || phase === 'app' || entering) return;
+    ev.preventDefault();
+    window.enterApp();
+  });
+
   window.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('resize', () => { if (!trackLocked) onScroll(); },
                           { passive: true });

@@ -1790,3 +1790,88 @@ body[data-phase="app"] .btn-cover-return { display: inline-flex; }
   .beat-17, .beat-18, .beat-19, .beat-20, .beat-21, .beat-22 { transform: none; }
   .alt-scale::after { transition: none; }
 }
+
+/* ==========================================================================
+   SKIP TO CONSOLE
+   --------------------------------------------------------------------------
+   The Continue button sits in the final chapter, which means the only way into
+   the console is to scroll all twenty-two. That is right for a first visit and
+   wrong for every one after it, so this offers the same handover from anywhere
+   in the journey.
+
+   It sits quiet until wanted: low-contrast at rest, and it does not compete
+   with the scroll cue, which is still the primary invitation.
+   ========================================================================== */
+
+.cover-skip {
+  position: absolute;
+  top: 22px;
+  right: 26px;
+  z-index: 6;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 7px 13px;
+
+  font-family: var(--font-mono);
+  font-size: var(--fs-tick);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+
+  cursor: pointer;
+  transition: color var(--dur-quick) var(--ease),
+              border-color var(--dur-quick) var(--ease),
+              background var(--dur-quick) var(--ease);
+}
+
+.cover-skip:hover {
+  color: var(--text-primary);
+  border-color: var(--instrument);
+  background: var(--instrument-band);
+}
+
+.cover-skip:focus-visible {
+  outline: 2px solid var(--instrument);
+  outline-offset: 2px;
+  color: var(--text-primary);
+}
+
+.cover-skip:active { transform: translateY(1px); }
+
+.cover-skip-arrow {
+  color: var(--instrument);
+  transition: transform var(--dur-quick) var(--ease);
+}
+.cover-skip:hover .cover-skip-arrow { transform: translateX(3px); }
+
+/* Once the console is live the whole cover is display:none, so this goes with
+   it — but be explicit, so the rule survives any change to that. */
+body[data-phase="app"] .cover-skip { display: none; }
+
+/* It also leaves during the exit animation rather than sitting over the
+   transition it just triggered. */
+.cover.cover-exit .cover-skip { opacity: 0; pointer-events: none; }
+
+@media (max-width: 860px) {
+  .cover-skip { top: 14px; right: 14px; padding: 6px 10px; letter-spacing: 0.08em; }
+}
+
+@media (max-width: 560px) {
+  /* On a phone the label is the first thing to go, not the control. */
+  .cover-skip span:first-child { display: none; }
+  .cover-skip { padding: 8px 11px; }
+  .cover-skip-arrow { font-size: 13px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cover-skip,
+  .cover-skip-arrow { transition: none; }
+  .cover-skip:active { transform: none; }
+  .cover-skip:hover .cover-skip-arrow { transform: none; }
+}
