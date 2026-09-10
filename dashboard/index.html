@@ -785,6 +785,90 @@
        Identity, mission context tape, station controls. All greyscale
        except the telemetry-live indicator.
        ==================================================================== -->
+
+  <!-- ====================================================================
+       ENGINE BAY — fit a different powerplant, or define your own.
+       The problem statement names one engine; an operator whose airframe
+       carries something else should be able to describe it rather than be
+       told the tool does not apply.
+       ==================================================================== -->
+  <div id="panel-engine" class="chrome rule-b px-3 py-2 flex-shrink-0 z-20" hidden>
+    <div class="flex items-start justify-between gap-6">
+      <div class="flex items-start gap-6 min-w-0 flex-1">
+        <span class="label flex-shrink-0">Engine bay</span>
+
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <label class="label-sm" for="sel-engine">Fitted</label>
+          <select id="sel-engine" class="btn" style="min-width:19rem"></select>
+          <button onclick="fitSelectedEngine()" class="btn" title="Fit this engine and restart the sortie">Fit</button>
+          <button onclick="toggleEngineForm()" id="btn-engine-new" class="btn">+ New engine</button>
+          <button onclick="deleteSelectedEngine()" class="btn" title="Delete the selected custom engine">Delete</button>
+        </div>
+
+        <div id="box-engine-status" class="text-muted min-w-0 flex-1"
+             style="font-size:0.72rem; line-height:1.5">
+          Loading the engine catalogue&hellip;
+        </div>
+      </div>
+
+      <button onclick="toggleEnginePanel()" class="btn" title="Collapse">Close &#9652;</button>
+    </div>
+
+    <!-- Builder form. Prefilled from the reference engine so a user edits real
+         numbers rather than facing empty boxes. -->
+    <div id="box-engine-form" class="engine-form" hidden>
+      <div class="engine-form-grid">
+        <label><span>Engine name</span>
+          <input id="eng-name" type="text" maxlength="80" placeholder="My Engine"></label>
+        <label><span>Displacement (L)</span>
+          <input id="eng-disp" type="number" step="0.001" min="0.2" max="20"></label>
+        <label><span>Cylinders</span>
+          <input id="eng-cyl" type="number" step="1" min="1" max="16"></label>
+        <label><span>Rated power (HP)</span>
+          <input id="eng-power" type="number" step="1" min="5" max="1200"></label>
+        <label><span>Rated RPM</span>
+          <input id="eng-rated-rpm" type="number" step="10" min="800" max="12000"></label>
+        <label><span>Idle RPM</span>
+          <input id="eng-idle-rpm" type="number" step="10" min="400" max="4000"></label>
+        <label><span>Max continuous RPM</span>
+          <input id="eng-gov-rpm" type="number" step="10" min="800" max="12000"></label>
+        <label><span>Compression ratio</span>
+          <input id="eng-cr" type="number" step="0.1" min="5" max="26"></label>
+        <label><span>Max boost (bar abs)</span>
+          <input id="eng-boost" type="number" step="0.01" min="0.5" max="5"></label>
+        <label><span>Nominal EGT (&deg;C)</span>
+          <input id="eng-egt" type="number" step="1" min="200" max="1100"></label>
+        <label><span>Nominal CHT (&deg;C)</span>
+          <input id="eng-cht" type="number" step="1" min="50" max="400"></label>
+        <label><span>Nominal oil press (bar)</span>
+          <input id="eng-oilp" type="number" step="0.1" min="0.5" max="12"></label>
+      </div>
+
+      <div class="engine-derate">
+        <div class="label-sm" style="margin-bottom:6px">
+          Altitude power derating &mdash; how the turbo holds power, then loses it
+        </div>
+        <table class="engine-derate-table">
+          <thead><tr><th>Altitude (ft)</th><th>Power (HP)</th><th>Boost (bar)</th><th></th></tr></thead>
+          <tbody id="tbody-derate"></tbody>
+        </table>
+        <button onclick="addDerateRow()" class="btn" style="margin-top:6px">+ Add altitude point</button>
+      </div>
+
+      <div id="box-engine-errors" class="engine-errors" hidden></div>
+
+      <div class="engine-form-actions">
+        <button onclick="saveCustomEngine()" class="btn is-active">Save engine</button>
+        <button onclick="saveCustomEngine(true)" class="btn">Save &amp; fit</button>
+        <button onclick="toggleEngineForm()" class="btn">Cancel</button>
+        <span class="engine-form-note">
+          Physics will model your engine exactly. Fault diagnosis stays calibrated
+          on the reference engine until the models are retrained.
+        </span>
+      </div>
+    </div>
+  </div>
+
   <!-- ====================================================================
        CHAPTER 2 — THE CONSOLE
        The same station as before, unchanged in structure. It is a fixed
@@ -813,6 +897,7 @@
     <div class="flex items-center gap-1.5">
       <button id="btn-sandbox-open" onclick="toggleSandbox()" class="btn" title="Developer flight sandbox controls">Sandbox ▾</button>
       <button id="btn-debrief-open" onclick="toggleDebrief()" class="btn" title="Post-flight analysis and mission replay">Debrief ▾</button>
+      <button id="btn-engine-open" onclick="toggleEnginePanel()" class="btn" title="Fit a different engine, or define your own">Engine ▾</button>
       <button onclick="returnToCover()" class="btn btn-cover-return"
               title="Scroll back up to the cover">↑ Cover</button>
       <a href="https://claude.ai/code/artifact/fd59ade8-7421-4f96-9720-96d8f2a0bea0"
