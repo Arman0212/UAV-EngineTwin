@@ -56,6 +56,51 @@ def _interp(x: float, points: List[Tuple[float, float]]) -> float:
     return points[-1][1]
 
 
+
+def _calibrate_eta_th(disp_l, rated_rpm, rated_power_hp, max_boost_bar,
+                      afr, lam, lhv, fmep_coeff, eta_vol_base,
+                      eta_vol_droop, eta_vol_gain) -> float:
+    """
+    Solves indicated thermal efficiency from the engine's rated point.
+
+    A datasheet never quotes thermal efficiency, but it always quotes rated
+    power — and at the rated point the air path, the fuelling and the friction
+    model are all determined by numbers we do have. So rather than carry the
+    reference engine's efficiency onto every other engine (which left small
+    high-revving engines producing 20-30% under their rating), invert the
+    balance and ask what efficiency the quoted rating implies:
+
+        eta_th = (P_rated + P_friction) / (m_fuel * LHV)
+
+    This is parameter identification from a known operating point, not a
+    rescaling of the model's output. Everything downstream — part-load
+    behaviour, altitude derating, fault response — still emerges from the
+    physics rather than being imposed.
+    """
+    v_d = disp_l * 1e-3
+    n_120 = rated_rpm / 120.0
+
+    # Manifold charge density at the rated point, post-intercooler.
+    t_manifold_k = 313.15
+    rho_manifold = (max_boost_bar * 1e5) / (287.058 * t_manifold_k)
+
+    # Volumetric efficiency at rated speed and full boost.
+    eta_vol = eta_vol_base - eta_vol_droop + eta_vol_gain
+
+    air_kgps = eta_vol * v_d * n_120 * rho_manifold
+    fuel_kgps = air_kgps / max(1e-9, afr * lam)
+
+    fmep_bar = 0.45 + fmep_coeff * rated_rpm + 0.04 * max_boost_bar
+    friction_w = fmep_bar * 1e5 * v_d * n_120
+    rated_w = rated_power_hp * 745.7
+
+    eta = (rated_w + friction_w) / max(1e-9, fuel_kgps * lhv)
+
+    # Keep it physically sensible. A four-stroke piston engine that claims
+    # better than 55% indicated efficiency is a datasheet error, not a discovery.
+    return max(0.18, min(0.55, eta))
+
+
 @dataclass
 class EngineSpec:
     """Everything the MVEM needs to know about which engine it is simulating."""
@@ -267,6 +312,17 @@ class EngineSpec:
         # Likewise friction: the rpm term is calibrated so FMEP at the engine's
         # own rated speed matches the reference at its rated speed.
         fmep_coeff = ref.fmep_rpm_coeff * (ref.rated_rpm / rated_rpm) if rated_rpm > 0             else ref.fmep_rpm_coeff
+
+        eta_th = _calibrate_eta_th(
+            disp_l, rated_rpm, rated_power, max_boost, afr, lam, fuel_lhv,
+            fmep_coeff, ref.eta_vol_base, ref.eta_vol_speed_droop,
+            ref.eta_vol_boost_gain)
+
+        # The reference engine's default was derived from this same balance, so
+        # a round-trip through from_config must land back on it exactly rather
+        # than a hair away — the shipped checkpoints depend on that.
+        if abs(eta_th - ref.eta_th_base) / ref.eta_th_base < 0.01:
+            eta_th = ref.eta_th_base
 
         return cls(
             name=str(cfg.get("engine_name", "Custom Engine")),

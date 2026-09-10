@@ -1,0 +1,111 @@
+{
+  "engine_name": "Austro AE300 Turbo Diesel",
+  "displacement_litres": 1.991,
+  "cylinders": 4,
+  "rated_power_hp_sealevel": 168.0,
+  "rated_rpm": 3880.0,
+  "idle_rpm": 1100.0,
+  "max_continuous_rpm": 3600.0,
+  "compression_ratio": 16.5,
+  "turbocharged": true,
+  "intercooled": true,
+  "max_boost_bar": 2.2,
+  "altitude_power_derating": [
+    {
+      "altitude_ft": 0,
+      "power_hp": 168.0,
+      "rated_boost_bar": 2.2
+    },
+    {
+      "altitude_ft": 6000,
+      "power_hp": 168.0,
+      "rated_boost_bar": 2.2
+    },
+    {
+      "altitude_ft": 10000,
+      "power_hp": 155.0,
+      "rated_boost_bar": 2.0
+    },
+    {
+      "altitude_ft": 18000,
+      "power_hp": 128.0,
+      "rated_boost_bar": 1.6
+    }
+  ],
+  "nominal_operating_parameters": {
+    "egt_nominal_celsius": 690,
+    "egt_max_continuous_celsius": 820,
+    "egt_alarm_celsius": 860,
+    "cht_nominal_celsius": 160,
+    "cht_max_continuous_celsius": 205,
+    "cht_alarm_celsius": 225,
+    "oil_pressure_nominal_bar": 4.0,
+    "oil_pressure_min_safe_bar": 1.76,
+    "oil_pressure_max_bar": 5.8,
+    "oil_temp_nominal_celsius": 100,
+    "oil_temp_max_celsius": 135,
+    "fuel_flow_cruise_lph": 26.0,
+    "fuel_flow_max_lph": 40.0,
+    "bus_voltage_nominal_v": 28.0,
+    "vibration_nominal_g_rms": 1.1,
+    "vibration_alarm_g_rms": 4.1
+  },
+  "notes": "Jet-A burning turbo diesel, Diamond DA42 class.",
+  "origin": "builtin",
+  "sensor_specifications": {
+    "egt": {
+      "noise_sigma_celsius": 3.5,
+      "tau_lag_seconds": 2.0,
+      "quantization": 0.5,
+      "rate_hz": 5.0
+    },
+    "cht": {
+      "noise_sigma_celsius": 1.8,
+      "tau_lag_seconds": 3.5,
+      "quantization": 0.2,
+      "rate_hz": 5.0
+    },
+    "oil_pressure": {
+      "noise_sigma_bar": 0.06,
+      "tau_lag_seconds": 0.4,
+      "quantization": 0.02,
+      "rate_hz": 10.0
+    },
+    "oil_temp": {
+      "noise_sigma_celsius": 0.9,
+      "tau_lag_seconds": 4.0,
+      "quantization": 0.1,
+      "rate_hz": 2.0
+    },
+    "manifold_pressure": {
+      "noise_sigma_bar": 0.02,
+      "tau_lag_seconds": 0.1,
+      "quantization": 0.01,
+      "rate_hz": 20.0
+    },
+    "rpm": {
+      "noise_sigma_rpm": 8.0,
+      "tau_lag_seconds": 0.05,
+      "quantization": 1.0,
+      "rate_hz": 50.0
+    },
+    "fuel_flow": {
+      "noise_sigma_lph": 0.35,
+      "tau_lag_seconds": 0.8,
+      "quantization": 0.05,
+      "rate_hz": 5.0
+    },
+    "vibration": {
+      "noise_sigma_g": 0.08,
+      "tau_lag_seconds": 0.02,
+      "quantization": 0.01,
+      "rate_hz": 20.0
+    },
+    "bus_voltage": {
+      "noise_sigma_v": 0.12,
+      "tau_lag_seconds": 0.1,
+      "quantization": 0.05,
+      "rate_hz": 10.0
+    }
+  }
+}

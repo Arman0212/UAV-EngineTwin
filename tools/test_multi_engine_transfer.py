@@ -36,11 +36,12 @@ from simulation.engine_spec import EngineSpec
 
 CONFIG_PATH = PROJECT_ROOT / "configs" / "rotax_914_config.json"
 
-# A generic mean-value model parameterised from a sparse config will not match a
-# manufacturer's dyno sheet. These bounds say what "transferred successfully"
-# means: boost follows the published curve closely, because that is what the
-# config states directly; power lands in the right region, because it is an
-# emergent result of fuelling, friction and propeller load.
+# What "transferred successfully" means here, stated precisely so the numbers
+# below are not read as more than they are: boost follows the published curve
+# because the config states it, and power stays inside the boost-derived
+# ceiling built from that same table. Neither is an independent check of the
+# physics. The physics is what decides whether the engine can reach its ceiling
+# at all — which is the failure these bounds actually catch.
 MAP_RMSE_LIMIT_BAR = 0.05
 POWER_RMSE_LIMIT_FRACTION = 0.25
 
@@ -125,11 +126,17 @@ def test_rotax_914_transfer():
     print(f"  Shaft power RMSE:       {power_rmse:.1f} HP = {power_frac*100:.1f}% of rating"
           f"   (limit {POWER_RMSE_LIMIT_FRACTION*100:.0f}%)")
     print()
-    print("  Boost tracks closely because the config states the curve directly.")
-    print("  Power is looser because it emerges from fuelling, friction and")
-    print("  propeller load — a generic mean-value model parameterised from a")
-    print("  datasheet is a plausible engine, not a calibrated one. Matching a")
-    print("  dyno sheet would require bench data, which is Stage 1 of the roadmap.")
+    print("  What these two numbers do and do not prove:")
+    print("    Manifold pressure follows the configured curve exactly, because the")
+    print("    config states that curve directly. This confirms the config reaches")
+    print("    the model — it is not independent validation of the model.")
+    print("    Shaft power is bounded by the boost-derived ceiling, which is built")
+    print("    from the same table, so agreement at the knee points is largely by")
+    print("    construction. What the physics decides is whether the engine can")
+    print("    actually REACH that ceiling: before thermal efficiency was solved")
+    print("    from the rated point, small high-revving engines fell 20-30% short")
+    print("    of their own rating. They no longer do.")
+    print("    Genuine validation against a dyno needs bench data — roadmap Stage 1.")
 
     assert map_rmse < MAP_RMSE_LIMIT_BAR, (
         f"Manifold pressure did not follow the configured curve: "
