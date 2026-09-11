@@ -29,6 +29,7 @@ from simulation.flight_profile import FlightProfile, FlightState
 from simulation.mvem import MeanValueEngineModel, EngineState
 from simulation.sensors import SensorModel, SensorReadings
 from simulation.fault_injector import FaultInjector, FaultType, FaultConfig
+from simulation import engine_registry
 from digital_twin.health_index import HealthIndexEngine
 from digital_twin.state_estimator import PhysicsAnchoredKalmanEstimator
 from digital_twin.twin_state import DigitalTwinState, SubsystemHealth, AIHealthState, StateLevel
@@ -102,8 +103,42 @@ class EngineTwinRuntime:
         self.latest_frame: Optional[Dict[str, Any]] = None
         self.active_fault_name: str = "HEALTHY"
 
+        # Which powerplant is fitted. The shipped checkpoints are trained on the
+        # reference engine's residuals, so anything else is flagged to the
+        # operator rather than silently diagnosed with the wrong calibration.
+        self.engine_id: str = engine_registry.REFERENCE_ID
+        self.engine_name: str = "DRDO-VRDE-2.2L-Turbo-AeroDiesel"
+
         # Flight data recorder (attached by the service on startup)
         self.recorder: Optional[FlightRecorder] = None
+
+    def fit_engine(self, engine_id: str) -> Dict[str, Any]:
+        """
+        Swaps the powerplant and restarts the sortie on it.
+
+        Both the faulted engine and the healthy baseline are rebuilt from the
+        same spec — if only one were swapped, every residual would report the
+        difference between two engines rather than a fault.
+        """
+        cfg = engine_registry.get_config(engine_id)
+        if cfg is None:
+            raise ValueError(f"No such engine: {engine_id}")
+
+        self.mvem_physical = MeanValueEngineModel(config=cfg)
+        self.mvem_baseline = MeanValueEngineModel(config=cfg)
+        self.sensors = SensorModel(seed=int(time.time()))
+        self.injector = FaultInjector(self.mvem_physical, self.sensors)
+        self.ekf = PhysicsAnchoredKalmanEstimator()
+        self.rul_engine.reset()
+        self.latest_alert = None
+        self.active_fault_name = "HEALTHY"
+        self.sim_time_s = 0.0
+
+        self.engine_id = engine_id
+        self.engine_name = cfg.get("engine_name", engine_id)
+        self.warm_up(seconds=15.0, dt_s=SIM_DT_S)
+        return {"id": self.engine_id, "name": self.engine_name,
+                "is_reference": engine_id == engine_registry.REFERENCE_ID}
 
     def reset(self):
         self.sim_time_s = 0.0
@@ -334,6 +369,11 @@ class EngineTwinRuntime:
         # bytes and recording costs one serialisation rather than two.
         frame = state.to_dict()
         frame["active_alert"] = self.latest_alert
+        frame["engine"] = {
+            "id": self.engine_id,
+            "name": self.engine_name,
+            "is_reference": self.engine_id == engine_registry.REFERENCE_ID,
+        }
         self.latest_frame = frame
 
         if record and self.recorder is not None:
@@ -575,6 +615,106 @@ async def reset_simulation_endpoint():
 async def set_simulation_speed(speed: float = 1.0):
     twin_runtime.time_scale = max(0.2, min(10.0, speed))
     return {"status": "SUCCESS", "time_scale": twin_runtime.time_scale}
+
+# -------------------------------------------------------------
+# Engine catalogue — fit a different powerplant, or define your own
+#
+# The problem statement names one engine. An operator whose airframe carries
+# something else should be able to describe it rather than be told the tool
+# does not apply.
+# -------------------------------------------------------------
+class EngineCreateRequest(BaseModel):
+    engine_name: str
+    displacement_litres: float
+    cylinders: int = 4
+    rated_power_hp_sealevel: float
+    rated_rpm: float
+    idle_rpm: float = 1400.0
+    max_continuous_rpm: float = 4000.0
+    compression_ratio: float = 17.5
+    turbocharged: bool = True
+    max_boost_bar: float = 2.45
+    intercooled: bool = True
+    altitude_power_derating: List[Dict[str, Any]] = []
+    nominal_operating_parameters: Dict[str, Any] = {}
+
+@app.get("/api/engines")
+async def list_engines_endpoint():
+    """Every engine available, and which one is currently fitted."""
+    return {
+        "engines": engine_registry.list_engines(),
+        "fitted": twin_runtime.engine_id,
+        "reference": engine_registry.REFERENCE_ID,
+    }
+
+@app.get("/api/engines/template")
+async def engine_template():
+    """
+    A starting point for the builder, pre-filled with the reference engine so a
+    user edits real numbers instead of facing empty boxes.
+    """
+    return engine_registry.blank_config()
+
+@app.get("/api/engines/{engine_id}")
+async def get_engine(engine_id: str):
+    cfg = engine_registry.get_config(engine_id)
+    if cfg is None:
+        raise HTTPException(status_code=404, detail=f"No such engine: {engine_id}")
+    spec = engine_registry.get_spec(engine_id)
+    return {"config": cfg, "spec": spec.to_dict() if spec else None}
+
+@app.post("/api/engines")
+async def create_engine(req: EngineCreateRequest):
+    """Validates and stores a user-defined engine."""
+    try:
+        summary = engine_registry.save_custom(req.model_dump())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"status": "SUCCESS", "engine": summary}
+
+@app.delete("/api/engines/{engine_id}")
+async def delete_engine(engine_id: str):
+    # Order matters: a built-in is protected because it is built in, not
+    # because it happens to be fitted, and the message should say which.
+    if engine_id in {p.stem for p in engine_registry.BUILTIN_DIR.glob("*.json")}:
+        raise HTTPException(status_code=403,
+                            detail="Built-in engines cannot be deleted.")
+    if engine_id == twin_runtime.engine_id:
+        raise HTTPException(status_code=409,
+                            detail="That engine is currently fitted. Fit another first.")
+    if not engine_registry.delete_custom(engine_id):
+        raise HTTPException(status_code=404,
+                            detail="No such custom engine. Built-in engines cannot be deleted.")
+    return {"status": "SUCCESS", "deleted": engine_id}
+
+@app.post("/api/engines/{engine_id}/fit")
+async def fit_engine(engine_id: str):
+    """
+    Fits an engine and restarts the sortie on it.
+
+    Diagnosis remains calibrated for the reference engine: the autoencoder
+    threshold and the classifier were trained on its residuals. Fitting another
+    powerplant gives correct physics and an uncalibrated AI layer, which is why
+    the response says so rather than leaving the operator to assume otherwise.
+    """
+    try:
+        fitted = twin_runtime.fit_engine(engine_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    return {
+        "status": "SUCCESS",
+        "engine": fitted,
+        "diagnosis_calibrated": fitted["is_reference"],
+        "note": (
+            "Diagnosis is calibrated for this engine."
+            if fitted["is_reference"] else
+            "Physics now models this engine. The anomaly threshold and fault "
+            "classifier are still calibrated on the reference engine, so "
+            "diagnosis on this powerplant is indicative until the models are "
+            "retrained: python data/generate_dataset.py && python train_and_export_models.py"
+        ),
+    }
 
 # -------------------------------------------------------------
 # Post-Flight Analysis & Mission Replay

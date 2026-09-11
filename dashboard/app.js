@@ -1590,3 +1590,250 @@ function renderInspector() {
 
   setText("txt-inspector-note", info.note || "");
 }
+
+// ------------------------------------------------------------------
+// 16. ENGINE BAY — fit a powerplant, or define one
+//
+// The problem statement names a single engine. Anyone whose airframe carries
+// something else can describe it here and fly it immediately: the physics is
+// genuinely re-parameterised, not rescaled.
+//
+// One thing is stated plainly rather than hidden: the anomaly threshold and
+// the fault classifier are trained on the reference engine's residuals. Fitting
+// another powerplant gives correct physics and an uncalibrated AI layer, and
+// the operator is told so on screen rather than left to assume.
+// ------------------------------------------------------------------
+let engineCatalogue = [];
+let fittedEngineId = null;
+let derateRows = [];
+
+function toggleEnginePanel() {
+  const panel = document.getElementById("panel-engine");
+  const btn = document.getElementById("btn-engine-open");
+  if (!panel) return;
+  panel.hidden = !panel.hidden;
+  if (btn) {
+    btn.innerText = panel.hidden ? "Engine ▾" : "Engine ▴";
+    btn.classList.toggle("is-active", !panel.hidden);
+  }
+  if (!panel.hidden) refreshEngines();
+}
+
+function setEngineStatus(html) {
+  const el = document.getElementById("box-engine-status");
+  if (el) el.innerHTML = html;
+}
+
+async function refreshEngines() {
+  const sel = document.getElementById("sel-engine");
+  if (!sel) return;
+  try {
+    const res = await fetch('/api/engines');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    engineCatalogue = data.engines || [];
+    fittedEngineId = data.fitted;
+
+    sel.innerHTML = engineCatalogue.map(e => {
+      const kind = e.builtin ? (e.is_reference ? "reference" : "built-in") : "custom";
+      const fit = e.id === fittedEngineId ? " · fitted" : "";
+      return `<option value="${e.id}">${e.name} — ${e.rated_power_hp} HP · ${kind}${fit}</option>`;
+    }).join("");
+    if (fittedEngineId) sel.value = fittedEngineId;
+
+    describeFittedEngine();
+  } catch (e) {
+    setEngineStatus("Could not reach the engine catalogue.");
+  }
+}
+
+function describeFittedEngine() {
+  const e = engineCatalogue.find(x => x.id === fittedEngineId);
+  if (!e) { setEngineStatus("No engine information."); return; }
+
+  const spec = `${e.displacement_litres} L · ${e.cylinders} cyl · ` +
+               `${e.rated_power_hp} HP @ ${Math.round(e.rated_rpm)} rpm · ` +
+               `${e.max_boost_bar} bar · ceiling ${Math.round(e.ceiling_ft).toLocaleString()} ft`;
+
+  const warn = e.is_reference ? "" :
+    `<div class="engine-warn">Diagnosis is calibrated for the reference engine. ` +
+    `Physics models <b>${e.name}</b> correctly; fault classification on it is ` +
+    `indicative until the models are retrained.</div>`;
+
+  setEngineStatus(
+    `<div><span class="text-dim">Fitted</span> <b>${e.name}</b></div>` +
+    `<div class="text-dim" style="margin-top:2px">${spec}</div>` + warn);
+}
+
+async function fitSelectedEngine() {
+  const sel = document.getElementById("sel-engine");
+  if (!sel || !sel.value) return;
+  setEngineStatus("Fitting engine and restarting the sortie…");
+  try {
+    const res = await fetch(`/api/engines/${encodeURIComponent(sel.value)}/fit`,
+                            { method: 'POST' });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.detail || `HTTP ${res.status}`);
+    addEventLog("SYS", `Fitted ${d.engine.name}. ${d.diagnosis_calibrated ? "" : "Diagnosis uncalibrated for this engine."}`);
+    await refreshEngines();
+  } catch (e) {
+    setEngineStatus(`Could not fit that engine. ${e.message}`);
+  }
+}
+
+async function deleteSelectedEngine() {
+  const sel = document.getElementById("sel-engine");
+  if (!sel || !sel.value) return;
+  const e = engineCatalogue.find(x => x.id === sel.value);
+  if (e && e.builtin) {
+    setEngineStatus("Built-in engines cannot be deleted.");
+    return;
+  }
+  try {
+    const res = await fetch(`/api/engines/${encodeURIComponent(sel.value)}`,
+                            { method: 'DELETE' });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.detail || `HTTP ${res.status}`);
+    addEventLog("SYS", `Deleted engine ${sel.value}.`);
+    await refreshEngines();
+  } catch (e) {
+    setEngineStatus(e.message);
+  }
+}
+
+// -- builder form ---------------------------------------------------
+
+function toggleEngineForm() {
+  const box = document.getElementById("box-engine-form");
+  if (!box) return;
+  box.hidden = !box.hidden;
+  const btn = document.getElementById("btn-engine-new");
+  if (btn) btn.classList.toggle("is-active", !box.hidden);
+  if (!box.hidden) prefillEngineForm();
+}
+
+async function prefillEngineForm() {
+  // Start from the reference engine so every box holds a plausible number and
+  // the user edits rather than invents.
+  try {
+    const res = await fetch('/api/engines/template');
+    const t = await res.json();
+    const nom = t.nominal_operating_parameters || {};
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+
+    set("eng-name", "My Engine");
+    set("eng-disp", t.displacement_litres);
+    set("eng-cyl", t.cylinders);
+    set("eng-power", t.rated_power_hp_sealevel);
+    set("eng-rated-rpm", t.rated_rpm);
+    set("eng-idle-rpm", t.idle_rpm);
+    set("eng-gov-rpm", t.max_continuous_rpm);
+    set("eng-cr", t.compression_ratio);
+    set("eng-boost", t.max_boost_bar);
+    set("eng-egt", nom.egt_nominal_celsius);
+    set("eng-cht", nom.cht_nominal_celsius);
+    set("eng-oilp", nom.oil_pressure_nominal_bar);
+
+    derateRows = (t.altitude_power_derating || []).map(r => ({ ...r }));
+    renderDerateRows();
+  } catch (e) {
+    setEngineStatus("Could not load the engine template.");
+  }
+}
+
+function renderDerateRows() {
+  const tb = document.getElementById("tbody-derate");
+  if (!tb) return;
+  tb.innerHTML = derateRows.map((r, i) => `
+    <tr>
+      <td><input type="number" step="500" value="${r.altitude_ft}"
+                 oninput="updateDerate(${i},'altitude_ft',this.value)"></td>
+      <td><input type="number" step="1" value="${r.power_hp}"
+                 oninput="updateDerate(${i},'power_hp',this.value)"></td>
+      <td><input type="number" step="0.01" value="${r.rated_boost_bar}"
+                 oninput="updateDerate(${i},'rated_boost_bar',this.value)"></td>
+      <td><button class="btn" onclick="removeDerateRow(${i})" title="Remove">✕</button></td>
+    </tr>`).join("");
+}
+
+function updateDerate(i, key, value) {
+  if (derateRows[i]) derateRows[i][key] = parseFloat(value);
+}
+
+function addDerateRow() {
+  const last = derateRows[derateRows.length - 1] || { altitude_ft: 0, power_hp: 100, rated_boost_bar: 1.5 };
+  derateRows.push({
+    altitude_ft: Number(last.altitude_ft) + 5000,
+    power_hp: Math.max(5, Number(last.power_hp) - 20),
+    rated_boost_bar: Math.max(0.5, Number(last.rated_boost_bar) - 0.2)
+  });
+  renderDerateRows();
+}
+
+function removeDerateRow(i) {
+  derateRows.splice(i, 1);
+  renderDerateRows();
+}
+
+function showEngineErrors(list) {
+  const box = document.getElementById("box-engine-errors");
+  if (!box) return;
+  if (!list || !list.length) { box.hidden = true; box.innerHTML = ""; return; }
+  box.hidden = false;
+  box.innerHTML = list.map(e => `<div>${e}</div>`).join("");
+}
+
+async function saveCustomEngine(alsoFit) {
+  const num = (id) => parseFloat((document.getElementById(id) || {}).value);
+  const body = {
+    engine_name: (document.getElementById("eng-name") || {}).value || "",
+    displacement_litres: num("eng-disp"),
+    cylinders: Math.round(num("eng-cyl")),
+    rated_power_hp_sealevel: num("eng-power"),
+    rated_rpm: num("eng-rated-rpm"),
+    idle_rpm: num("eng-idle-rpm"),
+    max_continuous_rpm: num("eng-gov-rpm"),
+    compression_ratio: num("eng-cr"),
+    turbocharged: true,
+    max_boost_bar: num("eng-boost"),
+    intercooled: true,
+    altitude_power_derating: derateRows.map(r => ({
+      altitude_ft: Number(r.altitude_ft),
+      power_hp: Number(r.power_hp),
+      rated_boost_bar: Number(r.rated_boost_bar)
+    })),
+    nominal_operating_parameters: {
+      egt_nominal_celsius: num("eng-egt"),
+      cht_nominal_celsius: num("eng-cht"),
+      oil_pressure_nominal_bar: num("eng-oilp"),
+      bus_voltage_nominal_v: 28.0
+    }
+  };
+
+  showEngineErrors(null);
+  try {
+    const res = await fetch('/api/engines', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const d = await res.json();
+    if (!res.ok) {
+      // The server returns every problem at once so the form can show them
+      // together rather than one per submission.
+      showEngineErrors(String(d.detail || `HTTP ${res.status}`).split(". ").filter(Boolean));
+      return;
+    }
+    addEventLog("SYS", `Created engine "${d.engine.name}".`);
+    toggleEngineForm();
+    await refreshEngines();
+
+    if (alsoFit === true) {
+      const sel = document.getElementById("sel-engine");
+      if (sel) sel.value = d.engine.id;
+      await fitSelectedEngine();
+    }
+  } catch (e) {
+    showEngineErrors([e.message]);
+  }
+}
