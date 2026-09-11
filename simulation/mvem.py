@@ -357,8 +357,10 @@ class MeanValueEngineModel:
             # EGT: function of air-fuel ratio, fuel trim, throttle, and ignition timing
             fuel_delta_egt = 0.0
             if fuel_ratio_i < 1.0:
-                # Lean mixture: delayed late-burning flame raises EGT by up to +180 C
-                fuel_delta_egt = (1.0 - fuel_ratio_i) * 260.0
+                # Lean mixture: delayed late-burning flame raises EGT by up to +260 C under load.
+                # Thermal delta scales with throttle and manifold boost (loss of charge cooling under heavy air mass).
+                load_mult = 0.75 + 0.65 * (throttle ** 1.1) * max(0.6, min(2.5, self.p_manifold / 1.0))
+                fuel_delta_egt = (1.0 - fuel_ratio_i) * 260.0 * load_mult
             elif fuel_ratio_i > 1.0:
                 # Rich mixture: evaporative cooling from excess fuel drops EGT by up to -140 C
                 fuel_delta_egt = (1.0 - fuel_ratio_i) * 180.0
@@ -369,13 +371,18 @@ class MeanValueEngineModel:
 
             # CHT: Cylinder Head Temp (lumped balance with coolant and airspeed)
             target_cht = (self.spec.cht_base_c
-                          + self.spec.cht_power_span_c * (net_power_hp / self.spec.rated_power_hp) * fuel_ratio_i + 
+                          + self.spec.cht_power_span_c * (net_power_hp / self.spec.rated_power_hp) * min(1.0, fuel_ratio_i) + 
                           (self.t_coolant - 80.0) * 0.65 - 
                           (airspeed - 30.0) * 0.35 * cooling_ratio_i + 
                           (t_amb_c - 15.0) * 0.25)
             # If cooling degradation is active (cooling_ratio_i < 1.0), CHT rises significantly
             if cooling_ratio_i < 1.0:
                 target_cht += (1.0 - cooling_ratio_i) * 115.0
+
+            # Lean combustion thermal surge under high throttle (micro-detonation and severe heat transfer to head)
+            if fuel_ratio_i < 1.0:
+                lean_cht_surge = (1.0 - fuel_ratio_i) * 120.0 * (throttle ** 1.3) * max(0.5, min(2.5, self.p_manifold / 1.0))
+                target_cht += lean_cht_surge
 
             self.t_cht[i] += (target_cht - self.t_cht[i]) * (dt_s / 1.5)
 
