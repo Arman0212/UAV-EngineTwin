@@ -1,5 +1,5 @@
 """
-Empirical Baseline Comparison Benchmark (SIH26054 Section 27.2)
+Empirical Baseline Comparison Benchmark (SIH26054)
 Compares:
 1. Method A: Fixed-Threshold EIS Instrument (Garmin/EDM-930 style)
 2. Method B: Basic Black-Box ML Classifier (Random Forest on raw telemetry without physics model)
@@ -70,7 +70,7 @@ class FixedThresholdBaseline:
 
 def run_benchmark():
     print("=" * 80)
-    print("ENGINE-TWIN: Executing Section 27.2 Empirical Baseline Comparison")
+    print("ENGINE-TWIN: Empirical Baseline Comparison")
     print("=" * 80)
 
     # 1. Load Data

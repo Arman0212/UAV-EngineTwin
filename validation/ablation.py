@@ -1,5 +1,5 @@
 """
-Architectural Ablation Study (SIH26054 Section 27.3)
+Architectural Ablation Study (SIH26054)
 
 Measures what each architectural choice is actually worth by removing it and
 re-scoring on the held-out sorties. Every number this file prints is computed
@@ -117,7 +117,7 @@ def _score(net: FaultClassifierNet, norm: Dict[str, np.ndarray], X: np.ndarray, 
 
 def run_ablation_study():
     print("=" * 78)
-    print("ENGINE-TWIN: Section 27.3 Architectural Ablation Study")
+    print("ENGINE-TWIN: Architectural Ablation Study")
     print("=" * 78)
     print("All figures below are computed in this run. Nothing is quoted.")
 

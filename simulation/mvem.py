@@ -29,20 +29,55 @@ VARIANT_KEYS = (
     "combustion_efficiency_mult",
 )
 
+# Per-cylinder build imbalance, four entries each. Port geometry, injector trim
+# and baffle placement differ slightly between cylinders from the day the engine
+# is assembled, so no real four-cylinder runs perfectly even. These are the
+# hardest deviation for the twin to absorb: the baseline models four identical
+# cylinders, so a standing imbalance looks exactly like the per-cylinder faults
+# the classifier exists to name.
+CYLINDER_VARIANT_KEYS = (
+    "cyl_flow_mult",      # fuelling per cylinder -> drives EGT spread
+    "cyl_cooling_mult",   # heat rejection per cylinder -> drives CHT spread
+)
 
-def sample_variant(rng: np.random.Generator, spread_pct: float) -> Dict[str, float]:
+# Cylinder imbalance is a machining and assembly tolerance, held to a tighter
+# band than the engine-level constants and largely independent of how far the
+# unit as a whole sits from datasheet. Capped rather than scaled so that a
+# punishing global spread does not imply an absurd cylinder spread, while a
+# spread of 0.0 still returns an exactly even engine.
+CYLINDER_SIGMA_PCT = 1.5
+
+
+def sample_variant(rng: np.random.Generator, spread_pct: float) -> Dict[str, Any]:
     """
-    Draws one engine's build deviations: each multiplier normal about 1.0 with
-    ``spread_pct`` percent as its standard deviation, truncated at +/- 3 sigma.
+    Draws one engine's build deviations: each engine-level multiplier normal
+    about 1.0 with ``spread_pct`` percent as its standard deviation, truncated
+    at +/- 3 sigma.
+
+    The per-cylinder multipliers are drawn at ``min(spread_pct, 1.5)`` percent
+    and then divided by their own mean, so the four always average exactly 1.0.
+    Cylinder imbalance is therefore pure redistribution between cylinders: it
+    changes which cylinder runs hot, never the engine's total fuelling or heat
+    rejection.
 
     :param spread_pct: standard deviation as a percentage. 0.0 returns exact
         datasheet values, which is what keeps the committed datasets valid.
     """
     sigma = spread_pct / 100.0
     if sigma <= 0.0:
-        return {k: 1.0 for k in VARIANT_KEYS}
+        variant: Dict[str, Any] = {k: 1.0 for k in VARIANT_KEYS}
+        variant.update({k: [1.0] * 4 for k in CYLINDER_VARIANT_KEYS})
+        return variant
+
     lo, hi = 1.0 - 3.0 * sigma, 1.0 + 3.0 * sigma
-    return {k: float(np.clip(rng.normal(1.0, sigma), lo, hi)) for k in VARIANT_KEYS}
+    variant = {k: float(np.clip(rng.normal(1.0, sigma), lo, hi)) for k in VARIANT_KEYS}
+
+    cyl_sigma = min(spread_pct, CYLINDER_SIGMA_PCT) / 100.0
+    c_lo, c_hi = 1.0 - 3.0 * cyl_sigma, 1.0 + 3.0 * cyl_sigma
+    for key in CYLINDER_VARIANT_KEYS:
+        draw = np.clip(rng.normal(1.0, cyl_sigma, size=4), c_lo, c_hi)
+        variant[key] = [float(x) for x in draw / draw.mean()]
+    return variant
 
 
 @dataclass
@@ -132,16 +167,28 @@ class MeanValueEngineModel:
         # Build Variant (unit-to-unit deviation from datasheet, fixed for the
         # engine's life). Deliberately set outside reset(): a variant is a
         # property of the unit, not of the run.
-        unknown = set(variant or {}) - set(VARIANT_KEYS)
+        unknown = set(variant or {}) - set(VARIANT_KEYS) - set(CYLINDER_VARIANT_KEYS)
         if unknown:
             raise ValueError(f"Unknown engine variant keys: {sorted(unknown)}")
-        self.variant: Dict[str, float] = {k: 1.0 for k in VARIANT_KEYS}
-        self.variant.update({k: float(v) for k, v in (variant or {}).items()})
+        self.variant: Dict[str, Any] = {k: 1.0 for k in VARIANT_KEYS}
+        self.variant.update({k: [1.0] * self.cylinders for k in CYLINDER_VARIANT_KEYS})
+        for key, value in (variant or {}).items():
+            if key in CYLINDER_VARIANT_KEYS:
+                per_cyl = [float(x) for x in value]
+                if len(per_cyl) != self.cylinders:
+                    raise ValueError(
+                        f"Engine variant {key!r} needs {self.cylinders} entries, "
+                        f"got {len(per_cyl)}")
+                self.variant[key] = per_cyl
+            else:
+                self.variant[key] = float(value)
         self.turbo_efficiency_mult = self.variant["turbo_efficiency_mult"]
         self.volumetric_efficiency_mult = self.variant["volumetric_efficiency_mult"]
         self.fmep_mult = self.variant["fmep_mult"]
         self.oil_pump_efficiency_mult = self.variant["oil_pump_efficiency_mult"]
         self.combustion_efficiency_mult = self.variant["combustion_efficiency_mult"]
+        self.cyl_flow_mult = self.variant["cyl_flow_mult"]
+        self.cyl_cooling_mult = self.variant["cyl_cooling_mult"]
 
     def reset(self, idle: bool = False):
         """
@@ -226,7 +273,7 @@ class MeanValueEngineModel:
         cyl_fuel_kgps = []
         cyl_lambdas = []
         for i in range(self.cylinders):
-            f_i = (base_fuel_kgps / self.cylinders) * self.cylinder_fuel_trim[i]
+            f_i = (base_fuel_kgps / self.cylinders) * self.cylinder_fuel_trim[i] * self.cyl_flow_mult[i]
             # Timing jitter drops combustion efficiency
             jitter_loss = max(0.0, 1.0 - 0.015 * abs(self.timing_jitter_deg))
             cyl_fuel_kgps.append(f_i * jitter_loss)
@@ -304,8 +351,8 @@ class MeanValueEngineModel:
 
         # Per-Cylinder CHT & EGT Equations
         for i in range(self.cylinders):
-            fuel_ratio_i = self.cylinder_fuel_trim[i]
-            cooling_ratio_i = self.cylinder_cooling_trim[i]
+            fuel_ratio_i = self.cylinder_fuel_trim[i] * self.cyl_flow_mult[i]
+            cooling_ratio_i = self.cylinder_cooling_trim[i] * self.cyl_cooling_mult[i]
 
             # EGT: function of air-fuel ratio, fuel trim, throttle, and ignition timing
             fuel_delta_egt = 0.0

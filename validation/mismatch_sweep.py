@@ -18,6 +18,9 @@ Systems compared, both frozen at datasheet knowledge before the sweep begins:
   3. Residual control -- the same recipe as (2) but on residuals, so the
                       residual-vs-raw comparison cannot be confounded by the
                       shipped checkpoint having had a different training schedule
+  4. ENGINE-TWIN + adaptation -- the shipped checkpoint again, with
+                      digital_twin/baseline_adapter.py learning this engine's
+                      standing offset online during steady, quiet flight
 
 Nothing here writes to data/datasets/. Each spread level is generated into a
 temporary directory and discarded.
@@ -37,9 +40,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from data.generate_dataset import generate_heldout_split
+from digital_twin.baseline_adapter import BaselineAdapter
 from digital_twin.health_index import HealthIndexEngine
-from models.fault_classifier import FaultDiagnosisEngine, CLASS_TO_IDX
-from simulation.mvem import MeanValueEngineModel, VARIANT_KEYS
+from models.anomaly_autoencoder import AnomalyDetector, RESIDUAL_CHANNELS
+from models.fault_classifier import FaultDiagnosisEngine, CLASS_TO_IDX, FAULT_CLASSES
+from simulation.mvem import MeanValueEngineModel, VARIANT_KEYS, CYLINDER_VARIANT_KEYS
 from train_and_export_models import extract_residuals_from_df
 from validation.ablation import RAW_CHANNELS, _train_classifier, _score
 
@@ -56,7 +61,18 @@ SPREAD_LEVELS = [0.0, 2.0, 5.0, 10.0]
 # convention as validation/benchmark.py, so latencies are comparable.
 MISS_PENALTY_S = 30.0
 
-# Regression floor. ENGINE-TWIN measures 0.8975 macro F1 at 5% build spread on
+# The three classes a per-cylinder build imbalance makes hardest. The baseline
+# twin models four identical cylinders, so a standing imbalance in the plant
+# presents as exactly the signature these classes are defined by: one cylinder
+# running richer, leaner or hotter than its neighbours. If model mismatch is
+# going to break anything, it breaks these first.
+CYLINDER_FAULT_CLASSES = (
+    "LEAN_MIXTURE_CYL3",
+    "RICH_MIXTURE_CYL1",
+    "COOLING_DEGRADATION_CYL2",
+)
+
+# Regression floor. ENGINE-TWIN measures 0.8949 macro F1 at 5% build spread on
 # the reference run recorded in README.md (against 0.9771 with perfect knowledge
 # -- the mismatch costs it most of its margin over raw telemetry). The bound sits
 # a clear margin below the measured value: low enough to survive retraining and
@@ -109,12 +125,71 @@ def _metrics(df: pd.DataFrame, y_true: np.ndarray, preds: np.ndarray,
              healthy_sorties: np.ndarray) -> Dict[str, float]:
     n_healthy = int(healthy_sorties.sum())
     far = float((preds[healthy_sorties] != CLASS_TO_IDX["HEALTHY"]).sum()) / max(1, n_healthy) * 100.0
+    per_class = f1_score(y_true, preds, average=None,
+                         labels=list(range(len(FAULT_CLASSES))), zero_division=0)
     return {
         "accuracy": accuracy_score(y_true, preds) * 100.0,
         "macro_f1": float(f1_score(y_true, preds, average="macro")),
         "false_alarm_pct": far,
         "latency_s": _mean_detection_latency(df, preds),
+        "cylinder_class_f1": {c: float(per_class[CLASS_TO_IDX[c]])
+                              for c in CYLINDER_FAULT_CLASSES},
     }
+
+
+def _adapted_predictions(test_df: pd.DataFrame, X_res: np.ndarray,
+                         shipped: FaultDiagnosisEngine,
+                         detector: AnomalyDetector) -> np.ndarray:
+    """
+    Replays the held-out sorties through the shipped stack with baseline
+    adaptation live, and returns the predicted class per frame.
+
+    Each sortie is a different engine, so each gets its own adapter. The replay
+    is inherently sequential in time -- the bias at frame k depends on the
+    verdict at frame k-1 -- but the sorties are independent of each other, so
+    all of them are stepped together and the two networks see one batch per time
+    index instead of one call per frame.
+    """
+    run_ids = test_df["run_id"].to_numpy()
+    order = np.unique(run_ids)
+    lengths = {int(r): int((run_ids == r).sum()) for r in order}
+    if len(set(lengths.values())) != 1:
+        raise ValueError(f"sorties have differing lengths: {sorted(set(lengths.values()))}")
+    n_runs, T = len(order), next(iter(lengths.values()))
+
+    idx = np.stack([np.flatnonzero(run_ids == r) for r in order])   # (n_runs, T)
+    R = X_res[idx]                                                   # (n_runs, T, 15)
+    phases = test_df["phase"].to_numpy()[idx]                        # (n_runs, T)
+
+    adapters = [BaselineAdapter() for _ in range(n_runs)]
+    preds = np.zeros((n_runs, T), dtype=np.int64)
+    healthy_idx = CLASS_TO_IDX["HEALTHY"]
+
+    for t in range(T):
+        bias = np.array([a.bias_vector() for a in adapters], dtype=np.float32)
+        adapted = (R[:, t, :] - bias).astype(np.float32)
+        x = torch.tensor(adapted)
+        with torch.no_grad():
+            recon, _ = detector.model(x)
+            mse = torch.mean((x - recon) ** 2, dim=1).numpy()
+            logits, _ = shipped.model(x)
+            step_preds = logits.argmax(dim=1).numpy()
+        preds[:, t] = step_preds
+
+        is_anom = mse > detector.threshold
+        for i, adapter in enumerate(adapters):
+            adapter.update(
+                {ch: float(R[i, t, k]) for k, ch in enumerate(RESIDUAL_CHANNELS)},
+                dt_s=0.1,
+                phase=str(phases[i, t]),
+                is_anomalous=bool(is_anom[i]),
+                fault_annunciated=bool(step_preds[i] != healthy_idx),
+            )
+
+    # Unpack back into the frame order the metrics expect.
+    out = np.zeros(len(test_df), dtype=np.int64)
+    out[idx.reshape(-1)] = preds.reshape(-1)
+    return out
 
 
 def run_mismatch_sweep(spread_levels: List[float] = None) -> Dict[str, object]:
@@ -143,6 +218,7 @@ def run_mismatch_sweep(spread_levels: List[float] = None) -> Dict[str, object]:
 
     shipped = FaultDiagnosisEngine(str(SAVED_MODELS_DIR / "fault_classifier.pt"))
     assert shipped.is_trained, "shipped fault_classifier.pt failed to load"
+    detector = AnomalyDetector(str(SAVED_MODELS_DIR / "anomaly_autoencoder.pt"))
     net_raw, norm_raw = _train_classifier(X_train_raw, y_train)
     net_res, norm_res = _train_classifier(X_train_res, y_train)
     print(f"  shipped checkpoint loaded; raw and residual control arms trained "
@@ -169,6 +245,9 @@ def run_mismatch_sweep(spread_levels: List[float] = None) -> Dict[str, object]:
         # the x-axis is the measured deviation rather than only the requested one.
         per_run_variant = test_df.groupby("run_id")[list(VARIANT_KEYS)].first()
         realised_pct = float(np.abs(per_run_variant.to_numpy() - 1.0).mean() * 100.0)
+        cyl_cols = [f"{k}_{i}" for k in CYLINDER_VARIANT_KEYS for i in range(1, 5)]
+        per_run_cyl = test_df.groupby("run_id")[cyl_cols].first()
+        realised_cyl_pct = float(np.abs(per_run_cyl.to_numpy() - 1.0).mean() * 100.0)
 
         with torch.no_grad():
             logits, _ = shipped.model(torch.tensor(X_res, dtype=torch.float32))
@@ -183,20 +262,28 @@ def run_mismatch_sweep(spread_levels: List[float] = None) -> Dict[str, object]:
         m_twin = _metrics(test_df, y_true, preds_twin, healthy_sorties)
         m_raw = _metrics(test_df, y_true, _preds(net_raw, norm_raw, X_raw), healthy_sorties)
         m_ctl = _metrics(test_df, y_true, _preds(net_res, norm_res, X_res), healthy_sorties)
+        m_adapt = _metrics(test_df, y_true,
+                           _adapted_predictions(test_df, X_res, shipped, detector),
+                           healthy_sorties)
 
         rows.append({
             "spread_pct": spread,
             "realised_mean_abs_dev_pct": realised_pct,
+            "realised_cyl_mean_abs_dev_pct": realised_cyl_pct,
             "n_frames": int(len(test_df)),
             "n_healthy_sortie_frames": int(healthy_sorties.sum()),
             "engine_twin": m_twin,
             "raw_telemetry": m_raw,
             "residual_control": m_ctl,
+            "engine_twin_adapted": m_adapt,
         })
-        print(f"  {len(test_df):,} frames | mean |deviation| {realised_pct:.2f}% | "
-              f"twin F1 {m_twin['macro_f1']:.4f}  raw F1 {m_raw['macro_f1']:.4f}")
+        print(f"  {len(test_df):,} frames | mean |deviation| engine {realised_pct:.2f}% / "
+              f"cylinder {realised_cyl_pct:.2f}% | "
+              f"twin F1 {m_twin['macro_f1']:.4f}  +adapt {m_adapt['macro_f1']:.4f}  "
+              f"raw F1 {m_raw['macro_f1']:.4f}")
 
     _print_table(rows)
+    _print_cylinder_table(rows)
     verdict = _print_verdict(rows)
 
     RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -231,6 +318,7 @@ def _print_table(rows: List[Dict]) -> None:
     print("False alarms are counted on sorties that are healthy end to end.")
     print(f"Latency is mean seconds to first correct call, {MISS_PENALTY_S:.0f} s charged for a miss.\n")
     for key, title in (("engine_twin", "ENGINE-TWIN (physics residuals, shipped checkpoint)"),
+                       ("engine_twin_adapted", "ENGINE-TWIN + online baseline adaptation"),
                        ("raw_telemetry", "Raw telemetry (identical network, identical recipe)"),
                        ("residual_control", "Residual control (identical recipe to the raw arm)")):
         print(f"{title}")
@@ -240,6 +328,31 @@ def _print_table(rows: List[Dict]) -> None:
             m = r[key]
             print(f"  {r['spread_pct']:>6.1f}% | {m['accuracy']:>8.2f}% | {m['macro_f1']:>9.4f} | "
                   f"{m['false_alarm_pct']:>11.2f}% | {m['latency_s']:>8.2f}s")
+        print()
+
+
+def _print_cylinder_table(rows: List[Dict]) -> None:
+    """
+    Per-class F1 for the three faults a per-cylinder build imbalance confounds.
+    These are the classes the imbalance makes hardest, which is the point of
+    reporting them separately rather than letting the macro average hide them.
+    """
+    print("=" * 86)
+    print("PER-CYLINDER FAULT SEPARABILITY UNDER BUILD IMBALANCE")
+    print("=" * 86)
+    print("The plant's four cylinders are unevenly built; the twin's baseline models them")
+    print("as identical. These three classes are defined by exactly that kind of asymmetry.\n")
+    for key, title in (("engine_twin", "ENGINE-TWIN (physics residuals, shipped checkpoint)"),
+                       ("engine_twin_adapted", "ENGINE-TWIN + online baseline adaptation"),
+                       ("raw_telemetry", "Raw telemetry (identical network, identical recipe)")):
+        print(f"{title}")
+        header = f"  {'Spread':>7} | " + " | ".join(f"{c:>24}" for c in CYLINDER_FAULT_CLASSES)
+        print(header)
+        print("  " + "-" * (len(header) - 2))
+        for r in rows:
+            cells = " | ".join(f"{r[key]['cylinder_class_f1'][c]:>24.4f}"
+                               for c in CYLINDER_FAULT_CLASSES)
+            print(f"  {r['spread_pct']:>6.1f}% | {cells}")
         print()
 
 
@@ -262,6 +375,10 @@ def _print_verdict(rows: List[Dict]) -> Dict[str, object]:
     print(f"  ENGINE-TWIN        loses {d_twin:.4f} macro F1 and gains {far_twin:+.2f} pp false alarms")
     print(f"  Raw telemetry      loses {d_raw:.4f} macro F1 and gains {far_raw:+.2f} pp false alarms")
     print(f"  Residual control   loses {d_ctl:.4f} macro F1  (same recipe as the raw arm)")
+    d_adapt = base["engine_twin_adapted"]["macro_f1"] - worst["engine_twin_adapted"]["macro_f1"]
+    far_adapt = (worst["engine_twin_adapted"]["false_alarm_pct"]
+                 - base["engine_twin_adapted"]["false_alarm_pct"])
+    print(f"  ENGINE-TWIN+adapt  loses {d_adapt:.4f} macro F1 and gains {far_adapt:+.2f} pp false alarms")
 
     graceful = d_ctl < d_raw
     if graceful:
@@ -279,6 +396,8 @@ def _print_verdict(rows: List[Dict]) -> Dict[str, object]:
         "residual_control_f1_drop": d_ctl,
         "twin_far_rise_pp": far_twin,
         "raw_far_rise_pp": far_raw,
+        "adapted_f1_drop": d_adapt,
+        "adapted_far_rise_pp": far_adapt,
         "residual_degrades_more_gracefully": bool(graceful),
         "max_spread_pct": worst["spread_pct"],
     }

@@ -259,6 +259,63 @@ true speed regardless of how many clients are attached.
 
 ---
 
+## 6b. MODEL MISMATCH, ONLINE ADAPTATION & END-OF-LIFE DEFINITION
+
+Every figure in §3 gives the twin perfect knowledge of the engine it shadows: the
+plant MVEM and the baseline MVEM carry identical constants. In service that is
+never true. `validation/mismatch_sweep.py` measures the cost by deviating the
+simulated engine — turbo and volumetric efficiency, FMEP, oil-pump and combustion
+efficiency, plus a fixed per-cylinder flow and cooling imbalance — while leaving
+the twin's baseline at datasheet. The twin is never told.
+
+| Engine build spread | 0 % | 2 % | 5 % | 10 % |
+|:--|:---:|:---:|:---:|:---:|
+| ENGINE-TWIN macro F1 | 0.9771 | 0.9623 | 0.8949 | 0.8160 |
+| ENGINE-TWIN false alarms | 0.43 % | 4.03 % | 34.93 % | 54.65 % |
+| Black-box ML macro F1 | 0.9155 | 0.9118 | 0.8930 | 0.8247 |
+| Black-box ML false alarms | 40.45 % | 40.69 % | 43.79 % | 50.88 % |
+
+**The result does not favour us and is reported as measured.** Across 0 → 10 %
+spread the residual representation loses 0.1611 macro F1 against the black-box's
+0.0907. Its F1 advantage is gone by 5 % spread; at 10 % the black-box is
+marginally ahead. False alarms — the metric where physics anchoring wins by two
+orders of magnitude under perfect knowledge — degrade hardest. A third arm
+trained with the black-box's own recipe on residuals loses 0.1499, confirming the
+representation degrades rather than the training schedule.
+
+The mechanism is that a residual is measurement minus baseline prediction; when
+the baseline is wrong about the unit, every residual carries a standing offset a
+healthy-trained classifier reads as a fault. The damage concentrates: per-cylinder
+build imbalance drives `RICH_MIXTURE_CYL1` from 0.9627 to 0.7749 at 5 % and 0.6140
+at 10 %, because a cylinder built with above-average flow *is* a mild rich trim on
+that cylinder. On that class the black-box is the more robust of the two at 10 %
+(0.7434 against 0.6140). `COOLING_DEGRADATION_CYL2` holds at 0.9101 throughout.
+
+`digital_twin/baseline_adapter.py` estimates the standing offset online — one
+additive bias per residual channel, updated only while the anomaly gate is quiet
+and no fault is annunciated, clamped to ±1.5 σ, frozen outside steady flight. On
+the bench it works: `test_baseline_adapter.py` measures the healthy false-alarm
+rate falling from 85.82 % to 11.05 % after convergence, a fault injected after
+convergence still caught 0.50 s after onset, and a fault injected *during*
+convergence not absorbed (the gate froze adaptation on 99.2 % of post-onset frames
+and the learned oil bias stayed at 0.050 σ against the 1.500 σ the same healthy
+engine learns). **On the held-out sorties it is a wash**, because adaptation needs
+about 90 s of quiet steady flight and no sortie in the set contains that much
+loiter — the median is 69 s, the longest 86 s. It never converges there. A second
+limit is structural: mismatch large enough to hold the anomaly gate open
+continuously stops the adapter learning anything at all.
+
+End-of-life is now defined per subsystem in engine units in `configs/*.json`, and
+`HealthIndexEngine.end_of_life_criteria()` maps each to the health value it
+corresponds to under the current σ and α — physical limit in, percentage out.
+`models/rul_estimator.py` projects the subsystem with the least margin to its own
+limit, and the alert card names the criterion ("Oil pressure projected to reach
+2.0 bar in 18.0–25.0 flight hours") rather than a bare number. The mapping
+exposed that the previous fixed 30 % threshold was far more conservative than any
+documented limit: the stated limits map to 0.10 %–12.20 % health.
+
+---
+
 ## 7. KNOWN LIMITATIONS
 
 Stated here rather than left to be discovered, because a reviewer who finds an
@@ -293,6 +350,23 @@ unstated limitation discounts everything else in the document.
 7. **Taxonomy scope.** Nine failure modes plus healthy. Real engines fail in
    compound and cascading ways this taxonomy does not name, though the
    unsupervised trigger will still flag them as anomalous.
+8. **The residual representation degrades badly under model mismatch, and worse
+   than the baseline it beats.** Quantified in §6b: at 5 % build spread false
+   alarms rise from 0.43 % to 34.93 %, and across 0 → 10 % spread the twin loses
+   0.1611 macro F1 against the black-box's 0.0907. Per-unit parameter
+   identification on the ground is a precondition for deployment, not a
+   refinement. This is the most serious limitation in this document.
+9. **Online adaptation does not yet close that gap.** It is implemented and works
+   on a 240 s steady leg (85.82 % → 11.05 % false alarms), but needs ~90 s of
+   quiet steady flight to converge and no held-out sortie contains it, so it is a
+   wash on the sweep. It also cannot learn at all when mismatch holds the anomaly
+   gate permanently open.
+10. **Two of the five end-of-life limits are ours with no external source.** The
+   2.5 g 2X-vibration figure and the 90 °C EGT-spread margin are reasoned from
+   the model's own behaviour, not taken from a manufacturer limit. Oil pressure,
+   CHT and bus voltage trace to the engine envelope and MIL-STD-704F. All five
+   are stated in engine units in `configs/*.json` so an operator can replace
+   them.
 
 ---
 

@@ -31,6 +31,7 @@ from simulation.sensors import SensorModel, SensorReadings
 from simulation.fault_injector import FaultInjector, FaultType, FaultConfig
 from simulation import engine_registry
 from digital_twin.health_index import HealthIndexEngine
+from digital_twin.baseline_adapter import BaselineAdapter
 from digital_twin.state_estimator import PhysicsAnchoredKalmanEstimator
 from digital_twin.twin_state import DigitalTwinState, SubsystemHealth, AIHealthState, StateLevel
 from digital_twin.flight_recorder import (
@@ -70,6 +71,10 @@ class EngineTwinRuntime:
 
         self.anomaly_detector = AnomalyDetector(str(ae_path) if ae_path.exists() else None)
         self.fault_classifier = FaultDiagnosisEngine(str(clf_path) if clf_path.exists() else None)
+        # Learns the standing offset between this engine and the datasheet
+        # baseline, so downstream consumers see deviation from THIS unit's
+        # normal rather than from the book.
+        self.baseline_adapter = BaselineAdapter()
         self.shap_explainer = GradientAttributionExplainer(self.fault_classifier.model if self.fault_classifier.is_trained else None)
 
         self.sim_time_s = 0.0
@@ -148,6 +153,8 @@ class EngineTwinRuntime:
         self.injector = FaultInjector(self.mvem_physical, self.sensors)
         self.ekf = PhysicsAnchoredKalmanEstimator()
         self.rul_engine.reset()
+        # A reset means a different engine; the learned offset does not carry over.
+        self.baseline_adapter.reset()
         self.latest_alert = None
         self.active_fault_name = "HEALTHY"
 
@@ -258,7 +265,14 @@ class EngineTwinRuntime:
             "vibration_rms": mvem_expected.vibration_rms_g,
             "bus_voltage": mvem_expected.bus_voltage_v
         }
-        residuals = self.health_engine.compute_residuals(sensor_dict, mvem_dict)
+        raw_residuals = self.health_engine.compute_residuals(sensor_dict, mvem_dict)
+
+        # 6b. Baseline adaptation. Apply the bias learned so far, then update it
+        # at the end of the tick with this tick's gate decisions. Applying first
+        # and updating after keeps the loop causal: the estimate never depends
+        # on a verdict derived from itself.
+        residuals = self.baseline_adapter.apply(raw_residuals)
+
         sensor_check = self.sensor_validator.validate(sensor_dict, mvem_dict, residuals)
 
         if sensor_check.is_sensor_fault:
@@ -285,8 +299,21 @@ class EngineTwinRuntime:
             conf = 99.8
             sev = 0.0
 
+        # 9b. Advance the baseline estimate. Gated on this tick's verdict: a
+        # developing fault holds the estimate still rather than being learned
+        # as this engine's normal.
+        self.baseline_adapter.update(
+            raw_residuals,
+            dt_s=dt_s,
+            phase=flight.phase,
+            is_anomalous=is_anom,
+            fault_annunciated=(fault_class != "HEALTHY"),
+        )
+
         # 10. RUL Prognostics
-        rul_pred = self.rul_engine.update(t, subsystem_health.overall_health)
+        rul_pred = self.rul_engine.update(
+            t, subsystem_health.overall_health, subsystem_health=subsystem_health
+        )
 
         # 11. XAI local attribution (gradient x input)
         shap_exps = self.shap_explainer.explain(residuals, fault_class)
@@ -358,6 +385,9 @@ class EngineTwinRuntime:
             estimated_cht_c=ekf_est["estimated_cht_c"],
             # Residuals & Health
             residuals=residuals,
+            raw_residuals=raw_residuals,
+            baseline_bias={ch: round(v, 3) for ch, v in self.baseline_adapter.bias.items()},
+            baseline_adapted=self.baseline_adapter.is_converged,
             health=subsystem_health,
             ai_prognostics=ai_health_state,
             provenance="SIMULATED"
@@ -369,6 +399,9 @@ class EngineTwinRuntime:
         # bytes and recording costs one serialisation rather than two.
         frame = state.to_dict()
         frame["active_alert"] = self.latest_alert
+        # Full adaptation status: bias vector, converged flag, how far through
+        # convergence it is, and why it is frozen when it is.
+        frame["baseline_adaptation"] = self.baseline_adapter.to_dict()
         frame["engine"] = {
             "id": self.engine_id,
             "name": self.engine_name,

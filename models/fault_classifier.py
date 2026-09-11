@@ -1,5 +1,5 @@
 """
-Multi-Task Fault Classification & Severity Network (SIH26054 Section 12, 14)
+Multi-Task Fault Classification & Severity Network (SIH26054)
 Classifies engine anomalies into specific root causes and estimates degradation severity.
 Includes temperature scaling for calibrated confidence estimation.
 """

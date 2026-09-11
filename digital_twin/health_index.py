@@ -1,14 +1,53 @@
 """
-Physics-Anchored Health Index Engine (SIH26054 Section 11.2)
+Physics-Anchored Health Index Engine (SIH26054)
 Calculates continuous 0–100% health scores across engine subsystems based on
 normalized residuals against the MVEM expectation:
     Health_sub = 100 * exp(-alpha * |(y_meas - y_mvem) / sigma|)
 """
-from typing import Dict, List, Tuple, Any
+from dataclasses import dataclass, asdict
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Any
+import json
 import math
 import numpy as np
 
 from .twin_state import SubsystemHealth, StateLevel
+
+DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "configs" / "engine_config.json"
+
+
+@dataclass
+class EndOfLifeCriterion:
+    """
+    One subsystem's end-of-life condition, stated in engine units and carrying
+    the health-index value that condition corresponds to.
+
+    The direction of the derivation matters: the physical limit is the input and
+    the health percentage is the output. Health index is a presentation layer
+    over residuals, and its alphas are hand-tuned; expressing condemnation in
+    those units would mean the fleet's retirement criterion moves whenever
+    somebody retunes a display constant.
+    """
+    subsystem: str
+    criterion: str
+    channel: str
+    limit_value: float
+    limit_units: str
+    nominal_value: float
+    at_condition: str
+    deviation_physical: float     # |nominal - limit| in the channel's own units
+    deviation_sigma: float        # the same deviation in sensor sigmas
+    health_at_limit: float        # what the health index reads there
+    operator_text: str
+    source: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    def projected_text(self, hours_min: float, hours_max: float) -> str:
+        """e.g. 'oil pressure projected to reach 2.0 bar in 18.0-25.0 flight hours'."""
+        what = self.operator_text.format(limit=self.limit_value)
+        return f"{what} in {hours_min:.1f}-{hours_max:.1f} flight hours"
 
 class HealthIndexEngine:
     """
@@ -51,6 +90,76 @@ class HealthIndexEngine:
             "electrical": 0.08,
             "cooling": 0.07
         }
+
+    # -----------------------------------------------------------------
+    # Physical limits -> health index
+    # -----------------------------------------------------------------
+    def health_at_physical_deviation(self, channel_key: str, deviation_physical: float) -> float:
+        """
+        The health index value a deviation of the given physical size produces on
+        this channel, under the current sigma and alpha.
+
+        This is the bridge between an engine limit ("oil pressure 2.0 bar") and
+        the units the index happens to be expressed in. It applies the same
+        sigma normalisation, deadband and exponential the live path applies, so
+        the number it returns is the number the running system would report.
+        """
+        sigma = self.sigma.get(channel_key)
+        if sigma is None:
+            raise KeyError(f"no sigma calibrated for channel {channel_key!r}")
+        residual_norm = abs(deviation_physical) / sigma
+        return self._calc_subscore(residual_norm, channel_key)
+
+    def end_of_life_criteria(
+        self, config_path: Optional[Any] = None
+    ) -> Dict[str, EndOfLifeCriterion]:
+        """
+        Loads the per-subsystem end-of-life limits from an engine config and maps
+        each to its health-index equivalent.
+
+        The limits are physical and come from the config; the percentages are
+        derived here. Swapping in another engine's config swaps the limits
+        without touching any code.
+        """
+        path = Path(config_path) if config_path is not None else DEFAULT_CONFIG_PATH
+        config = json.loads(Path(path).read_text())
+        limits = config.get("end_of_life_limits", {})
+
+        criteria: Dict[str, EndOfLifeCriterion] = {}
+        for subsystem, spec in limits.items():
+            if subsystem.startswith("_"):
+                continue
+            channel = spec["channel"]
+            deviation = abs(float(spec["nominal_value"]) - float(spec["limit_value"]))
+            # Turbo is already stated as a deficit rather than an absolute, so
+            # the figure in the config IS the deviation.
+            if "deficit" in spec.get("limit_units", ""):
+                deviation = abs(float(spec["limit_value"]))
+            health_at_limit = self.health_at_physical_deviation(channel, deviation)
+            # A limit that maps to near-full health is a config error, not a very
+            # healthy engine: it means nominal and limit were set to the same
+            # value, and projecting to it would condemn the engine immediately.
+            if health_at_limit > 60.0:
+                raise ValueError(
+                    f"end-of-life limit for {subsystem!r} maps to {health_at_limit:.1f}% health "
+                    f"({deviation:g} {spec.get('limit_units','')} = "
+                    f"{deviation / self.sigma[channel]:.1f} sigma). Check nominal_value against "
+                    f"limit_value in the engine config.")
+            criteria[subsystem] = EndOfLifeCriterion(
+                subsystem=subsystem,
+                criterion=spec["criterion"],
+                channel=channel,
+                limit_value=float(spec["limit_value"]),
+                limit_units=spec["limit_units"],
+                nominal_value=float(spec["nominal_value"]),
+                at_condition=spec.get("at_condition", ""),
+                deviation_physical=round(deviation, 4),
+                deviation_sigma=round(deviation / self.sigma[channel], 2),
+                health_at_limit=health_at_limit,
+                operator_text=spec.get("operator_text", f"{channel} projected to reach {{limit}}"),
+                source=spec.get("source", ""),
+            )
+        return criteria
 
     def compute_residuals(
         self,

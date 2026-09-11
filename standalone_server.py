@@ -222,7 +222,9 @@ class StandaloneEngineRuntime:
                 conf = 99.8
                 sev = 0.0
 
-            rul_pred = self.rul_engine.update(t, subsystem_health.overall_health)
+            rul_pred = self.rul_engine.update(
+            t, subsystem_health.overall_health, subsystem_health=subsystem_health
+        )
             shap_exps = self.shap_explainer.explain(residuals, fault_class)
 
             alert = AlertGenerator.generate(

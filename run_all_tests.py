@@ -5,7 +5,8 @@ Executes all project verification suites and outputs a consolidated test report:
 2. AI Layer, EKF, RUL & XAI Tests (test_ai_layer.py)
 3. Scientific Benchmark vs Baselines (validation/benchmark.py)
 4. Architectural Ablation Studies (validation/ablation.py)
-5. Model-Mismatch Degradation Sweep (validation/mismatch_sweep.py)
+5. Online Baseline Adaptation (test_baseline_adapter.py)
+6. Model-Mismatch Degradation Sweep (validation/mismatch_sweep.py)
 """
 import sys
 import subprocess
@@ -45,9 +46,10 @@ def main():
         ("Step 5: Adversarial Stress & Failure Engineering Suite", "validation/stress_testing.py"),
         ("Step 6: Empirical Baseline Comparison (EIS vs ML vs ENGINE-TWIN)", "validation/benchmark.py"),
         ("Step 7: Architectural Ablation Study (Physics vs Raw ML)", "validation/ablation.py"),
-        ("Step 8: Model-Mismatch Degradation Sweep (twin vs deviating engine)", "validation/mismatch_sweep.py"),
-        ("Step 9: Multi-Engine Scalability Proof (Rotax 914 Flat-Four)", "tools/test_multi_engine_transfer.py"),
-        ("Step 10: Edge Hardware AI Compute & Memory Resource Profiler", "tools/edge_benchmark_profiler.py")
+        ("Step 8: Online Baseline Adaptation (gating, convergence, absorption)", "test_baseline_adapter.py"),
+        ("Step 9: Model-Mismatch Degradation Sweep (twin vs deviating engine)", "validation/mismatch_sweep.py"),
+        ("Step 10: Multi-Engine Scalability Proof (Rotax 914 Flat-Four)", "tools/test_multi_engine_transfer.py"),
+        ("Step 11: Edge Hardware AI Compute & Memory Resource Profiler", "tools/edge_benchmark_profiler.py")
     ]
 
     results = []

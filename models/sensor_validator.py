@@ -1,5 +1,5 @@
 """
-Sensor-vs-Engine Fault Discriminator (SIH26054 Section 14)
+Sensor-vs-Engine Fault Discriminator (SIH26054)
 Performs physical consistency and cross-channel redundancy checks to decouple
 sensor probe failures (e.g. open thermocouple, frozen transducer) from actual engine degradation.
 """

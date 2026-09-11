@@ -19,7 +19,142 @@
   <!-- Monospace throughout: certified-display convention -->
   <link rel="stylesheet" href="/static/vendor/jetbrains.css">
   <!-- GLASS COCKPIT THEME: single source of truth for colour and type -->
-  <link rel="stylesheet" href="/static/theme.css">
+  <link rel="stylesheet" href="/static/theme.css?v=2.0">
+  <style>
+    /* ====================================================================
+       INTERACTIVE HOVER BUTTON (Top-Right "CONSOLE" Shortcut)
+       Guaranteed styling independent of external cache.
+       ==================================================================== */
+    #btn-skip-cover.interactive-hover-btn {
+      position: fixed !important;
+      top: 22px !important;
+      right: 28px !important;
+      z-index: 9999 !important;
+      width: 146px !important;
+      height: 42px !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      overflow: hidden !important;
+      cursor: pointer !important;
+      border-radius: 9999px !important;
+      border: 1px solid rgba(124, 108, 255, 0.45) !important;
+      background: rgba(23, 23, 37, 0.94) !important;
+      backdrop-filter: blur(14px) !important;
+      -webkit-backdrop-filter: blur(14px) !important;
+      font-family: var(--font-mono, "JetBrains Mono", monospace) !important;
+      font-size: 12px !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.12em !important;
+      text-transform: uppercase !important;
+      color: #FFFFFF !important;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), 0 0 16px rgba(124, 108, 255, 0.25) !important;
+      transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.15s ease !important;
+    }
+
+    #btn-skip-cover.interactive-hover-btn .btn-text-init {
+      display: inline-block;
+      transform: translateX(4px);
+      transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      color: #FFFFFF;
+      position: relative;
+      z-index: 2;
+    }
+
+    #btn-skip-cover.interactive-hover-btn:hover .btn-text-init {
+      transform: translateX(50px);
+      opacity: 0;
+    }
+
+    #btn-skip-cover.interactive-hover-btn .btn-hover-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      z-index: 10;
+      opacity: 0;
+      color: #FFFFFF;
+      transform: translateX(40px);
+      transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: none;
+    }
+
+    #btn-skip-cover.interactive-hover-btn:hover .btn-hover-layer {
+      transform: translateX(0);
+      opacity: 1;
+    }
+
+    #btn-skip-cover.interactive-hover-btn .lucide-arrow {
+      width: 15px;
+      height: 15px;
+      stroke: #FFFFFF;
+      stroke-width: 2.5;
+      transition: transform 0.25s ease;
+    }
+
+    #btn-skip-cover.interactive-hover-btn:hover .lucide-arrow {
+      transform: translateX(3px);
+    }
+
+    #btn-skip-cover.interactive-hover-btn .btn-expand-dot {
+      position: absolute;
+      left: 17%;
+      top: 42%;
+      width: 8px;
+      height: 8px;
+      border-radius: 9999px;
+      background: #7C6CFF;
+      transform: scale(1);
+      z-index: 1;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: none;
+    }
+
+    #btn-skip-cover.interactive-hover-btn:hover .btn-expand-dot {
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      transform: scale(1.8);
+      border-radius: 9999px;
+      background: #7C6CFF;
+    }
+
+    #btn-skip-cover.interactive-hover-btn:hover {
+      border-color: #9C90FF !important;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.65), 0 0 24px rgba(124, 108, 255, 0.5) !important;
+    }
+
+    #btn-skip-cover.interactive-hover-btn:active {
+      transform: translateY(1px) !important;
+    }
+
+    body[data-phase="app"] #btn-skip-cover.interactive-hover-btn {
+      display: none !important;
+    }
+
+    .cover.cover-exit #btn-skip-cover.interactive-hover-btn {
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+
+    @media (max-width: 860px) {
+      #btn-skip-cover.interactive-hover-btn {
+        top: 14px !important;
+        right: 14px !important;
+        width: 128px !important;
+        height: 38px !important;
+        font-size: 11px !important;
+      }
+    }
+  </style>
 </head>
 <body class="select-none" data-phase="cover">
 
@@ -31,13 +166,18 @@
        ==================================================================== -->
   <div id="cover" class="cover">
 
-    <!-- Skip straight to the console. The journey is worth taking once; this is
-         for every visit after that, and for a judge who wants the live system
-         first and the argument second. -->
-    <button id="btn-skip-cover" class="cover-skip" onclick="enterApp()"
-            title="Go straight to the ground station (Esc)">
-      <span>Skip to console</span>
-      <span class="cover-skip-arrow" aria-hidden="true">&rarr;</span>
+    <!-- Interactive Hover Button (Top-Right "CONSOLE" Shortcut) -->
+    <button id="btn-skip-cover" class="interactive-hover-btn cover-skip" onclick="enterApp()"
+            title="Directly launch Ground Station Console (Esc)">
+      <span class="btn-text-init">CONSOLE</span>
+      <div class="btn-hover-layer" aria-hidden="true">
+        <span>CONSOLE</span>
+        <svg class="lucide-arrow" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12h14"></path>
+          <path d="m12 5 7 7-7 7"></path>
+        </svg>
+      </div>
+      <div class="btn-expand-dot" aria-hidden="true"></div>
     </button>
 
     <div class="cover-bg" aria-hidden="true">

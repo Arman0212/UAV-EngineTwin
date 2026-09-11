@@ -11,10 +11,26 @@
   "max_boost_bar": 2.45,
   "intercooled": true,
   "altitude_power_derating": [
-    {"altitude_ft": 0, "power_hp": 200.0, "rated_boost_bar": 2.40},
-    {"altitude_ft": 10000, "power_hp": 200.0, "rated_boost_bar": 2.45},
-    {"altitude_ft": 20000, "power_hp": 150.0, "rated_boost_bar": 2.10},
-    {"altitude_ft": 30000, "power_hp": 110.0, "rated_boost_bar": 1.65}
+    {
+      "altitude_ft": 0,
+      "power_hp": 200.0,
+      "rated_boost_bar": 2.4
+    },
+    {
+      "altitude_ft": 10000,
+      "power_hp": 200.0,
+      "rated_boost_bar": 2.45
+    },
+    {
+      "altitude_ft": 20000,
+      "power_hp": 150.0,
+      "rated_boost_bar": 2.1
+    },
+    {
+      "altitude_ft": 30000,
+      "power_hp": 110.0,
+      "rated_boost_bar": 1.65
+    }
   ],
   "nominal_operating_parameters": {
     "manifold_pressure_idle_bar": 1.02,
@@ -37,14 +53,115 @@
     "vibration_alarm_g_rms": 4.5
   },
   "sensor_specifications": {
-    "egt": { "noise_sigma_celsius": 3.5, "tau_lag_seconds": 2.0, "quantization": 0.5, "rate_hz": 5.0 },
-    "cht": { "noise_sigma_celsius": 1.8, "tau_lag_seconds": 3.5, "quantization": 0.2, "rate_hz": 5.0 },
-    "oil_pressure": { "noise_sigma_bar": 0.06, "tau_lag_seconds": 0.4, "quantization": 0.02, "rate_hz": 10.0 },
-    "oil_temp": { "noise_sigma_celsius": 0.9, "tau_lag_seconds": 4.0, "quantization": 0.1, "rate_hz": 2.0 },
-    "manifold_pressure": { "noise_sigma_bar": 0.02, "tau_lag_seconds": 0.1, "quantization": 0.01, "rate_hz": 20.0 },
-    "rpm": { "noise_sigma_rpm": 8.0, "tau_lag_seconds": 0.05, "quantization": 1.0, "rate_hz": 50.0 },
-    "fuel_flow": { "noise_sigma_lph": 0.35, "tau_lag_seconds": 0.8, "quantization": 0.05, "rate_hz": 5.0 },
-    "vibration": { "noise_sigma_g": 0.08, "tau_lag_seconds": 0.02, "quantization": 0.01, "rate_hz": 20.0 },
-    "bus_voltage": { "noise_sigma_v": 0.12, "tau_lag_seconds": 0.1, "quantization": 0.05, "rate_hz": 10.0 }
+    "egt": {
+      "noise_sigma_celsius": 3.5,
+      "tau_lag_seconds": 2.0,
+      "quantization": 0.5,
+      "rate_hz": 5.0
+    },
+    "cht": {
+      "noise_sigma_celsius": 1.8,
+      "tau_lag_seconds": 3.5,
+      "quantization": 0.2,
+      "rate_hz": 5.0
+    },
+    "oil_pressure": {
+      "noise_sigma_bar": 0.06,
+      "tau_lag_seconds": 0.4,
+      "quantization": 0.02,
+      "rate_hz": 10.0
+    },
+    "oil_temp": {
+      "noise_sigma_celsius": 0.9,
+      "tau_lag_seconds": 4.0,
+      "quantization": 0.1,
+      "rate_hz": 2.0
+    },
+    "manifold_pressure": {
+      "noise_sigma_bar": 0.02,
+      "tau_lag_seconds": 0.1,
+      "quantization": 0.01,
+      "rate_hz": 20.0
+    },
+    "rpm": {
+      "noise_sigma_rpm": 8.0,
+      "tau_lag_seconds": 0.05,
+      "quantization": 1.0,
+      "rate_hz": 50.0
+    },
+    "fuel_flow": {
+      "noise_sigma_lph": 0.35,
+      "tau_lag_seconds": 0.8,
+      "quantization": 0.05,
+      "rate_hz": 5.0
+    },
+    "vibration": {
+      "noise_sigma_g": 0.08,
+      "tau_lag_seconds": 0.02,
+      "quantization": 0.01,
+      "rate_hz": 20.0
+    },
+    "bus_voltage": {
+      "noise_sigma_v": 0.12,
+      "tau_lag_seconds": 0.1,
+      "quantization": 0.05,
+      "rate_hz": 10.0
+    }
+  },
+  "end_of_life_limits": {
+    "_note": "SIH26054 does not define end-of-life. Every limit below is chosen by this project, from the engine's own published/derived operating envelope, and is stated in physical units so it can be argued with, replaced by an operator's own maintenance manual figures, or rejected outright. Health-index percentages are DERIVED from these limits, never the other way round.",
+    "oil_system": {
+      "criterion": "Oil pressure at or below limit while at rated RPM",
+      "channel": "oil_pressure",
+      "limit_value": 2.0,
+      "limit_units": "bar",
+      "nominal_value": 4.5,
+      "at_condition": "rated RPM 4200",
+      "operator_text": "oil pressure projected to reach {limit} bar",
+      "source": "nominal_operating_parameters.oil_pressure_min_safe_bar in this file; the minimum-safe figure the sensor model and fault injector are built around. Below it, hydrodynamic bearing film cannot be assumed at rated speed."
+    },
+    "cylinders": {
+      "criterion": "CHT above max continuous, or EGT spread across cylinders beyond margin",
+      "channel": "cht",
+      "limit_value": 220.0,
+      "limit_units": "C",
+      "nominal_value": 175.0,
+      "at_condition": "max continuous power",
+      "secondary_channel": "egt",
+      "secondary_limit_value": 90.0,
+      "secondary_limit_units": "C spread",
+      "operator_text": "cylinder head temperature projected to reach {limit} C",
+      "source": "nominal_operating_parameters.cht_max_continuous_celsius (220 C) in this file. The 90 C EGT-spread margin is this project's own: it is roughly twice the largest spread seen across the healthy training sorties, so it sits outside normal build and instrument scatter without waiting for the 920 C alarm."
+    },
+    "turbo_boost": {
+      "criterion": "Manifold pressure deficit below the rated-boost schedule",
+      "channel": "manifold_pressure",
+      "limit_value": 0.35,
+      "limit_units": "bar deficit",
+      "nominal_value": 2.45,
+      "at_condition": "rated boost for current altitude",
+      "operator_text": "manifold pressure projected to fall {limit} bar below rated boost",
+      "source": "Derived from altitude_power_derating in this file: 0.35 bar is the boost step between the 20,000 ft (2.10 bar / 150 HP) and 30,000 ft (1.65 bar / 110 HP) rows scaled to one derating band. A deficit that size costs a full altitude band of power, which is the point the airframe can no longer hold its ceiling."
+    },
+    "vibration": {
+      "criterion": "2X order vibration amplitude above limit",
+      "channel": "vibration_rms",
+      "limit_value": 2.5,
+      "limit_units": "g",
+      "nominal_value": 1.2,
+      "at_condition": "cruise power",
+      "operator_text": "2X order vibration projected to reach {limit} g",
+      "source": "This project's own figure, set between nominal (1.2 g rms) and the 4.5 g rms alarm in nominal_operating_parameters. The 2X order is the bearing-wear signature the MVEM generates; 2.5 g is where it dominates the 1X fundamental. Replace with the airframe's published vibration survey when one exists."
+    },
+    "electrical": {
+      "criterion": "Bus voltage below limit under full avionics load",
+      "channel": "bus_voltage",
+      "limit_value": 24.0,
+      "limit_units": "V",
+      "nominal_value": 28.0,
+      "at_condition": "full avionics load",
+      "operator_text": "bus voltage projected to fall to {limit} V",
+      "source": "MIL-STD-704F steady-state lower limit for a 28 VDC bus is 22.0 V; 24.0 V is this project's margin above it, so the projection reaches the operator before flight-critical avionics reach their own undervoltage cutouts."
+    }
   }
 }
