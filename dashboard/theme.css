@@ -1803,75 +1803,152 @@ body[data-phase="app"] .btn-cover-return { display: inline-flex; }
    with the scroll cue, which is still the primary invitation.
    ========================================================================== */
 
+.interactive-hover-btn,
 .cover-skip {
-  position: absolute;
-  top: 22px;
+  position: fixed;
+  top: 20px;
   right: 26px;
-  z-index: 6;
+  z-index: 100;
+
+  width: 140px;
+  height: 42px;
+  box-sizing: border-box;
+  padding: 0;
 
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
 
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 7px 13px;
+  overflow: hidden;
+  cursor: pointer;
+
+  border-radius: 9999px;
+  border: 1px solid rgba(124, 108, 255, 0.45);
+  background: rgba(23, 23, 37, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 
   font-family: var(--font-mono);
-  font-size: var(--fs-tick);
+  font-size: 12px;
+  font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--text-dim);
+  color: #FFFFFF;
 
-  cursor: pointer;
-  transition: color var(--dur-quick) var(--ease),
-              border-color var(--dur-quick) var(--ease),
-              background var(--dur-quick) var(--ease);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 16px rgba(124, 108, 255, 0.22);
+  transition: border-color 0.3s var(--ease), box-shadow 0.3s var(--ease);
 }
 
-.cover-skip:hover {
-  color: var(--text-primary);
-  border-color: var(--instrument);
-  background: var(--instrument-band);
+.interactive-hover-btn .btn-text-init {
+  display: inline-block;
+  transform: translateX(4px);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  color: #FFFFFF;
+  position: relative;
+  z-index: 2;
 }
 
-.cover-skip:focus-visible {
+.interactive-hover-btn:hover .btn-text-init {
+  transform: translateX(45px);
+  opacity: 0;
+}
+
+.interactive-hover-btn .btn-hover-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  z-index: 10;
+  opacity: 0;
+  color: #FFFFFF;
+  transform: translateX(35px);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+.interactive-hover-btn:hover .btn-hover-layer {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.interactive-hover-btn .lucide-arrow {
+  width: 15px;
+  height: 15px;
+  stroke: #FFFFFF;
+  stroke-width: 2.5;
+  transition: transform 0.25s var(--ease);
+}
+
+.interactive-hover-btn:hover .lucide-arrow {
+  transform: translateX(2px);
+}
+
+.interactive-hover-btn .btn-expand-dot {
+  position: absolute;
+  left: 17%;
+  top: 42%;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: var(--instrument); /* #7C6CFF */
+  transform: scale(1);
+  z-index: 1;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+.interactive-hover-btn:hover .btn-expand-dot {
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  transform: scale(1.8);
+  border-radius: 9999px;
+  background: var(--instrument);
+}
+
+.interactive-hover-btn:hover {
+  border-color: var(--instrument-hover);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6), 0 0 24px rgba(124, 108, 255, 0.5);
+}
+
+.interactive-hover-btn:focus-visible {
   outline: 2px solid var(--instrument);
   outline-offset: 2px;
-  color: var(--text-primary);
 }
 
-.cover-skip:active { transform: translateY(1px); }
-
-.cover-skip-arrow {
-  color: var(--instrument);
-  transition: transform var(--dur-quick) var(--ease);
+.interactive-hover-btn:active {
+  transform: translateY(1px);
 }
-.cover-skip:hover .cover-skip-arrow { transform: translateX(3px); }
 
 /* Once the console is live the whole cover is display:none, so this goes with
    it — but be explicit, so the rule survives any change to that. */
-body[data-phase="app"] .cover-skip { display: none; }
+body[data-phase="app"] .interactive-hover-btn,
+body[data-phase="app"] .cover-skip { display: none !important; }
 
 /* It also leaves during the exit animation rather than sitting over the
    transition it just triggered. */
+.cover.cover-exit .interactive-hover-btn,
 .cover.cover-exit .cover-skip { opacity: 0; pointer-events: none; }
 
 @media (max-width: 860px) {
-  .cover-skip { top: 14px; right: 14px; padding: 6px 10px; letter-spacing: 0.08em; }
+  .interactive-hover-btn { top: 14px; right: 14px; width: 125px; height: 38px; font-size: 11px; }
 }
 
 @media (max-width: 560px) {
-  /* On a phone the label is the first thing to go, not the control. */
-  .cover-skip span:first-child { display: none; }
-  .cover-skip { padding: 8px 11px; }
-  .cover-skip-arrow { font-size: 13px; }
+  .cover-skip { padding: 7px 11px; }
+  .cover-skip-label { font-size: 11px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .cover-skip,
-  .cover-skip-arrow { transition: none; }
+  .cover-skip-arrow,
+  .cover-skip-pulse { transition: none; animation: none; }
   .cover-skip:active { transform: none; }
   .cover-skip:hover .cover-skip-arrow { transform: none; }
 }
