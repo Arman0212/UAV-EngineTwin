@@ -433,6 +433,70 @@ The MVEM itself is checked against published VRDE derating data: 200 HP at sea
 level and 10,000 ft, 150 HP at 20,000 ft, 110 HP at 30,000 ft, fitted to
 0.00 HP RMSE on power and 0.025 bar on manifold pressure.
 
+### "Your twin has perfect knowledge of your engine. What happens when it doesn't?"
+
+It degrades badly, and faster than the black-box baseline it beats everywhere else.
+
+Every number above this line gives the twin an advantage it will never have in
+service: the plant MVEM and the baseline MVEM are the same model with the same
+constants, so the twin knows the engine exactly. Real units leave the factory off
+datasheet and stay that way. [`validation/mismatch_sweep.py`](validation/mismatch_sweep.py)
+measures the cost by deviating the *simulated engine* — turbo efficiency,
+volumetric efficiency, FMEP, oil-pump efficiency, combustion efficiency — while
+leaving the twin's baseline at datasheet. The twin is never told.
+
+| Engine build spread | 0 % | 2 % | 5 % | 10 % |
+|:--|:---:|:---:|:---:|:---:|
+| **EngineTwin** macro F1 | **0.9771** | **0.9647** | 0.8975 | 0.8152 |
+| Black-box ML macro F1 | 0.9155 | 0.9126 | 0.8946 | **0.8248** |
+| **EngineTwin** false alarms | **0.43 %** | **3.20 %** | 33.85 % | 54.01 % |
+| Black-box ML false alarms | 40.45 % | 40.61 % | 43.81 % | **50.67 %** |
+| **EngineTwin** latency | **2.84 s** | **2.71 s** | **2.88 s** | **4.52 s** |
+| Black-box ML latency | 5.04 s | 5.11 s | 5.24 s | 6.54 s |
+
+**The residual representation does not degrade more gracefully than raw
+telemetry. It degrades less gracefully.** Across 0 → 10 % spread EngineTwin loses
+0.1618 macro F1 while the black-box loses 0.0907. The F1 advantage is gone by 5 %
+spread, and at 10 % the black-box is marginally ahead. False alarms are worse
+still: EngineTwin climbs from 0.43 % to 54.01 %, crossing the black-box's line at
+around 10 % spread — the one metric where the physics baseline was winning by
+two orders of magnitude is the one that collapses hardest.
+
+This is not a training artefact. The sweep carries a third arm — the same network
+trained with the *same* recipe as the black-box, but on residuals — which loses
+0.1544 F1 against the black-box's 0.0907. The representation is what degrades,
+not the schedule.
+
+The mechanism is straightforward once stated. A residual is measurement minus
+baseline prediction. When the baseline is wrong about this particular unit, every
+residual carries a standing offset that has nothing to do with the engine's
+health, and a classifier trained on healthy residuals sitting near zero reads that
+offset as a fault. Raw telemetry never had a baseline to be wrong, so it has less
+to lose. Detection latency is the one place the physics anchoring holds its
+advantage throughout — EngineTwin is still roughly 2 s faster at every spread.
+
+What this means in practice: **the twin needs a per-unit calibration step before
+it can be trusted on an engine it was not fitted to.** At 2 % spread — roughly a
+well-controlled production tolerance — it still scores 0.9647 F1 at 3.20 % false
+alarms and the argument for the residual approach survives intact. Beyond about
+3 % it does not, and parameter identification against the individual unit stops
+being a refinement and becomes a precondition. That work is listed in
+[Deployment roadmap](#deployment-roadmap) and is not implemented here.
+
+![Detection quality against twin/engine model mismatch](docs/figures/mismatch_degradation.png)
+
+One caveat on reading the table: false alarms here are counted on sorties that are
+healthy end to end, which is stricter than the healthy-*frame* convention used in
+the ablation table above — that one also counts pre-onset frames of fault sorties,
+where degradation may already be ramping. The same black-box model reads 14.78 %
+under the looser definition and 40.45 % under this one. Both are computed; they
+are not the same measurement.
+
+Reproduce with `python validation/mismatch_sweep.py`. It regenerates each spread
+level into a temporary directory, never touching `data/datasets/`, and asserts a
+floor of 0.85 macro F1 at 5 % spread so that a future change making the system
+more brittle fails the suite loudly.
+
 ---
 
 ## Checking the claims yourself
@@ -445,6 +509,7 @@ python test_ai_layer.py                    # estimator convergence, autoencoder,
 python test_fault_pipeline_qa.py           # end-to-end detection across the injectable fault modes
 python validation/benchmark.py             # the comparison table above
 python validation/ablation.py              # which architectural choice is load-bearing
+python validation/mismatch_sweep.py        # what happens when the twin is wrong about the engine
 python validation/leakage_audit.py         # train/test separation integrity
 python validation/stress_testing.py        # +500 % noise, 30 s blackout, 35,000 ft, −60 °C
 python run_all_tests.py                    # all of it, one report
@@ -462,6 +527,11 @@ separates probe defects perfectly on its own, so the sensor validator buys **no
 measurable accuracy** — its value is that it is a physics rule rather than a
 learned boundary, so it holds for probe failures the network was never trained
 on. The ablation says so in its own output.
+
+The mismatch sweep flatters us less still: it is the one suite whose headline
+finding is that the residual representation *loses* to raw telemetry once the
+twin is wrong enough about the engine. It prints that verdict itself, in whichever
+direction the measurements point.
 
 ---
 

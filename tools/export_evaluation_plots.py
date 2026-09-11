@@ -6,7 +6,9 @@ Generates high-resolution publication-quality PNG figures for pitch decks and te
 3. Benchmark Comparison Bar Charts (Accuracy, Latency, False Alarms)
 4. RUL Degradation Trajectory with 95% Confidence Interval
 5. Local SHAP Root-Cause Feature Attribution Breakdown
+6. Detection Quality vs Twin/Engine Model Mismatch
 """
+import json
 import sys
 from pathlib import Path
 import math
@@ -23,6 +25,7 @@ from models.fault_classifier import FAULT_CLASSES, CLASS_TO_IDX
 
 FIGURES_DIR = PROJECT_ROOT / "docs" / "figures"
 DATASETS_DIR = PROJECT_ROOT / "data" / "datasets"
+MISMATCH_RESULTS = FIGURES_DIR / "mismatch_sweep.json"
 
 # Set Clean Plotting Style
 plt.style.use('dark_background')
@@ -156,6 +159,61 @@ def plot_shap_attribution():
     plt.close()
     print(f"  -> Generated: {out_file.name}")
 
+def plot_mismatch_degradation():
+    """
+    Detection quality against twin/engine model mismatch, both systems on the
+    same axes. Reads the figures written by validation/mismatch_sweep.py rather
+    than carrying numbers of its own, so the plot cannot drift from the run.
+    """
+    if not MISMATCH_RESULTS.exists():
+        print(f"  -> Skipped mismatch_degradation.png: {MISMATCH_RESULTS.name} not found. "
+              f"Run 'python validation/mismatch_sweep.py' first.")
+        return
+
+    data = json.loads(MISMATCH_RESULTS.read_text())
+    rows = data["rows"]
+    spread = [r["spread_pct"] for r in rows]
+
+    series = [
+        ("engine_twin", "ENGINE-TWIN (physics residuals)", "#10b981", "o", "-"),
+        ("raw_telemetry", "Black-Box ML (raw telemetry)", "#f59e0b", "s", "-"),
+        ("residual_control", "Residual control (raw arm's recipe)", "#38bdf8", "^", "--"),
+    ]
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.6), dpi=300)
+
+    for key, label, color, marker, ls in series:
+        ax1.plot(spread, [r[key]["macro_f1"] for r in rows], color=color, marker=marker,
+                 linestyle=ls, linewidth=2.2, markersize=7, label=label)
+        ax2.plot(spread, [r[key]["false_alarm_pct"] for r in rows], color=color, marker=marker,
+                 linestyle=ls, linewidth=2.2, markersize=7, label=label)
+
+    ax1.set_title('Macro F1 vs Model Mismatch (Higher is Better)',
+                  fontsize=11, fontweight='bold', color='#f8fafc')
+    ax1.set_ylabel('Macro F1 on Held-Out Sorties', color='#cbd5e1')
+    ax1.set_ylim(0.0, 1.02)
+
+    ax2.set_title('False Alarms vs Model Mismatch (Lower is Better)',
+                  fontsize=11, fontweight='bold', color='#f8fafc')
+    ax2.set_ylabel('False Alarm Rate on Healthy Sorties (%)', color='#cbd5e1')
+    ax2.set_ylim(bottom=0)
+
+    for ax in (ax1, ax2):
+        ax.set_xlabel('Engine Build Spread (% std. dev. from datasheet)', color='#cbd5e1')
+        ax.set_xticks(spread)
+        ax.grid(True, linestyle='--', alpha=0.25, color='#475569')
+        ax.legend(fontsize=8, framealpha=0.85, facecolor='#1e293b', edgecolor='#334155')
+        # The twin is blind to the deviation; mark where every other suite sits.
+        ax.axvline(0.0, color='#64748b', linewidth=1.0, linestyle=':', alpha=0.7)
+
+    fig.suptitle('Degradation as the Twin Diverges from the Engine It Shadows',
+                 fontsize=12, fontweight='bold', color='#f8fafc', y=1.0)
+    plt.tight_layout()
+    out_file = FIGURES_DIR / "mismatch_degradation.png"
+    plt.savefig(out_file, bbox_inches='tight')
+    plt.close()
+    print(f"  -> Generated: {out_file.name}")
+
 def main():
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     print("=" * 70)
@@ -165,6 +223,7 @@ def main():
     plot_benchmark_comparison()
     plot_rul_trajectory()
     plot_shap_attribution()
+    plot_mismatch_degradation()
     print("=" * 70)
     print(f"All figures generated in {FIGURES_DIR.resolve()}")
     print("=" * 70)
