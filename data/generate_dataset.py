@@ -27,11 +27,16 @@ from typing import List, Dict, Any, Optional
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from simulation.flight_profile import FlightProfile, FlightState
-from simulation.mvem import MeanValueEngineModel, EngineState
+from simulation.mvem import MeanValueEngineModel, EngineState, VARIANT_KEYS, sample_variant
 from simulation.sensors import SensorModel, SensorReadings
 from simulation.fault_injector import FaultInjector, FaultType, FaultConfig
 
 OUTPUT_DIR = Path(__file__).resolve().parent / "datasets"
+
+# Offset that derives a sortie's variant RNG from its run seed. Keeping the
+# variant on its own stream means enabling it cannot shift the noise draws the
+# MVEM and sensor model make, so a spread of 0.0 reproduces the committed CSVs.
+VARIANT_STREAM_OFFSET = 9187
 
 
 def sample_mission_shape(rng: np.random.Generator, wide: bool = False) -> Dict[str, float]:
@@ -80,12 +85,22 @@ def simulate_run(
     fault_severity: float = 1.0,
     seed: int = 42,
     profile_kwargs: Optional[Dict[str, float]] = None,
+    variant_spread_pct: float = 0.0,
 ) -> pd.DataFrame:
     """
     Executes a single simulation sortie and returns a DataFrame of sensor readings + physics ground truth.
+
+    :param variant_spread_pct: unit-to-unit build spread, as a percentage standard
+        deviation. One variant is drawn per sortie and applied to the *plant* MVEM
+        only — the twin's baseline always runs at datasheet, because in service it
+        does not know the unit's true parameters. Defaults to 0.0 so that the
+        committed CSVs and the checkpoints trained on them stay valid.
     """
     flight_gen = FlightProfile(delta_t_isa=delta_t_isa, **(profile_kwargs or {}))
-    mvem = MeanValueEngineModel(seed=seed)
+    variant = sample_variant(
+        np.random.default_rng(seed + VARIANT_STREAM_OFFSET), variant_spread_pct
+    )
+    mvem = MeanValueEngineModel(seed=seed, variant=variant)
     sensors = SensorModel(seed=seed)
     injector = FaultInjector(mvem, sensors)
 
@@ -168,6 +183,10 @@ def simulate_run(
             "rul_hours": round(rul_hours, 2),
             "provenance": "SIMULATED"
         }
+        # Record the drawn build deviations alongside every row, so the CSV
+        # describes the engine it came off without reference to this script.
+        for k in VARIANT_KEYS:
+            row[k] = round(variant[k], 6)
         records.append(row)
 
     return pd.DataFrame(records)
@@ -202,6 +221,59 @@ TRAIN_DURATION_S = 180.0
 TEST_DURATION_S = 150.0
 
 
+def generate_heldout_split(
+    variant_spread_pct: float = 0.0,
+    scenario_seed: int = TEST_SCENARIO_SEED,
+    duration_s: float = TEST_DURATION_S,
+    output_dir: Optional[Path] = None,
+    verbose: bool = False,
+) -> pd.DataFrame:
+    """
+    Builds the held-out sortie set: run_ids 500+, wider mission envelope, drawn
+    from a scenario stream disjoint from the training stream.
+
+    Factored out so validation/mismatch_sweep.py can regenerate this exact split
+    under a non-zero build spread without duplicating the loop.
+
+    :param variant_spread_pct: unit-to-unit build spread applied to the plant
+        engine only. 0.0 reproduces the committed test_scenarios.csv exactly.
+    :param output_dir: if given, writes test_scenarios.csv there. Callers that
+        only need the frame can leave it None; nothing writes to data/datasets/
+        unless that path is passed explicitly.
+    """
+    test_rng = np.random.default_rng(scenario_seed)
+    test_plan = ([FaultType.HEALTHY] * N_HEALTHY_TEST_RUNS
+                 + [f for f in ALL_FAULTS for _ in range(N_SORTIES_PER_FAULT_TEST)])
+    test_dfs = []
+    run_idx = 500
+    for f_type in test_plan:
+        df = simulate_run(
+            run_id=run_idx,
+            duration_s=duration_s,
+            dt_s=0.1,
+            delta_t_isa=float(test_rng.uniform(-20.0, 20.0)),
+            fault_type=f_type,
+            fault_start_pct=float(test_rng.uniform(0.22, 0.45)),
+            fault_ramp_s=float(test_rng.uniform(8.0, 26.0)),
+            fault_severity=float(test_rng.uniform(0.65, 1.0)),
+            seed=run_idx * 7 + 13,
+            profile_kwargs=sample_mission_shape(test_rng, wide=True),
+            variant_spread_pct=variant_spread_pct,
+        )
+        test_dfs.append(df)
+        run_idx += 1
+
+    test_df = pd.concat(test_dfs, ignore_index=True)
+    if output_dir is not None:
+        out_dir = Path(output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        test_df.to_csv(out_dir / "test_scenarios.csv", index=False)
+    if verbose:
+        print(f"  -> {len(test_plan)} sorties / {len(test_df):,} samples "
+              f"(variant spread {variant_spread_pct:.1f}%)")
+    return test_df
+
+
 def generate_all_datasets(output_dir: Optional[Path] = None, verbose: bool = True):
     """
     Builds all three splits. Training and held-out sorties are disjoint by run_id
@@ -213,7 +285,6 @@ def generate_all_datasets(output_dir: Optional[Path] = None, verbose: bool = Tru
     """
     out_dir = Path(output_dir) if output_dir is not None else OUTPUT_DIR
     train_rng = np.random.default_rng(TRAIN_SCENARIO_SEED)
-    test_rng = np.random.default_rng(TEST_SCENARIO_SEED)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     def log(msg: str):
@@ -281,33 +352,12 @@ def generate_all_datasets(output_dir: Optional[Path] = None, verbose: bool = Tru
     # 3. Held-out test sorties (wider mission-shape envelope)
     # ---------------------------------------------------------------
     log("[3/3] Generating Held-Out Test Sorties...")
-    test_dfs = []
-    run_idx = 500
-    test_plan = ([FaultType.HEALTHY] * N_HEALTHY_TEST_RUNS
-                 + [f for f in ALL_FAULTS for _ in range(N_SORTIES_PER_FAULT_TEST)])
-    for f_type in test_plan:
-        df = simulate_run(
-            run_id=run_idx,
-            duration_s=TEST_DURATION_S,
-            dt_s=0.1,
-            delta_t_isa=float(test_rng.uniform(-20.0, 20.0)),
-            fault_type=f_type,
-            fault_start_pct=float(test_rng.uniform(0.22, 0.45)),
-            fault_ramp_s=float(test_rng.uniform(8.0, 26.0)),
-            fault_severity=float(test_rng.uniform(0.65, 1.0)),
-            seed=run_idx * 7 + 13,
-            profile_kwargs=sample_mission_shape(test_rng, wide=True),
-        )
-        test_dfs.append(df)
-        run_idx += 1
-
-    test_df = pd.concat(test_dfs, ignore_index=True)
-    test_path = out_dir / "test_scenarios.csv"
-    test_df.to_csv(test_path, index=False)
-    log(f"  -> {len(test_plan)} sorties / {len(test_df):,} samples -> {test_path.name}")
+    test_df = generate_heldout_split(output_dir=out_dir)
+    n_test_runs = test_df["run_id"].nunique()
+    log(f"  -> {n_test_runs} sorties / {len(test_df):,} samples -> test_scenarios.csv")
 
     log("=" * 60)
-    log(f"Independent missions: {N_HEALTHY_TRAIN_RUNS + n_fault_runs} training / {len(test_plan)} held-out")
+    log(f"Independent missions: {N_HEALTHY_TRAIN_RUNS + n_fault_runs} training / {n_test_runs} held-out")
     log("All provenance labels set to 'SIMULATED'.")
     log("=" * 60)
 
