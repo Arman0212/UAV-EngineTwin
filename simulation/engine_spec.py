@@ -373,7 +373,7 @@ class EngineSpec:
 # correlations still mean something. Outside them the model would still produce
 # numbers, and they would be fiction.
 LIMITS: Dict[str, Tuple[float, float]] = {
-    "displacement_litres": (0.2, 20.0),
+    "displacement_litres": (0.05, 20.0),
     "cylinders": (1, 16),
     "rated_power_hp_sealevel": (5.0, 1200.0),
     "rated_rpm": (800.0, 12000.0),
@@ -436,3 +436,46 @@ def validate_config(cfg: Dict[str, Any]) -> List[str]:
                               "it flat to critical altitude, then it falls.")
 
     return errors
+
+
+# Ranges where the mean-value correlations were calibrated. Outside them the
+# model still runs and still responds to faults, but its absolute numbers carry
+# less weight — so these produce warnings, not refusals. Telling an operator
+# "no" when the honest answer is "yes, with a caveat" is the worse failure.
+CALIBRATED: Dict[str, Tuple[float, float]] = {
+    "displacement_litres": (0.8, 9.0),
+    "rated_rpm": (2000.0, 6000.0),
+    "rated_power_hp_sealevel": (60.0, 400.0),
+}
+
+
+def config_warnings(cfg: Dict[str, Any]) -> List[str]:
+    """Non-blocking notes about a config that is valid but unusual."""
+    out: List[str] = []
+
+    disp = float(cfg.get("displacement_litres", 0) or 0)
+    if 0 < disp < CALIBRATED["displacement_litres"][0]:
+        out.append(
+            f"{disp * 1000:.0f} cc is below the range these correlations were "
+            f"fitted on (from {CALIBRATED['displacement_litres'][0] * 1000:.0f} cc). "
+            "Small two-strokes in particular breathe and scavenge differently "
+            "from the four-strokes the model was built around.")
+    elif disp > CALIBRATED["displacement_litres"][1]:
+        out.append(f"{disp:.1f} L is above the fitted range; treat absolute "
+                   "figures as indicative.")
+
+    rpm = float(cfg.get("rated_rpm", 0) or 0)
+    if rpm and not (CALIBRATED["rated_rpm"][0] <= rpm <= CALIBRATED["rated_rpm"][1]):
+        out.append(f"{rpm:.0f} rpm is outside the fitted speed range "
+                   f"({CALIBRATED['rated_rpm'][0]:.0f}-{CALIBRATED['rated_rpm'][1]:.0f}).")
+
+    hp = float(cfg.get("rated_power_hp_sealevel", 0) or 0)
+    if hp and not (CALIBRATED["rated_power_hp_sealevel"][0] <= hp
+                   <= CALIBRATED["rated_power_hp_sealevel"][1]):
+        out.append(f"{hp:.0f} HP is outside the fitted power range.")
+
+    if not cfg.get("turbocharged", True) and disp and disp < 0.5:
+        out.append("A small naturally aspirated engine will show very little "
+                   "manifold-pressure signal, so turbo faults are not meaningful on it.")
+
+    return out

@@ -935,8 +935,10 @@
       <div class="engine-form-grid">
         <label><span>Engine name</span>
           <input id="eng-name" type="text" maxlength="80" placeholder="My Engine"></label>
-        <label><span>Displacement (L)</span>
-          <input id="eng-disp" type="number" step="0.001" min="0.2" max="20"></label>
+        <label><span>Displacement (cc)</span>
+          <input id="eng-disp" type="number" step="1" min="50" max="20000"
+                 oninput="updateDispHint()">
+          <em id="hint-disp" class="field-hint">&nbsp;</em></label>
         <label><span>Cylinders</span>
           <input id="eng-cyl" type="number" step="1" min="1" max="16"></label>
         <label><span>Rated power (HP)</span>

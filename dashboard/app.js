@@ -1722,7 +1722,7 @@ async function prefillEngineForm() {
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
 
     set("eng-name", "My Engine");
-    set("eng-disp", t.displacement_litres);
+    set("eng-disp", Math.round((t.displacement_litres || 0) * 1000));
     set("eng-cyl", t.cylinders);
     set("eng-power", t.rated_power_hp_sealevel);
     set("eng-rated-rpm", t.rated_rpm);
@@ -1787,7 +1787,9 @@ async function saveCustomEngine(alsoFit) {
   const num = (id) => parseFloat((document.getElementById(id) || {}).value);
   const body = {
     engine_name: (document.getElementById("eng-name") || {}).value || "",
-    displacement_litres: num("eng-disp"),
+    // The form asks for cc because that is how engines in this class are
+    // quoted; the schema stores litres.
+    displacement_litres: num("eng-disp") / 1000.0,
     cylinders: Math.round(num("eng-cyl")),
     rated_power_hp_sealevel: num("eng-power"),
     rated_rpm: num("eng-rated-rpm"),
@@ -1825,6 +1827,11 @@ async function saveCustomEngine(alsoFit) {
       return;
     }
     addEventLog("SYS", `Created engine "${d.engine.name}".`);
+    // A config can be valid and still sit outside the range the correlations
+    // were fitted on. Say so plainly rather than letting the numbers imply
+    // more confidence than they carry.
+    ((d.engine && d.engine.warnings) || []).forEach(
+      w => addEventLog("SYS", `Note: ${w}`));
     toggleEngineForm();
     await refreshEngines();
 
@@ -1836,4 +1843,19 @@ async function saveCustomEngine(alsoFit) {
   } catch (e) {
     showEngineErrors([e.message]);
   }
+}
+
+/**
+ * Shows the litre equivalent while a displacement is typed in cc.
+ * Small UAV engines are always quoted in cc and large aero engines in litres,
+ * so showing both removes a unit slip that would otherwise scale the whole
+ * engine by a thousand.
+ */
+function updateDispHint() {
+  const el = document.getElementById("eng-disp");
+  const hint = document.getElementById("hint-disp");
+  if (!el || !hint) return;
+  const cc = parseFloat(el.value);
+  if (!isFinite(cc) || cc <= 0) { hint.innerHTML = "&nbsp;"; return; }
+  hint.textContent = `${(cc / 1000).toFixed(3)} L`;
 }

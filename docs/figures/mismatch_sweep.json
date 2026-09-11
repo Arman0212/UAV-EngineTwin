@@ -6,10 +6,10 @@
       "n_frames": 48000,
       "n_healthy_sortie_frames": 7500,
       "engine_twin": {
-        "accuracy": 97.63541666666666,
-        "macro_f1": 0.9769704189024291,
-        "false_alarm_pct": 0.44,
-        "latency_s": 2.8444444444444446
+        "accuracy": 97.65416666666667,
+        "macro_f1": 0.9771205234133594,
+        "false_alarm_pct": 0.45333333333333337,
+        "latency_s": 2.855555555555556
       },
       "raw_telemetry": {
         "accuracy": 89.88541666666666,
@@ -18,10 +18,10 @@
         "latency_s": 5.055555555555555
       },
       "residual_control": {
-        "accuracy": 97.51875,
-        "macro_f1": 0.9761092010298753,
-        "false_alarm_pct": 0.9199999999999999,
-        "latency_s": 2.703703703703704
+        "accuracy": 97.53125,
+        "macro_f1": 0.9761682247205343,
+        "false_alarm_pct": 1.0666666666666667,
+        "latency_s": 2.72962962962963
       }
     },
     {
@@ -31,9 +31,9 @@
       "n_healthy_sortie_frames": 7500,
       "engine_twin": {
         "accuracy": 96.27291666666666,
-        "macro_f1": 0.9647175780687128,
+        "macro_f1": 0.964654986219238,
         "false_alarm_pct": 3.173333333333334,
-        "latency_s": 2.7185185185185192
+        "latency_s": 2.681481481481482
       },
       "raw_telemetry": {
         "accuracy": 89.6375,
@@ -42,10 +42,10 @@
         "latency_s": 5.04814814814815
       },
       "residual_control": {
-        "accuracy": 95.42083333333333,
-        "macro_f1": 0.9584332200170852,
-        "false_alarm_pct": 4.653333333333333,
-        "latency_s": 2.7148148148148157
+        "accuracy": 95.40416666666667,
+        "macro_f1": 0.9579895360373248,
+        "false_alarm_pct": 4.773333333333333,
+        "latency_s": 2.6703703703703705
       }
     },
     {
@@ -54,10 +54,10 @@
       "n_frames": 48000,
       "n_healthy_sortie_frames": 7500,
       "engine_twin": {
-        "accuracy": 87.36666666666667,
-        "macro_f1": 0.8975539175842396,
-        "false_alarm_pct": 33.879999999999995,
-        "latency_s": 2.8851851851851857
+        "accuracy": 87.36874999999999,
+        "macro_f1": 0.8977042440166054,
+        "false_alarm_pct": 33.89333333333333,
+        "latency_s": 2.8814814814814826
       },
       "raw_telemetry": {
         "accuracy": 88.11041666666667,
@@ -66,10 +66,10 @@
         "latency_s": 5.251851851851853
       },
       "residual_control": {
-        "accuracy": 87.12708333333333,
-        "macro_f1": 0.9005027027006609,
-        "false_alarm_pct": 30.25333333333333,
-        "latency_s": 3.107407407407408
+        "accuracy": 86.94375,
+        "macro_f1": 0.8984190456046012,
+        "false_alarm_pct": 31.22666666666667,
+        "latency_s": 3.12962962962963
       }
     },
     {
@@ -78,9 +78,9 @@
       "n_frames": 48000,
       "n_healthy_sortie_frames": 7500,
       "engine_twin": {
-        "accuracy": 76.17916666666666,
-        "macro_f1": 0.8151054278245627,
-        "false_alarm_pct": 54.0,
+        "accuracy": 76.1875,
+        "macro_f1": 0.815186142816653,
+        "false_alarm_pct": 54.013333333333335,
         "latency_s": 4.425925925925928
       },
       "raw_telemetry": {
@@ -90,17 +90,17 @@
         "latency_s": 6.244444444444446
       },
       "residual_control": {
-        "accuracy": 77.19583333333333,
-        "macro_f1": 0.821685890762222,
-        "false_alarm_pct": 46.57333333333333,
+        "accuracy": 77.20625,
+        "macro_f1": 0.8220060132385594,
+        "false_alarm_pct": 48.013333333333335,
         "latency_s": 5.466666666666668
       }
     }
   ],
   "verdict": {
-    "twin_f1_drop": 0.16186499107786634,
+    "twin_f1_drop": 0.1619343805967064,
     "raw_f1_drop": 0.09276946049182,
-    "residual_control_f1_drop": 0.15442331026765332,
+    "residual_control_f1_drop": 0.15416221148197495,
     "twin_far_rise_pp": 53.56,
     "raw_far_rise_pp": 8.680000000000007,
     "residual_degrades_more_gracefully": false,

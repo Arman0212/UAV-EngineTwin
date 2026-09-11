@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from simulation.engine_spec import EngineSpec, validate_config
+from simulation.engine_spec import EngineSpec, validate_config, config_warnings
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 BUILTIN_DIR = PROJECT_ROOT / "configs"
@@ -116,6 +116,10 @@ def save_custom(cfg: Dict[str, Any]) -> Dict[str, Any]:
     if errors:
         raise ValueError(" ".join(errors))
 
+    # Valid is not the same as inside the range the correlations were fitted on.
+    # These travel back with the summary so the operator is told, not stopped.
+    warnings = config_warnings(cfg)
+
     engine_id = _slug(cfg.get("engine_name", ""))
     if engine_id in {p.stem for p in BUILTIN_DIR.glob("*.json")}:
         raise ValueError(f"'{engine_id}' is the name of a built-in engine. "
@@ -133,7 +137,9 @@ def save_custom(cfg: Dict[str, Any]) -> Dict[str, Any]:
     (CUSTOM_DIR / f"{engine_id}.json").write_text(
         json.dumps(cfg, indent=2), encoding="utf-8")
 
-    return _summarise(engine_id, cfg, builtin=False)
+    summary = _summarise(engine_id, cfg, builtin=False)
+    summary["warnings"] = warnings
+    return summary
 
 
 def delete_custom(engine_id: str) -> bool:

@@ -53,8 +53,11 @@ class SensorModel:
         self.rng = np.random.default_rng(seed)
 
         # Lag States (Internal filter registers for steady-state cruise)
-        self._lag_egt = [810.0, 810.0, 810.0, 810.0]
-        self._lag_cht = [175.0, 175.0, 175.0, 175.0]
+        # Sized on first sample from the engine actually being measured. A
+        # fixed four broke the moment a twin or a six was fitted: the MVEM
+        # produced two EGT channels and this iterated over four.
+        self._lag_egt: List[float] = []
+        self._lag_cht: List[float] = []
         self._lag_oil_p = 4.2
         self._lag_oil_t = 88.0
         self._lag_coolant_t = 86.0
@@ -143,7 +146,14 @@ class SensorModel:
         self._lag_fuel_flow = update_lag(self._lag_fuel_flow, true_engine.fuel_flow_lph, self.tau_fuel)
         self._lag_bus_v = update_lag(self._lag_bus_v, true_engine.bus_voltage_v, self.tau_bus_v)
 
-        for i in range(4):
+        n_cyl = len(true_engine.egt_c)
+        if len(self._lag_egt) != n_cyl:
+            # Seed from the engine's own state so a newly fitted engine does not
+            # spend its first seconds lagging toward the previous one's numbers.
+            self._lag_egt = list(true_engine.egt_c)
+            self._lag_cht = list(true_engine.cht_c)
+
+        for i in range(n_cyl):
             self._lag_egt[i] = update_lag(self._lag_egt[i], true_engine.egt_c[i], self.tau_egt)
             self._lag_cht[i] = update_lag(self._lag_cht[i], true_engine.cht_c[i], self.tau_cht)
 
@@ -158,7 +168,7 @@ class SensorModel:
 
         egt_meas = []
         cht_meas = []
-        for i in range(4):
+        for i in range(n_cyl):
             e_val = self._quantize(self._lag_egt[i] + self.rng.normal(0, self.sigma_egt), self.quant_egt)
             c_val = self._quantize(self._lag_cht[i] + self.rng.normal(0, self.sigma_cht), self.quant_cht)
             egt_meas.append(e_val)
