@@ -1,5 +1,5 @@
 """
-ENGINE-TWIN: Edge Hardware & Compute Profiler (SIH26054 Section 19, 23)
+ENGINE-TWIN: Edge Hardware & Compute Profiler (SIH26054)
 Profiles:
 1. Peak & Steady-State RAM Memory Footprint (MB)
 2. CPU Utilization & Single-Thread Throughput (Frames Per Second / FPS)

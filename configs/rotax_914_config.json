@@ -11,10 +11,26 @@
   "max_boost_bar": 1.35,
   "intercooled": false,
   "altitude_power_derating": [
-    {"altitude_ft": 0, "power_hp": 115.0, "rated_boost_bar": 1.35},
-    {"altitude_ft": 8000, "power_hp": 115.0, "rated_boost_bar": 1.35},
-    {"altitude_ft": 15000, "power_hp": 100.0, "rated_boost_bar": 1.20},
-    {"altitude_ft": 20000, "power_hp": 85.0, "rated_boost_bar": 1.05}
+    {
+      "altitude_ft": 0,
+      "power_hp": 115.0,
+      "rated_boost_bar": 1.35
+    },
+    {
+      "altitude_ft": 8000,
+      "power_hp": 115.0,
+      "rated_boost_bar": 1.35
+    },
+    {
+      "altitude_ft": 15000,
+      "power_hp": 100.0,
+      "rated_boost_bar": 1.2
+    },
+    {
+      "altitude_ft": 20000,
+      "power_hp": 85.0,
+      "rated_boost_bar": 1.05
+    }
   ],
   "nominal_operating_parameters": {
     "manifold_pressure_idle_bar": 0.95,
@@ -26,5 +42,61 @@
     "fuel_flow_cruise_lph": 18.5,
     "bus_voltage_nominal_v": 14.0,
     "vibration_nominal_g_rms": 1.1
+  },
+  "end_of_life_limits": {
+    "_note": "SIH26054 does not define end-of-life. Every limit below is chosen by this project, from the engine's own published/derived operating envelope, and is stated in physical units so it can be argued with, replaced by an operator's own maintenance manual figures, or rejected outright. Health-index percentages are DERIVED from these limits, never the other way round.",
+    "oil_system": {
+      "criterion": "Oil pressure at or below limit while at rated RPM",
+      "channel": "oil_pressure",
+      "limit_value": 1.5,
+      "limit_units": "bar",
+      "nominal_value": 3.8,
+      "at_condition": "rated RPM 5800",
+      "operator_text": "oil pressure projected to reach {limit} bar",
+      "source": "Rotax 914 UL Operators Manual quotes 1.5 bar minimum oil pressure above 3500 rpm; nominal 3.8 bar is nominal_operating_parameters.oil_pressure_nominal_bar here."
+    },
+    "cylinders": {
+      "criterion": "CHT above max continuous, or EGT spread across cylinders beyond margin",
+      "channel": "cht",
+      "limit_value": 135.0,
+      "limit_units": "C",
+      "nominal_value": 108.0,
+      "at_condition": "max continuous power",
+      "secondary_channel": "egt",
+      "secondary_limit_value": 90.0,
+      "secondary_limit_units": "C spread",
+      "operator_text": "cylinder head temperature projected to reach {limit} C",
+      "source": "Rotax 914 UL Operators Manual quotes 135 C maximum cylinder head temperature (liquid-cooled heads, hottest cylinder). Note nominal_operating_parameters.cht_nominal_celsius in this file is 135 C, which is that MAXIMUM rather than a cruise value; 108 C is taken as typical cruise CHT so the criterion measures a real margin. This is a head-temperature limit on a different cooling architecture from the VRDE engine, not the same number rescaled."
+    },
+    "turbo_boost": {
+      "criterion": "Manifold pressure deficit below the rated-boost schedule",
+      "channel": "manifold_pressure",
+      "limit_value": 0.2,
+      "limit_units": "bar deficit",
+      "nominal_value": 1.35,
+      "at_condition": "rated boost for current altitude",
+      "operator_text": "manifold pressure projected to fall {limit} bar below rated boost",
+      "source": "Derived from altitude_power_derating in this file. The Rotax runs far lower absolute boost (1.35 bar max against 2.45), so the deficit that costs a full derating band is correspondingly smaller."
+    },
+    "vibration": {
+      "criterion": "2X order vibration amplitude above limit",
+      "channel": "vibration_rms",
+      "limit_value": 2.2,
+      "limit_units": "g",
+      "nominal_value": 1.1,
+      "at_condition": "cruise power",
+      "operator_text": "2X order vibration projected to reach {limit} g",
+      "source": "Scaled from this project's VRDE figure by the ratio of nominal vibration levels (1.1 g against 1.2 g rms). A flat-four has a different order signature from an inline four; treat this as a placeholder pending a real vibration survey."
+    },
+    "electrical": {
+      "criterion": "Bus voltage below limit under full avionics load",
+      "channel": "bus_voltage",
+      "limit_value": 12.0,
+      "limit_units": "V",
+      "nominal_value": 14.0,
+      "at_condition": "full avionics load",
+      "operator_text": "bus voltage projected to fall to {limit} V",
+      "source": "Rotax 914 runs a 14 VDC bus, not 28 VDC. 12.0 V is the same fractional margin this project applies to the VRDE bus, above the ~11 V at which typical 14 V avionics drop out."
+    }
   }
 }

@@ -1,7 +1,7 @@
 """
 Parametric Fault Injection Engine for Aero Piston Engine Digital Twin.
 Implements the 8 core aero piston engine failure modes + sensor failure modes
-defined in SIH26054 Proposal Section 26.
+defined by this project for the SIH26054 aero-piston engine.
 """
 from dataclasses import dataclass
 from enum import Enum

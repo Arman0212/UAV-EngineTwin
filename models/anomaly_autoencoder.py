@@ -1,5 +1,5 @@
 """
-Residual Autoencoder for Unsupervised Anomaly Detection (SIH26054 Section 13)
+Residual Autoencoder for Unsupervised Anomaly Detection (SIH26054)
 Trained exclusively on healthy engine residual sequences.
 Reconstruction error above statistical threshold triggers the downstream fault diagnosis stage.
 """

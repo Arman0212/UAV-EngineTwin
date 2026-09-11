@@ -1,5 +1,5 @@
 """
-Multi-Engine Scalability & Transfer Validation (SIH26054 Section 37, Task M1c)
+Multi-Engine Scalability & Transfer Validation (SIH26054)
 Demonstrates that ENGINE-TWIN's physics core (MVEM), EKF state estimator,
 and residual pipeline seamlessly transfer to a second engine profile (Rotax 914 Turbo Flat-Four)
 purely via JSON parameterization without changing architecture code.

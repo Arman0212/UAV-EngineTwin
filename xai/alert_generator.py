@@ -1,5 +1,5 @@
 """
-Structured Evidence-Carrying Operator Alert Generator (SIH26054 Section 17)
+Structured Evidence-Carrying Operator Alert Generator (SIH26054)
 Formats AI diagnostics, physics evidence, RUL intervals, and sensor integrity into
 standardized military aviation decision-support alerts.
 """
@@ -20,6 +20,10 @@ class OperatorAlert:
     evidence_items: List[str]
     rul_forecast_text: str
     recommended_action: str
+    # The end-of-life criterion the forecast is projecting to, in engine units.
+    # Empty when no subsystem breakdown reached the estimator.
+    rul_criterion: str = ""
+    rul_limit_subsystem: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -102,10 +106,20 @@ class AlertGenerator:
         if is_sensor_fault:
             rul_text = "N/A (Sensor replacement required; physical engine life unaffected)."
         elif hasattr(rul_prediction, "regime"):
+            # What the forecast is counting down TO, in engine units, so the
+            # operator reads a physical condition rather than a bare number.
+            criterion = getattr(rul_prediction, "criterion_text", "") or ""
             if rul_prediction.regime == "STABLE":
                 rul_text = f"Nominal operation. Scheduled overhaul in ~{rul_prediction.rul_hours_mean:.0f} flight hours."
             elif rul_prediction.regime == "ABRUPT":
                 rul_text = "EMERGENCY: Immediate failure threshold reached (<0.5 flight hours)."
+            elif rul_prediction.regime == "EXPIRED":
+                rul_text = (f"LIMIT REACHED: {criterion.replace('projected to reach', 'has reached')}."
+                            if criterion else "LIMIT REACHED: subsystem is at its condemnation limit.")
+            elif criterion:
+                rul_text = (f"{criterion[0].upper()}{criterion[1:]} in "
+                            f"{rul_prediction.rul_hours_min:.1f}-{rul_prediction.rul_hours_max:.1f} "
+                            f"flight hours (Confidence: 95%).")
             else:
                 rul_text = f"Action Window: {rul_prediction.rul_hours_min:.1f} to {rul_prediction.rul_hours_max:.1f} flight hours (Confidence: 95%)."
         else:
@@ -128,5 +142,7 @@ class AlertGenerator:
             sensor_fault_check=sensor_status,
             evidence_items=evidence_lines,
             rul_forecast_text=rul_text,
+            rul_criterion=getattr(rul_prediction, "criterion_text", "") or "",
+            rul_limit_subsystem=getattr(rul_prediction, "driving_subsystem", "") or "",
             recommended_action=action
         )

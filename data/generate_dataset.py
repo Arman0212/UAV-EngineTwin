@@ -27,7 +27,9 @@ from typing import List, Dict, Any, Optional
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from simulation.flight_profile import FlightProfile, FlightState
-from simulation.mvem import MeanValueEngineModel, EngineState, VARIANT_KEYS, sample_variant
+from simulation.mvem import (
+    MeanValueEngineModel, EngineState, VARIANT_KEYS, CYLINDER_VARIANT_KEYS, sample_variant,
+)
 from simulation.sensors import SensorModel, SensorReadings
 from simulation.fault_injector import FaultInjector, FaultType, FaultConfig
 
@@ -187,6 +189,9 @@ def simulate_run(
         # describes the engine it came off without reference to this script.
         for k in VARIANT_KEYS:
             row[k] = round(variant[k], 6)
+        for k in CYLINDER_VARIANT_KEYS:
+            for cyl_i, mult in enumerate(variant[k], start=1):
+                row[f"{k}_{cyl_i}"] = round(mult, 6)
         records.append(row)
 
     return pd.DataFrame(records)

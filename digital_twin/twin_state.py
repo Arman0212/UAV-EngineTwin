@@ -1,5 +1,5 @@
 """
-5-State Digital Twin Architecture Model (SIH26054 Section 10)
+5-State Digital Twin Architecture Model (SIH26054)
 Defines the state representation across the physical, sensor, estimated, virtual, and AI-health layers.
 """
 from dataclasses import dataclass, field, asdict
@@ -81,8 +81,14 @@ class DigitalTwinState:
     estimated_oil_t_c: float
     estimated_egt_c: List[float]
     estimated_cht_c: List[float]
-    # 4. Normalized Residuals: (Sensor - MVEM) / Sigma
+    # 4. Normalized Residuals: (Sensor - MVEM) / Sigma, after baseline adaptation
     residuals: Dict[str, float] = field(default_factory=dict)
+    # 4b. Baseline adaptation: the per-channel offset this engine sits at
+    # relative to datasheet, and whether that estimate has settled. Residuals
+    # above are post-adaptation; raw_residuals is what the physics produced.
+    raw_residuals: Dict[str, float] = field(default_factory=dict)
+    baseline_bias: Dict[str, float] = field(default_factory=dict)
+    baseline_adapted: bool = False
     # 5. Health & Prognostics State
     health: SubsystemHealth = field(default_factory=lambda: SubsystemHealth(100.0, [100.0]*4, 100.0, 100.0, 100.0, 100.0, 100.0))
     ai_prognostics: AIHealthState = field(default_factory=AIHealthState)

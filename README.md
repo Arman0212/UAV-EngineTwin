@@ -442,29 +442,33 @@ service: the plant MVEM and the baseline MVEM are the same model with the same
 constants, so the twin knows the engine exactly. Real units leave the factory off
 datasheet and stay that way. [`validation/mismatch_sweep.py`](validation/mismatch_sweep.py)
 measures the cost by deviating the *simulated engine* — turbo efficiency,
-volumetric efficiency, FMEP, oil-pump efficiency, combustion efficiency — while
-leaving the twin's baseline at datasheet. The twin is never told.
+volumetric efficiency, FMEP, oil-pump efficiency, combustion efficiency, plus a
+fixed per-cylinder flow and cooling imbalance — while leaving the twin's baseline
+at datasheet, still modelling four identical cylinders. The twin is never told.
 
 | Engine build spread | 0 % | 2 % | 5 % | 10 % |
 |:--|:---:|:---:|:---:|:---:|
-| **EngineTwin** macro F1 | **0.9771** | **0.9647** | 0.8975 | 0.8152 |
-| Black-box ML macro F1 | 0.9155 | 0.9126 | 0.8946 | **0.8248** |
-| **EngineTwin** false alarms | **0.43 %** | **3.20 %** | 33.85 % | 54.01 % |
-| Black-box ML false alarms | 40.45 % | 40.61 % | 43.81 % | **50.67 %** |
-| **EngineTwin** latency | **2.84 s** | **2.71 s** | **2.88 s** | **4.52 s** |
-| Black-box ML latency | 5.04 s | 5.11 s | 5.24 s | 6.54 s |
+| **EngineTwin** macro F1 | **0.9771** | **0.9623** | 0.8949 | 0.8160 |
+| EngineTwin **+ adaptation** macro F1 | 0.9755 | 0.9590 | 0.8928 | 0.8167 |
+| Black-box ML macro F1 | 0.9155 | 0.9118 | 0.8930 | **0.8247** |
+| **EngineTwin** false alarms | **0.43 %** | **4.03 %** | 34.93 % | 54.65 % |
+| EngineTwin **+ adaptation** false alarms | 1.97 % | 6.59 % | **33.84 %** | 55.25 % |
+| Black-box ML false alarms | 40.45 % | 40.69 % | 43.79 % | **50.88 %** |
+| **EngineTwin** latency | 2.87 s | 3.04 s | 3.41 s | **4.65 s** |
+| EngineTwin **+ adaptation** latency | **2.40 s** | **2.84 s** | **3.29 s** | 4.70 s |
+| Black-box ML latency | 5.04 s | 5.29 s | 5.41 s | 6.41 s |
 
 **The residual representation does not degrade more gracefully than raw
 telemetry. It degrades less gracefully.** Across 0 → 10 % spread EngineTwin loses
-0.1618 macro F1 while the black-box loses 0.0907. The F1 advantage is gone by 5 %
+0.1611 macro F1 while the black-box loses 0.0907. The F1 advantage is gone by 5 %
 spread, and at 10 % the black-box is marginally ahead. False alarms are worse
-still: EngineTwin climbs from 0.43 % to 54.01 %, crossing the black-box's line at
+still: EngineTwin climbs from 0.43 % to 54.65 %, crossing the black-box's line at
 around 10 % spread — the one metric where the physics baseline was winning by
 two orders of magnitude is the one that collapses hardest.
 
 This is not a training artefact. The sweep carries a third arm — the same network
 trained with the *same* recipe as the black-box, but on residuals — which loses
-0.1544 F1 against the black-box's 0.0907. The representation is what degrades,
+0.1499 F1 against the black-box's 0.0907. The representation is what degrades,
 not the schedule.
 
 The mechanism is straightforward once stated. A residual is measurement minus
@@ -477,11 +481,74 @@ advantage throughout — EngineTwin is still roughly 2 s faster at every spread.
 
 What this means in practice: **the twin needs a per-unit calibration step before
 it can be trusted on an engine it was not fitted to.** At 2 % spread — roughly a
-well-controlled production tolerance — it still scores 0.9647 F1 at 3.20 % false
+well-controlled production tolerance — it still scores 0.9623 F1 at 4.03 % false
 alarms and the argument for the residual approach survives intact. Beyond about
 3 % it does not, and parameter identification against the individual unit stops
 being a refinement and becomes a precondition. That work is listed in
 [Deployment roadmap](#deployment-roadmap) and is not implemented here.
+
+#### Which classes the imbalance actually breaks
+
+A per-cylinder imbalance is the deviation the twin has least defence against,
+because the baseline models four identical cylinders. Three fault classes are
+*defined* by exactly that asymmetry, so the sweep reports them individually
+rather than letting the macro average hide them:
+
+| EngineTwin, per-class F1 | 0 % | 2 % | 5 % | 10 % |
+|:--|:---:|:---:|:---:|:---:|
+| `COOLING_DEGRADATION_CYL2` | 0.9626 | 0.9611 | 0.9490 | **0.9101** |
+| `LEAN_MIXTURE_CYL3` | 0.9557 | 0.9604 | 0.9492 | 0.8093 |
+| `RICH_MIXTURE_CYL1` | 0.9627 | 0.9318 | **0.7749** | **0.6140** |
+
+Two of the three hold up. Cooling degradation barely moves — the fault is worth
+about 115 °C of CHT and the imbalance about 3 °C, so there is no contest. Lean
+mixture on cylinder 3 survives to 5 % and only falls apart at 10 %.
+
+`RICH_MIXTURE_CYL1` is the one that breaks, and it breaks early. The reason is
+specific rather than general: a cylinder built with above-average flow *is* a
+mild rich trim on that cylinder — same channel, same sign, same signature. The
+build imbalance does not merely obscure the fault, it manufactures a weak copy of
+it. Lean mixture is partly protected by the model's asymmetry (a lean cylinder
+raises EGT by up to 260 °C, a rich one lowers it by at most 140 °C), so the same
+imbalance buys less confusion in that direction. On this class the black-box is
+the more robust of the two at high mismatch — 0.7434 against 0.6140 at 10 % —
+which is the sharpest single illustration of the point this whole section makes.
+
+#### Does online adaptation rescue it? Not in these sorties.
+
+[`digital_twin/baseline_adapter.py`](digital_twin/baseline_adapter.py) is the
+obvious answer to the mechanism above: if the standing offset is the problem,
+estimate it and subtract it. It maintains one additive bias per residual channel
+on a long time constant, updating **only** while the anomaly gate is quiet and no
+fault is annunciated, clamped to ±1.5 σ per channel, and frozen outside steady
+flight. The gate is what stops it learning a developing fault as normal; the
+clamp bounds what a slow-enough fault could ever cost.
+
+In isolation it works, and dramatically. On a 240 s steady loiter leg with a
+mismatched engine, [`test_baseline_adapter.py`](test_baseline_adapter.py)
+measures the false-alarm rate falling from **85.82 % to 11.05 %** after
+convergence, a fault injected after convergence still caught 0.50 s after onset,
+and a fault injected *during* the convergence window not absorbed — the gate
+froze adaptation on 99.2 % of post-onset frames and the learned oil-pressure bias
+stayed at 0.050 σ against the 1.500 σ the same engine learns when healthy.
+
+**On the sweep it is a wash**, as the `+ adaptation` rows above show: macro F1
+moves by less than 0.004 at every spread, false alarms improve at 5 % and worsen
+at 0, 2 and 10 %. The reason is not subtle and is worth stating rather than
+burying. Adaptation runs only in steady phases and needs about 90 s of quiet
+steady flight to converge. **None of the 32 held-out sorties contains 90 s of
+loiter** — the median is 69 s and the longest is 86 s. The adapter never
+converges in this test set, so what the sweep measures is the cost of a
+half-converged estimate, not the benefit of a settled one. Detection latency is
+the one thing it improves consistently (2.87 s → 2.40 s at 0 % spread).
+
+There is a second limit the test found, which no amount of sortie length fixes:
+when the mismatch is large enough to hold the anomaly gate open continuously, the
+adapter freezes and never learns anything at all. The gate that protects against
+absorbing faults also prevents learning the very offsets adaptation exists for.
+Honest summary: this component is real and it works on the bench, but it is not
+yet the answer to the section above, and per-unit parameter identification on the
+ground remains the precondition.
 
 ![Detection quality against twin/engine model mismatch](docs/figures/mismatch_degradation.png)
 
@@ -496,6 +563,79 @@ Reproduce with `python validation/mismatch_sweep.py`. It regenerates each spread
 level into a temporary directory, never touching `data/datasets/`, and asserts a
 floor of 0.85 macro F1 at 5 % spread so that a future change making the system
 more brittle fails the suite loudly.
+
+---
+
+## What "end of life" means here
+
+**SIH26054 does not define end-of-life, so we did.** Every limit below is this
+project's choice. They are stated in engine units precisely so they can be
+argued with, replaced with an operator's own maintenance-manual figures, or
+rejected — which is not possible when condemnation is expressed as a percentage
+of a hand-tuned index.
+
+Until recently it was. The RUL estimator projected a composite health score to a
+fixed 30 %, and that score is `100·exp(-α·|r|)` with alphas tuned by hand to put
+fault onset in the caution band. End-of-life was therefore denominated in our own
+display constants: retune an α for legibility and the fleet's retirement
+criterion moves with it. It was also one number for five subsystems that fail in
+completely different ways.
+
+Limits now live in [`configs/engine_config.json`](configs/engine_config.json)
+(and [`configs/rotax_914_config.json`](configs/rotax_914_config.json)), each with
+a source note.
+[`HealthIndexEngine.end_of_life_criteria()`](digital_twin/health_index.py) maps
+each to the health value it corresponds to under the current σ and α — physical
+limit in, percentage out, never the reverse:
+
+| Subsystem | End-of-life criterion | Deviation | In σ | Health index |
+|:--|:--|--:|--:|--:|
+| `oil_system` | oil pressure ≤ **2.0 bar** at rated RPM | 2.50 bar | 41.7 | 0.10 % |
+| `cylinders` | CHT ≥ **220 °C** continuous (or EGT spread > 90 °C) | 45.0 °C | 25.0 | 3.40 % |
+| `turbo_boost` | MAP deficit ≥ **0.35 bar** below rated boost | 0.35 bar | 17.5 | 12.20 % |
+| `vibration` | 2X order amplitude ≥ **2.5 g** | 1.30 g | 16.2 | 6.40 % |
+| `electrical` | bus voltage ≤ **24.0 V** under full avionics load | 4.00 V | 33.3 | 2.50 % |
+
+Provenance, honestly separated into what is sourced and what is ours:
+
+- **Oil 2.0 bar** and **CHT 220 °C** come from this engine's own operating
+  envelope, already in the config as `oil_pressure_min_safe_bar` and
+  `cht_max_continuous_celsius`.
+- **Bus 24.0 V** is our margin above the MIL-STD-704F steady-state floor of
+  22.0 V for a 28 VDC bus, so the projection reaches the operator before
+  avionics reach their own undervoltage cutouts.
+- **Boost 0.35 bar** is derived from the published derating schedule: it is the
+  boost step between the 20,000 ft and 30,000 ft rows, i.e. a deficit costing a
+  full altitude band of power.
+- **Vibration 2.5 g** and the **90 °C EGT spread** are ours outright, with no
+  external source. 2.5 g sits between nominal (1.2 g) and the 4.5 g alarm, at
+  roughly where the 2X bearing-wear order overtakes the 1X fundamental. The
+  90 °C spread is about twice the largest seen across the healthy training
+  sorties. Both should be replaced by a real vibration survey and a real
+  hot-section limit before anyone flies behind them.
+
+The mapping is worth reading for what it exposes: **the old 30 % threshold was
+far more conservative than any limit anyone had written down.** The stated
+physical limits land between 0.10 % and 12.20 % health, so the estimator was
+condemning engines long before they reached a documented condition. That is a
+safe direction to be wrong in, but it was wrong by an unknown margin, and nobody
+could see it while the criterion was a percentage.
+
+[`models/rul_estimator.py`](models/rul_estimator.py) now projects the subsystem
+with the **least margin to its own limit** — margin, not raw health, since a
+turbo at 20 % is further from its 12.2 % limit than an oil system at 15 % is from
+its 0.1 % one. The alert card names the criterion instead of a bare number:
+
+```
+Oil pressure projected to reach 2.0 bar in 18.0-25.0 flight hours (Confidence: 95%).
+```
+
+The Rotax config carries its own limits rather than the VRDE numbers rescaled —
+1.5 bar oil pressure and 135 °C CHT from the Rotax 914 UL manual, on a 14 VDC
+bus. Its cylinder limit exposed a mislabelling worth noting: that config's
+`cht_nominal_celsius` of 135 °C is the manual's *maximum*, not a cruise value, so
+the criterion takes 108 °C as nominal to measure a real margin. A limit that maps
+to near-full health now raises rather than passing silently.
 
 ---
 
@@ -567,11 +707,25 @@ compound and cascading ways that this taxonomy does not cover — though the
 unsupervised trigger will still flag them as anomalous, it just will not name
 them.
 
-The MVEM is calibrated to a datasheet, not to a specific airframe's worn engine,
-and it does not currently adapt online as an engine ages. The RUL interval is
-constructed from the degradation trajectory rather than from a distribution-free
-coverage guarantee; conformal prediction would be the honest upgrade. It is
-reported as a trend interval, not a calibrated 95 % one.
+The MVEM is calibrated to a datasheet, not to a specific airframe's worn engine.
+That gap is no longer an unmeasured worry — it is measured, and it is the
+system's largest weakness. At 5 % build spread macro F1 falls from 0.9771 to
+0.8949 and false alarms rise from 0.43 % to 34.93 %, and across 0 → 10 % spread
+the residual representation loses **more** than the black-box baseline it beats
+everywhere else (0.1611 against 0.0907 macro F1). Online adaptation is now
+implemented and is a wash on the held-out sorties for a specific reason: none of
+them contains enough steady flight for it to converge. Both results are in
+["Your twin has perfect knowledge of your engine"](#your-twin-has-perfect-knowledge-of-your-engine-what-happens-when-it-doesnt)
+above, with the mechanism and the per-class damage.
+
+The RUL interval is constructed from the degradation trajectory rather than from
+a distribution-free coverage guarantee; conformal prediction would be the honest
+upgrade. It is reported as a trend interval, not a calibrated 95 % one.
+
+End-of-life is now defined in engine units rather than as a percentage of a tuned
+index, but two of the five limits are ours with no external source: the 2.5 g 2X
+vibration figure and the 90 °C EGT-spread margin. They are reasoned rather than
+arbitrary, and they are still not a manufacturer's number.
 
 The sensor validator covers two archetypes — thermocouple open circuit and oil
 transducer dropout. Stuck-at, slow drift and noise bursts on the other thirteen
@@ -590,10 +744,13 @@ The MVEM calibration RMSE against the published derating curve is reported as
 lookup table it is scored against. Treat it as a consistency check, not as
 independent validation.
 
-Natural next steps, in order of usefulness: hardware-in-the-loop against a test
-cell, profiling on flight-representative edge compute, an expanded fault
-taxonomy, online baseline adaptation to per-airframe wear, and conformal
-prediction for the RUL bounds.
+Natural next steps, in order of usefulness: per-unit parameter identification on
+the ground, which the mismatch sweep shows is a precondition rather than a
+refinement; hardware-in-the-loop against a test cell; profiling on
+flight-representative edge compute; an expanded fault taxonomy; and conformal
+prediction for the RUL bounds. Online baseline adaptation is implemented — what
+it still needs is either longer steady legs than these sorties contain or a
+ground-based initial estimate to start from.
 
 ---
 

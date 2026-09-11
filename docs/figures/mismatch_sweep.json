@@ -3,106 +3,216 @@
     {
       "spread_pct": 0.0,
       "realised_mean_abs_dev_pct": 0.0,
+      "realised_cyl_mean_abs_dev_pct": 0.0,
       "n_frames": 48000,
       "n_healthy_sortie_frames": 7500,
       "engine_twin": {
-        "accuracy": 97.64375,
-        "macro_f1": 0.9769957870507406,
+        "accuracy": 97.64791666666667,
+        "macro_f1": 0.9770354237031478,
         "false_alarm_pct": 0.46666666666666673,
-        "latency_s": 2.8518518518518525
+        "latency_s": 2.8444444444444446,
+        "cylinder_class_f1": {
+          "LEAN_MIXTURE_CYL3": 0.9556687417468402,
+          "RICH_MIXTURE_CYL1": 0.9624699574782769,
+          "COOLING_DEGRADATION_CYL2": 0.9627307558342041
+        }
       },
       "raw_telemetry": {
         "accuracy": 89.75625000000001,
         "macro_f1": 0.9154651901606575,
         "false_alarm_pct": 40.45333333333333,
-        "latency_s": 5.037037037037037
+        "latency_s": 5.037037037037037,
+        "cylinder_class_f1": {
+          "LEAN_MIXTURE_CYL3": 0.9045687070029987,
+          "RICH_MIXTURE_CYL1": 0.8701716738197425,
+          "COOLING_DEGRADATION_CYL2": 0.9538839207434684
+        }
       },
       "residual_control": {
-        "accuracy": 97.50833333333333,
-        "macro_f1": 0.9760026551912141,
-        "false_alarm_pct": 1.0,
-        "latency_s": 2.6111111111111116
+        "accuracy": 97.54583333333333,
+        "macro_f1": 0.9763517728322613,
+        "false_alarm_pct": 0.9466666666666667,
+        "latency_s": 2.703703703703704,
+        "cylinder_class_f1": {
+          "LEAN_MIXTURE_CYL3": 0.9544853635505194,
+          "RICH_MIXTURE_CYL1": 0.962497690744504,
+          "COOLING_DEGRADATION_CYL2": 0.9584574934268186
+        }
+      },
+      "engine_twin_adapted": {
+        "accuracy": 97.46041666666667,
+        "macro_f1": 0.9756428452441218,
+        "false_alarm_pct": 1.8800000000000001,
+        "latency_s": 2.4481481481481486,
+        "cylinder_class_f1": {
+          "LEAN_MIXTURE_CYL3": 0.9511606313834726,
+          "RICH_MIXTURE_CYL1": 0.9627837737253443,
+          "COOLING_DEGRADATION_CYL2": 0.9606986899563319
+        }
       }
     },
     {
       "spread_pct": 2.0,
       "realised_mean_abs_dev_pct": 1.495098125,
+      "realised_cyl_mean_abs_dev_pct": 0.9439511718750005,
       "n_frames": 48000,
       "n_healthy_sortie_frames": 7500,
       "engine_twin": {
-        "accuracy": 96.30208333333333,
-        "macro_f1": 0.9649154329052679,
-        "false_alarm_pct": 3.1333333333333333,
-        "latency_s": 2.7148148148148157
+        "accuracy": 96.00833333333333,
+        "macro_f1": 0.9621486486224547,
+        "false_alarm_pct": 4.0,
+        "latency_s": 3.0444444444444456,
+        "cylinder_class_f1": {
+          "LEAN_MIXTURE_CYL3": 0.9601952684941795,
+          "RICH_MIXTURE_CYL1": 0.9312227074235808,
+          "COOLING_DEGRADATION_CYL2": 0.9612645475073823
+        }
       },
       "raw_telemetry": {
-        "accuracy": 89.50833333333334,
-        "macro_f1": 0.9125518846912012,
-        "false_alarm_pct": 40.61333333333334,
-        "latency_s": 5.114814814814816
+        "accuracy": 89.35833333333333,
+        "macro_f1": 0.9118154375626665,
+        "false_alarm_pct": 40.69333333333333,
+        "latency_s": 5.2888888888888905,
+        "cylinder_class_f1": {
+          "LEAN_MIXTURE_CYL3": 0.924433249370277,
+          "RICH_MIXTURE_CYL1": 0.8467698878804057,
+          "COOLING_DEGRADATION_CYL2": 0.9545853059793091
+        }
       },
       "residual_control": {
-        "accuracy": 95.33333333333334,
-        "macro_f1": 0.9576031203457036,
-        "false_alarm_pct": 4.84,
-        "latency_s": 2.8074074074074082
+        "accuracy": 95.09583333333333,
+        "macro_f1": 0.9556396427733915,
+        "false_alarm_pct": 5.866666666666666,
+        "latency_s": 2.8222222222222233,
+        "cylinder_class_f1": {
+          "LEAN_MIXTURE_CYL3": 0.9588577869622393,
+          "RICH_MIXTURE_CYL1": 0.9328724758959432,
+          "COOLING_DEGRADATION_CYL2": 0.9593552908199019
+        }
+      },
+      "engine_twin_adapted": {
+        "accuracy": 95.60416666666667,
+        "macro_f1": 0.9589282312683031,
+        "false_alarm_pct": 6.586666666666667,
+        "latency_s": 2.681481481481481,
+        "cylinder_class_f1": {
+          "LEAN_MIXTURE_CYL3": 0.9559233773479635,
+          "RICH_MIXTURE_CYL1": 0.9499721034033848,
+          "COOLING_DEGRADATION_CYL2": 0.9596788270204224
+        }
       }
     },
     {
       "spread_pct": 5.0,
       "realised_mean_abs_dev_pct": 3.737753125,
+      "realised_cyl_mean_abs_dev_pct": 0.9439511718750005,
       "n_frames": 48000,
       "n_healthy_sortie_frames": 7500,
       "engine_twin": {
-        "accuracy": 87.35416666666667,
-        "macro_f1": 0.897548259534514,
-        "false_alarm_pct": 33.89333333333333,
-        "latency_s": 2.859259259259259
+        "accuracy": 86.94375,
+        "macro_f1": 0.8947313609751895,
+        "false_alarm_pct": 35.013333333333335,
+        "latency_s": 3.4185185185185194,
+        "cylinder_class_f1": {
+          "LEAN_MIXTURE_CYL3": 0.9491588785046728,
+          "RICH_MIXTURE_CYL1": 0.7750652541071703,
+          "COOLING_DEGRADATION_CYL2": 0.9483336272262387
+        }
       },
       "raw_telemetry": {
-        "accuracy": 87.94999999999999,
-        "macro_f1": 0.8946415666056187,
-        "false_alarm_pct": 43.81333333333333,
-        "latency_s": 5.240740740740741
+        "accuracy": 87.72708333333334,
+        "macro_f1": 0.8930383742932664,
+        "false_alarm_pct": 43.78666666666667,
+        "latency_s": 5.411111111111113,
+        "cylinder_class_f1": {
+          "LEAN_MIXTURE_CYL3": 0.905055487053021,
+          "RICH_MIXTURE_CYL1": 0.8197402597402598,
+          "COOLING_DEGRADATION_CYL2": 0.9493006993006993
+        }
       },
       "residual_control": {
-        "accuracy": 86.95833333333334,
-        "macro_f1": 0.8988041806051641,
-        "false_alarm_pct": 30.533333333333335,
-        "latency_s": 3.1666666666666674
+        "accuracy": 86.98958333333333,
+        "macro_f1": 0.8997079266811923,
+        "false_alarm_pct": 30.48,
+        "latency_s": 3.3518518518518525,
+        "cylinder_class_f1": {
+          "LEAN_MIXTURE_CYL3": 0.941418678644956,
+          "RICH_MIXTURE_CYL1": 0.8733275412684622,
+          "COOLING_DEGRADATION_CYL2": 0.9484316852737905
+        }
+      },
+      "engine_twin_adapted": {
+        "accuracy": 86.93333333333332,
+        "macro_f1": 0.8928353183166848,
+        "false_alarm_pct": 33.86666666666667,
+        "latency_s": 3.2629629629629644,
+        "cylinder_class_f1": {
+          "LEAN_MIXTURE_CYL3": 0.9219960367501351,
+          "RICH_MIXTURE_CYL1": 0.7931472081218274,
+          "COOLING_DEGRADATION_CYL2": 0.9479074695391135
+        }
       }
     },
     {
       "spread_pct": 10.0,
       "realised_mean_abs_dev_pct": 7.475506875,
+      "realised_cyl_mean_abs_dev_pct": 0.9439511718750005,
       "n_frames": 48000,
       "n_healthy_sortie_frames": 7500,
       "engine_twin": {
-        "accuracy": 76.17916666666666,
-        "macro_f1": 0.8151382262048408,
-        "false_alarm_pct": 54.05333333333333,
-        "latency_s": 4.500000000000002
+        "accuracy": 76.03125,
+        "macro_f1": 0.816101416008632,
+        "false_alarm_pct": 54.65333333333333,
+        "latency_s": 4.700000000000001,
+        "cylinder_class_f1": {
+          "LEAN_MIXTURE_CYL3": 0.8089692334434209,
+          "RICH_MIXTURE_CYL1": 0.6146289658834462,
+          "COOLING_DEGRADATION_CYL2": 0.9092912229159016
+        }
       },
       "raw_telemetry": {
-        "accuracy": 82.06458333333333,
-        "macro_f1": 0.8247707305152204,
-        "false_alarm_pct": 50.66666666666667,
-        "latency_s": 6.540740740740743
+        "accuracy": 81.95416666666667,
+        "macro_f1": 0.8247432644564222,
+        "false_alarm_pct": 50.88,
+        "latency_s": 6.407407407407408,
+        "cylinder_class_f1": {
+          "LEAN_MIXTURE_CYL3": 0.7449700924415443,
+          "RICH_MIXTURE_CYL1": 0.7433510638297872,
+          "COOLING_DEGRADATION_CYL2": 0.940822111977321
+        }
       },
       "residual_control": {
-        "accuracy": 76.8625,
-        "macro_f1": 0.8181998512253129,
-        "false_alarm_pct": 47.36,
-        "latency_s": 5.414814814814816
+        "accuracy": 76.69375000000001,
+        "macro_f1": 0.818153440007829,
+        "false_alarm_pct": 47.38666666666666,
+        "latency_s": 5.529629629629631,
+        "cylinder_class_f1": {
+          "LEAN_MIXTURE_CYL3": 0.8231786845537544,
+          "RICH_MIXTURE_CYL1": 0.7050272562083586,
+          "COOLING_DEGRADATION_CYL2": 0.8533899942051381
+        }
+      },
+      "engine_twin_adapted": {
+        "accuracy": 76.09375,
+        "macro_f1": 0.8166151987048152,
+        "false_alarm_pct": 55.279999999999994,
+        "latency_s": 4.700000000000001,
+        "cylinder_class_f1": {
+          "LEAN_MIXTURE_CYL3": 0.8073933321817239,
+          "RICH_MIXTURE_CYL1": 0.6123318684245572,
+          "COOLING_DEGRADATION_CYL2": 0.9092912229159016
+        }
       }
     }
   ],
   "verdict": {
-    "twin_f1_drop": 0.16185756084589986,
-    "raw_f1_drop": 0.0906944596454371,
-    "residual_control_f1_drop": 0.15780280396590118,
-    "twin_far_rise_pp": 53.58666666666666,
-    "raw_far_rise_pp": 10.213333333333338,
+    "twin_f1_drop": 0.16093400769451582,
+    "raw_f1_drop": 0.09072192570423532,
+    "residual_control_f1_drop": 0.1581983328244323,
+    "twin_far_rise_pp": 54.18666666666666,
+    "raw_far_rise_pp": 10.42666666666667,
+    "adapted_f1_drop": 0.15902764653930657,
+    "adapted_far_rise_pp": 53.39999999999999,
     "residual_degrades_more_gracefully": false,
     "max_spread_pct": 10.0
   },

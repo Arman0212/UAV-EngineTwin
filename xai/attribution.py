@@ -1,5 +1,5 @@
 """
-Local Feature Attribution for Real-Time Diagnosis (SIH26054 Section 17)
+Local Feature Attribution for Real-Time Diagnosis (SIH26054)
 
 Ranks which of the 15 normalized residual channels drove the classifier toward
 the fault it named, so the operator card carries evidence rather than a bare
