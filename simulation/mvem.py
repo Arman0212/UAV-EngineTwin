@@ -17,6 +17,34 @@ import numpy as np
 from .flight_profile import FlightState
 from .engine_spec import EngineSpec
 
+# Multiplicative deviations of one physical unit from its datasheet. A real
+# engine leaves the factory slightly off nominal — a marginally tighter turbo,
+# a little more friction — and stays that way for its life. Each key scales the
+# named constant where that constant is used; 1.0 is exactly datasheet.
+VARIANT_KEYS = (
+    "turbo_efficiency_mult",
+    "volumetric_efficiency_mult",
+    "fmep_mult",
+    "oil_pump_efficiency_mult",
+    "combustion_efficiency_mult",
+)
+
+
+def sample_variant(rng: np.random.Generator, spread_pct: float) -> Dict[str, float]:
+    """
+    Draws one engine's build deviations: each multiplier normal about 1.0 with
+    ``spread_pct`` percent as its standard deviation, truncated at +/- 3 sigma.
+
+    :param spread_pct: standard deviation as a percentage. 0.0 returns exact
+        datasheet values, which is what keeps the committed datasets valid.
+    """
+    sigma = spread_pct / 100.0
+    if sigma <= 0.0:
+        return {k: 1.0 for k in VARIANT_KEYS}
+    lo, hi = 1.0 - 3.0 * sigma, 1.0 + 3.0 * sigma
+    return {k: float(np.clip(rng.normal(1.0, sigma), lo, hi)) for k in VARIANT_KEYS}
+
+
 @dataclass
 class EngineState:
     time_s: float
@@ -46,7 +74,8 @@ class MeanValueEngineModel:
     Control-oriented Physics Engine Simulator.
     Integrates intake ODEs, inertia torque balance, and lumped-parameter thermal heat transfer.
     """
-    def __init__(self, config: Optional[Dict[str, Any]] = None, seed: Optional[int] = None):
+    def __init__(self, config: Optional[Dict[str, Any]] = None, seed: Optional[int] = None,
+                 variant: Optional[Dict[str, float]] = None):
         # Owned RNG so stochastic terms are reproducible. Previously the
         # vibration z-axis drew from NumPy's global RNG, which meant a seeded
         # dataset run still produced different data on every regeneration.
@@ -100,8 +129,27 @@ class MeanValueEngineModel:
         self.timing_jitter_deg = 0.0     # Degrees of timing jitter (misfire proxy)
         self.alternator_health = 1.0     # Multiplier on electrical output
 
+        # Build Variant (unit-to-unit deviation from datasheet, fixed for the
+        # engine's life). Deliberately set outside reset(): a variant is a
+        # property of the unit, not of the run.
+        unknown = set(variant or {}) - set(VARIANT_KEYS)
+        if unknown:
+            raise ValueError(f"Unknown engine variant keys: {sorted(unknown)}")
+        self.variant: Dict[str, float] = {k: 1.0 for k in VARIANT_KEYS}
+        self.variant.update({k: float(v) for k, v in (variant or {}).items()})
+        self.turbo_efficiency_mult = self.variant["turbo_efficiency_mult"]
+        self.volumetric_efficiency_mult = self.variant["volumetric_efficiency_mult"]
+        self.fmep_mult = self.variant["fmep_mult"]
+        self.oil_pump_efficiency_mult = self.variant["oil_pump_efficiency_mult"]
+        self.combustion_efficiency_mult = self.variant["combustion_efficiency_mult"]
+
     def reset(self, idle: bool = False):
-        """Resets engine to nominal state."""
+        """
+        Resets engine to nominal state. The build variant is preserved.
+
+        Initial conditions come from the spec, so resetting a Rotax does not
+        drop it at the reference engine's idle speed or boost.
+        """
         n = self.cylinders
         self.rpm = self.spec.idle_rpm if idle else 2800.0
         self.p_manifold = 1.02 if idle else self.spec.max_boost_bar
@@ -142,7 +190,7 @@ class MeanValueEngineModel:
         alt_ft = flight.altitude_ft
         max_boost_cap = self.spec.boost_ceiling_at(alt_ft)
 
-        max_achievable_map = max_boost_cap * self.turbo_efficiency
+        max_achievable_map = max_boost_cap * self.turbo_efficiency * self.turbo_efficiency_mult
         target_map = p_amb + (max_achievable_map - p_amb) * (throttle ** 1.3)
         target_map = max(p_amb * 0.95, target_map) # MAP cannot be below idle intake vacuum
 
@@ -156,10 +204,13 @@ class MeanValueEngineModel:
         self.t_manifold_c = t_compressor_out - intercooler_eff * (t_compressor_out - t_amb_c)
 
         # Volumetric Efficiency (Speed-density equation)
+        # Shape from the spec (which engine), scale from the variant (how far
+        # this particular unit has drifted from that engine's paper spec).
         speed_ratio = self.rpm / self.spec.rated_rpm
         eta_vol = (self.spec.eta_vol_base
                    - self.spec.eta_vol_speed_droop * (speed_ratio ** 2)
-                   + self.spec.eta_vol_boost_gain * (self.p_manifold / self.spec.max_boost_bar))
+                   + self.spec.eta_vol_boost_gain * (self.p_manifold / self.spec.max_boost_bar)
+                   ) * self.volumetric_efficiency_mult
         t_man_k = self.t_manifold_c + 273.15
         rho_manifold = (self.p_manifold * 1e5) / (self.r_air * t_man_k)
         air_mass_flow_kgps = eta_vol * (self.displacement_v_d * (self.rpm / 120.0)) * rho_manifold
@@ -187,13 +238,15 @@ class MeanValueEngineModel:
         fuel_flow_lph = (total_fuel_kgps * 3600.0) / self.diesel_density
 
         # Indicated Thermal Efficiency (function of compression ratio and load)
-        eta_th_ind = self.spec.eta_th_base * (1.0 - 0.08 * (1.0 - throttle))
+        eta_th_ind = (self.spec.eta_th_base * (1.0 - 0.08 * (1.0 - throttle))
+                      * self.combustion_efficiency_mult)
         indicated_power_watts = total_fuel_kgps * self.lhv_fuel * eta_th_ind
 
         # Chen-Flynn Mechanical Friction Model + Bearing Wear
         # P_fric ~ (FMEP * V_d * N) / 120
         fmep_bar = ((0.45 + self.spec.fmep_rpm_coeff * self.rpm
-                     + 0.04 * (self.p_manifold / 1.0)) * self.bearing_wear_factor)
+                     + 0.04 * (self.p_manifold / 1.0))
+                    * self.bearing_wear_factor * self.fmep_mult)
         friction_power_watts = (fmep_bar * 1e5 * self.displacement_v_d * (self.rpm / 120.0))
 
         # Propeller Load Torque Absorption: Tau_prop = c_prop * rho * omega^2
@@ -246,7 +299,8 @@ class MeanValueEngineModel:
         oil_viscosity_factor = math.exp(-0.015 * (self.t_oil - 90.0))
         base_oil_p = (self.spec.oil_p_base_bar
                       + self.spec.oil_p_rpm_span_bar * (self.rpm / self.spec.governor_max_rpm))
-        oil_pressure_bar = base_oil_p * oil_viscosity_factor * self.oil_pump_health
+        oil_pressure_bar = (base_oil_p * oil_viscosity_factor
+                            * self.oil_pump_health * self.oil_pump_efficiency_mult)
 
         # Per-Cylinder CHT & EGT Equations
         for i in range(self.cylinders):

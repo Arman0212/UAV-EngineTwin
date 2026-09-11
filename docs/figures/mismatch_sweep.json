@@ -1,0 +1,111 @@
+{
+  "rows": [
+    {
+      "spread_pct": 0.0,
+      "realised_mean_abs_dev_pct": 0.0,
+      "n_frames": 48000,
+      "n_healthy_sortie_frames": 7500,
+      "engine_twin": {
+        "accuracy": 97.63541666666666,
+        "macro_f1": 0.9769704189024291,
+        "false_alarm_pct": 0.44,
+        "latency_s": 2.8444444444444446
+      },
+      "raw_telemetry": {
+        "accuracy": 89.88541666666666,
+        "macro_f1": 0.9164990987389638,
+        "false_alarm_pct": 39.89333333333333,
+        "latency_s": 5.055555555555555
+      },
+      "residual_control": {
+        "accuracy": 97.51875,
+        "macro_f1": 0.9761092010298753,
+        "false_alarm_pct": 0.9199999999999999,
+        "latency_s": 2.703703703703704
+      }
+    },
+    {
+      "spread_pct": 2.0,
+      "realised_mean_abs_dev_pct": 1.495098125,
+      "n_frames": 48000,
+      "n_healthy_sortie_frames": 7500,
+      "engine_twin": {
+        "accuracy": 96.27291666666666,
+        "macro_f1": 0.9647175780687128,
+        "false_alarm_pct": 3.173333333333334,
+        "latency_s": 2.7185185185185192
+      },
+      "raw_telemetry": {
+        "accuracy": 89.6375,
+        "macro_f1": 0.9131312557712825,
+        "false_alarm_pct": 39.92,
+        "latency_s": 5.04814814814815
+      },
+      "residual_control": {
+        "accuracy": 95.42083333333333,
+        "macro_f1": 0.9584332200170852,
+        "false_alarm_pct": 4.653333333333333,
+        "latency_s": 2.7148148148148157
+      }
+    },
+    {
+      "spread_pct": 5.0,
+      "realised_mean_abs_dev_pct": 3.737753125,
+      "n_frames": 48000,
+      "n_healthy_sortie_frames": 7500,
+      "engine_twin": {
+        "accuracy": 87.36666666666667,
+        "macro_f1": 0.8975539175842396,
+        "false_alarm_pct": 33.879999999999995,
+        "latency_s": 2.8851851851851857
+      },
+      "raw_telemetry": {
+        "accuracy": 88.11041666666667,
+        "macro_f1": 0.8948143783606713,
+        "false_alarm_pct": 42.08,
+        "latency_s": 5.251851851851853
+      },
+      "residual_control": {
+        "accuracy": 87.12708333333333,
+        "macro_f1": 0.9005027027006609,
+        "false_alarm_pct": 30.25333333333333,
+        "latency_s": 3.107407407407408
+      }
+    },
+    {
+      "spread_pct": 10.0,
+      "realised_mean_abs_dev_pct": 7.475506875,
+      "n_frames": 48000,
+      "n_healthy_sortie_frames": 7500,
+      "engine_twin": {
+        "accuracy": 76.17916666666666,
+        "macro_f1": 0.8151054278245627,
+        "false_alarm_pct": 54.0,
+        "latency_s": 4.425925925925928
+      },
+      "raw_telemetry": {
+        "accuracy": 82.22708333333333,
+        "macro_f1": 0.8237296382471438,
+        "false_alarm_pct": 48.57333333333334,
+        "latency_s": 6.244444444444446
+      },
+      "residual_control": {
+        "accuracy": 77.19583333333333,
+        "macro_f1": 0.821685890762222,
+        "false_alarm_pct": 46.57333333333333,
+        "latency_s": 5.466666666666668
+      }
+    }
+  ],
+  "verdict": {
+    "twin_f1_drop": 0.16186499107786634,
+    "raw_f1_drop": 0.09276946049182,
+    "residual_control_f1_drop": 0.15442331026765332,
+    "twin_far_rise_pp": 53.56,
+    "raw_far_rise_pp": 8.680000000000007,
+    "residual_degrades_more_gracefully": false,
+    "max_spread_pct": 10.0
+  },
+  "miss_penalty_s": 30.0,
+  "min_macro_f1_at_5pct": 0.85
+}
