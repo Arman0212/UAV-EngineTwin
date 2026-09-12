@@ -22,32 +22,69 @@ const THEME = (() => {
     } catch (e) { return fallback; }
   };
   const t = {
-    bgPage: css('--bg-page', '#0E0F11'),
-    bgChrome: css('--bg-chrome', '#141619'),
-    bgPanel: css('--bg-panel', '#17191C'),
-    bgElevated: css('--bg-elevated', '#24272B'),
-    border: css('--border', '#2A2D31'),
-    textPrimary: css('--text-primary', '#E8E6E1'),
-    textMuted: css('--text-muted', '#8A8F96'),
-    textDim: css('--text-dim', '#6B7076'),
-    caution: css('--caution', '#DFA33A'),
-    cautionDim: css('--caution-dim', '#A97A24'),
-    warning: css('--warning', '#DD5A4E'),
-    ok: css('--ok', '#8CBE68'),
-    instrument: css('--instrument', '#63A8D6'),
-    instrumentDim: css('--instrument-dim', '#3E7AA3'),
-    cautionBand: css('--caution-band', 'rgba(223,163,58,0.13)'),
-    warningBand: css('--warning-band', 'rgba(221,90,78,0.13)'),
-    trace: [
-      css('--trace-1', '#E8E6E1'),
-      css('--trace-2', '#C2BFB9'),
-      css('--trace-3', '#9B9992'),
-      css('--trace-4', '#74726D')
+    /* Surfaces — three levels, so a panel separates from the page by tone
+       rather than by a drawn border. */
+    bgPage:     css('--bg-page', '#0B0F14'),
+    bgPanel:    css('--bg-panel', '#121821'),
+    bgElevated: css('--bg-elevated', '#1A2230'),
+    border:       css('--border', '#232C38'),
+    borderStrong: css('--border-strong', '#313D4D'),
+
+    textPrimary:   css('--text-primary', '#E4E9F0'),
+    textSecondary: css('--text-secondary', '#94A1B2'),
+    textMuted:     css('--text-muted', '#5C6878'),
+
+    /* Semantic state, on the existing 85/70/50/25 health bands. */
+    nominal:  css('--nominal',  '#3DD68C'),
+    advisory: css('--advisory', '#6BC4E8'),
+    caution:  css('--caution',  '#F0B429'),
+    warning:  css('--warning',  '#F2822C'),
+    critical: css('--critical', '#E5484D'),
+
+    /* UI accent. Selection and focus only — never state. */
+    accent: css('--accent', '#4C8DFF'),
+
+    /* Chart furniture. */
+    modelExpected: css('--model-expected', '#6B7684'),
+    grid:          css('--grid', '#1C242F'),
+
+    /* Per-cylinder identity. Index 0..3 is cylinder 1..4, and this is the
+       single source for that mapping: charts, tiles, the 3D model and the
+       attribution bars all read it, so cylinder 3 is one colour everywhere. */
+    cyl: [
+      css('--cyl-1', '#56C6F5'),
+      css('--cyl-2', '#7B94FF'),
+      css('--cyl-3', '#A78BFA'),
+      css('--cyl-4', '#DE7BD0')
     ],
-    fontMono: "'JetBrains Mono', ui-monospace, Menlo, monospace",
+    cylBand: [
+      css('--cyl-1-band', 'rgba(86, 198, 245, 0.10)'),
+      css('--cyl-2-band', 'rgba(123, 148, 255, 0.10)'),
+      css('--cyl-3-band', 'rgba(167, 139, 250, 0.10)'),
+      css('--cyl-4-band', 'rgba(222, 123, 208, 0.10)')
+    ],
+    cautionBand: css('--caution-band', 'rgba(240, 180, 41, 0.13)'),
+    warningBand: css('--warning-band', 'rgba(229, 72, 77, 0.13)'),
+
+    fontMono: "'IBM Plex Mono', ui-monospace, Menlo, monospace",
+    fontSans: "'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif",
     fsTick: 11
   };
+  /* Back-compat aliases: older call sites still reference these names. */
+  t.ok = t.nominal;
+  t.instrument = t.accent;
+  t.instrumentDim = t.modelExpected;
+  t.textDim = t.textMuted;
+  t.bgChrome = t.bgPanel;
+  t.trace = t.cyl;
   t.hex = (c) => parseInt(String(c).replace('#', ''), 16);
+  /* Health band -> semantic colour. The 85/70/50/25 thresholds are the
+     existing ones; only the hues resolve here. */
+  t.forHealth = (h) => h >= 85 ? t.nominal
+                     : h >= 70 ? t.advisory
+                     : h >= 50 ? t.caution
+                     : h >= 25 ? t.warning
+                     : t.critical;
   return t;
 })();
 

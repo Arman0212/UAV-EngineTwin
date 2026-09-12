@@ -16,91 +16,111 @@
 
 :root {
   /* ======================================================================
-     UNIFIED COLOUR SYSTEM
-     One palette for the whole experience — the cover chapter, the scroll
-     transition and the operator console all resolve from these tokens, so
-     there is no seam where the visual language changes. Deep navy ground
-     Near-black with a violet bias rather than neutral grey: the surfaces lean
-     toward the accent, which is what makes them read as chosen. The three
-     annunciator hues are deliberately held far from the accent in hue space so
-     an alarm can never be mistaken for an interface element.
+     SURFACE SYSTEM — three levels, not pure black.
+     Pure black gives no surface hierarchy, so every panel edge has to be
+     drawn with a border, and it glares under projector light. Three
+     elevations let a panel separate from the page by tone, and --border is
+     then spent only where two panels of the SAME elevation meet.
      ====================================================================== */
+  --bg-page:      #0B0F14;
+  --bg-panel:     #121821;
+  --bg-elevated:  #1A2230;
+  --border:       #232C38;
+  --border-strong:#313D4D;
 
-  /* --- Surfaces --------------------------------------------------------
-     Four depths: void (behind everything), page, chrome/panel, raised. */
-  --bg-void:      #06060A;
-  --bg-page:      #0B0B12;   /* primary background                         */
-  --bg-chrome:    #12121C;   /* secondary background — bars, cover ground  */
-  --bg-panel:     #171725;   /* panel surface                              */
-  --bg-elevated:  #1F1F31;   /* raised tiles, inspector                    */
-  --border:       #2A2A40;
-  --border-soft:  #1C1C2C;
+  --text-primary: #E4E9F0;
+  --text-secondary:#94A1B2;
+  --text-muted:   #5C6878;
 
-  /* --- Type ----------------------------------------------------------- */
-  --text-primary: #EDEDF5;
-  --text-muted:   #9B9BB0;
-  --text-dim:     #8484A0;  /* lifted to clear AA on panel: axis ticks must be readable */
+  /* --- Semantic state --------------------------------------------------
+     Mapped onto the existing health bands (85 / 70 / 50 / 25). Banding
+     logic is untouched; only the hues resolve here. */
+  --nominal:  #3DD68C;
+  --advisory: #6BC4E8;
+  --caution:  #F0B429;
+  --warning:  #F2822C;
+  --critical: #E5484D;
 
-  /* --- Annunciation ----------------------------------------------------
-     One annunciator scale across the whole project: the cover, the console,
-     the 3D model and the printed brief use these same hues, so CAUTION on a
-     page and CAUTION on the glass are the same colour. */
-  --caution:      #F0A93B;
-  --caution-dim:  #A8761F;
-  --warning:      #E5484D;
-  --ok:           #6DD98A;
+  /* --- Per-cylinder identity -------------------------------------------
+     One perceptual family, stepping blue -> violet -> magenta, so the four
+     read as instances of the same thing rather than four alarm states.
+     The same four colours are used for chart traces, the cylinder tiles,
+     the 3D model and the attribution bars: cylinder 3 is one colour
+     everywhere it appears. */
+  --cyl-1: #56C6F5;
+  --cyl-2: #7B94FF;
+  --cyl-3: #A78BFA;
+  --cyl-4: #DE7BD0;
 
-  /* --- Primary accent --------------------------------------------------
-     Reserved for one meaning and no other: the physics model. The MVEM
-     expectation traces, the 3D selection outline, the cover's key rules and
-     every interactive focus state are this blue, so it always reads as
-     "what physics says" and never competes with the annunciator scale. */
-  --instrument:       #7C6CFF;
-  --instrument-hover: #9C90FF;
-  --instrument-dim:   #4B3FA8;
-  --instrument-band:  rgba(124, 108, 255, 0.10);
-  --instrument-glow:  rgba(124, 108, 255, 0.26);
+  /* --- UI accent -------------------------------------------------------
+     Selection, focus rings, the active fault button, the active camera
+     preset. Never used for state, so "this is selected" can never be
+     mistaken for "something is wrong". */
+  --accent: #4C8DFF;
 
-  /* --- Secondary accent ------------------------------------------------
-     Deliberately quiet. Used only for the residual/derived layer: chart
-     baselines' companion, the cover's secondary rules, small metadata
-     emphasis. Never for state. */
-  --accent-2:      #4ECDC4;
-  --accent-2-dim:  #2F8A84;
+  /* --- Chart furniture ------------------------------------------------- */
+  --model-expected: #6B7684;
+  --grid: #1C242F;
 
-  /* Derived translucent bands for chart tolerance regions */
-  --caution-band: rgba(240, 169, 59, 0.13);
+  /* --- Translucent derivatives ----------------------------------------- */
+  --cyl-1-band: rgba(86, 198, 245, 0.10);
+  --cyl-2-band: rgba(123, 148, 255, 0.10);
+  --cyl-3-band: rgba(167, 139, 250, 0.10);
+  --cyl-4-band: rgba(222, 123, 208, 0.10);
+  --caution-band: rgba(240, 180, 41, 0.13);
   --warning-band: rgba(229, 72, 77, 0.13);
+  --accent-band:  rgba(76, 141, 255, 0.12);
+  --accent-glow:  rgba(76, 141, 255, 0.26);
 
-  /* Sensor trace ramp — structural, so neutral. Four cylinders need four
-     separable traces; they are told apart by lightness, never by hue. When
-     one leaves its envelope it turns amber and identifies itself. The ramp
-     carries the same slight blue bias as the surfaces so it sits in the
-     palette rather than on top of it. */
-  --trace-1: #EDEDF5;
-  --trace-2: #C4C4D4;
-  --trace-3: #9A9AAE;
-  --trace-4: #74748A;
+  /* --- Compatibility aliases -------------------------------------------
+     theme.css is shared with the scroll cover and the printed brief. These
+     keep those surfaces resolving against the new system rather than
+     forking a second palette. */
+  --bg-void:      #06090D;
+  --bg-chrome:    #0F141C;
+  --border-soft:  #1A2230;
+  --text-dim:     #5C6878;
+  --ok:           var(--nominal);
+  --caution-dim:  #A87C1A;
+  --instrument:       var(--accent);
+  --instrument-hover: #6FA4FF;
+  --instrument-dim:   #2E5DA8;
+  --instrument-band:  var(--accent-band);
+  --instrument-glow:  var(--accent-glow);
+  --accent-2:     var(--advisory);
+  --accent-2-dim: #3E7FA0;
+  --trace-1: var(--cyl-1);
+  --trace-2: var(--cyl-2);
+  --trace-3: var(--cyl-3);
+  --trace-4: var(--cyl-4);
 
-  /* --- Motion ----------------------------------------------------------
-     One easing curve and two durations for the whole site, so the cover
-     transition and the console's state changes feel like one hand. */
+  /* --- Motion ----------------------------------------------------------- */
   --ease:        cubic-bezier(0.22, 0.61, 0.36, 1);
   --dur-quick:   160ms;
   --dur-settle:  420ms;
 
-  /* --- Type scale — three tiers only ---------------------------------- */
-  --fs-tick:    11px;   /* axis ticks (low end of the label tier)         */
-  --fs-label:   12px;   /* labels, units, log lines                       */
-  --fs-title:   14px;   /* panel titles                                   */
-  --fs-readout: 22px;   /* primary numeric readouts                       */
+  /* --- Type scale -------------------------------------------------------- */
+  --fs-tick:    11px;
+  --fs-label:   12px;
+  --fs-title:   14px;
+  --fs-readout: 22px;
 
-  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', SFMono-Regular,
+  /* Plex Mono carries every numeral so digits do not jitter as they update;
+     Plex Sans carries labels, titles, buttons and prose. Both are served
+     from dashboard/vendor/ so the console runs air-gapped. */
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', SFMono-Regular,
                Menlo, Consolas, monospace;
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system,
+               'Segoe UI', Roboto, sans-serif;
+
+  /* Text on a saturated accent fill. Named rather than literal so the one
+     place white is legitimate is also the one place it appears. */
+  --on-accent: #FFFFFF;
 
   --radius: 4px;
-  --accent-w: 4px;      /* abnormal-state left border width               */
+  --accent-w: 4px;
 }
+
 
 /* ==========================================================================
    BASE
@@ -1833,7 +1853,7 @@ body[data-phase="app"] .btn-cover-return { display: inline-flex; }
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #FFFFFF;
+  color: var(--on-accent);
 
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 16px rgba(124, 108, 255, 0.22);
   transition: border-color 0.3s var(--ease), box-shadow 0.3s var(--ease);
@@ -1843,7 +1863,7 @@ body[data-phase="app"] .btn-cover-return { display: inline-flex; }
   display: inline-block;
   transform: translateX(4px);
   transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-  color: #FFFFFF;
+  color: var(--on-accent);
   position: relative;
   z-index: 2;
 }
@@ -1865,7 +1885,7 @@ body[data-phase="app"] .btn-cover-return { display: inline-flex; }
   gap: 7px;
   z-index: 10;
   opacity: 0;
-  color: #FFFFFF;
+  color: var(--on-accent);
   transform: translateX(35px);
   transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: none;
@@ -1879,7 +1899,7 @@ body[data-phase="app"] .btn-cover-return { display: inline-flex; }
 .interactive-hover-btn .lucide-arrow {
   width: 15px;
   height: 15px;
-  stroke: #FFFFFF;
+  stroke: var(--on-accent);
   stroke-width: 2.5;
   transition: transform 0.25s var(--ease);
 }
@@ -1895,7 +1915,7 @@ body[data-phase="app"] .btn-cover-return { display: inline-flex; }
   width: 8px;
   height: 8px;
   border-radius: 9999px;
-  background: var(--instrument); /* #7C6CFF */
+  background: var(--instrument); /* var(--accent) */
   transform: scale(1);
   z-index: 1;
   transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
@@ -2046,4 +2066,29 @@ body[data-phase="app"] .cover-skip { display: none !important; }
 @media (max-width: 860px) {
   .engine-form-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
   .engine-derate-table { min-width: 0; }
+}
+
+
+/* ======================================================================
+   TYPOGRAPHY
+   Plex Sans carries labels, panel titles, buttons and prose. Plex Mono,
+   with tabular figures locked on, carries every numeral so a readout does
+   not reflow as its digits change twenty times a second. Both families are
+   served from dashboard/vendor/, so the console runs air-gapped.
+   ====================================================================== */
+body, button, input, select, textarea,
+.panel-title, .label, .unit, .btn, label, p, h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-sans);
+}
+.mono, .readout, .value, .val, .tick, .log-line, .telemetry-value,
+.gauge-value, .num, code, pre, td.n, .metric-value, .stat-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+/* Any element whose text is a number gets tabular figures even when it also
+   wears the sans face, so mixed label+value lines stay on the same grid. */
+[data-numeric], .kv-value, .pct, .delta {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1;
 }

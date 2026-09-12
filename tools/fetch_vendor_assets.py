@@ -34,8 +34,26 @@ ASSETS = {
     "OrbitControls.js": "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js",
 }
 
-FONT_CSS_URL = ("https://fonts.googleapis.com/css2"
-                "?family=JetBrains+Mono:wght@400;500;600&display=swap")
+# Webfont families the dashboard serves itself. Each entry maps a stylesheet
+# name to its Google Fonts CSS URL and the prefix used for the woff2 faces it
+# pulls down, so adding a family is one line rather than another function.
+FONTS = {
+    "jetbrains.css": (
+        "https://fonts.googleapis.com/css2"
+        "?family=JetBrains+Mono:wght@400;500;600&display=swap",
+        "jetbrains-mono",
+    ),
+    "plex-mono.css": (
+        "https://fonts.googleapis.com/css2"
+        "?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap",
+        "plex-mono",
+    ),
+    "plex-sans.css": (
+        "https://fonts.googleapis.com/css2"
+        "?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap",
+        "plex-sans",
+    ),
+}
 
 
 def _get(url: str) -> bytes:
@@ -53,31 +71,33 @@ def fetch_scripts() -> int:
     return len(ASSETS)
 
 
-def fetch_font() -> int:
-    """Downloads the webfont CSS and every woff2 it references, then rewrites
-    the CSS to point at the local copies."""
+def fetch_fonts() -> int:
+    """Downloads each webfont stylesheet and every woff2 it references, then
+    rewrites the CSS to point at the local copies."""
     FONT_DIR.mkdir(parents=True, exist_ok=True)
-    css = _get(FONT_CSS_URL).decode("utf-8")
+    total = 0
+    for css_name, (url, prefix) in FONTS.items():
+        css = _get(url).decode("utf-8")
+        faces = sorted(set(re.findall(r"https://fonts\.gstatic\.com[^)]+", css)))
+        for i, face_url in enumerate(faces, start=1):
+            name = f"{prefix}-{i}.woff2"
+            (FONT_DIR / name).write_bytes(_get(face_url))
+            css = css.replace(face_url, f"fonts/{name}")
 
-    urls = sorted(set(re.findall(r"https://fonts\.gstatic\.com[^)]+", css)))
-    for i, url in enumerate(urls, start=1):
-        name = f"jetbrains-mono-{i}.woff2"
-        (FONT_DIR / name).write_bytes(_get(url))
-        css = css.replace(url, f"fonts/{name}")
-
-    (VENDOR_DIR / "jetbrains.css").write_text(css, encoding="utf-8")
-    remaining = re.findall(r"https?://", css)
-    if remaining:
-        print(f"  WARNING: {len(remaining)} remote reference(s) still in jetbrains.css")
-    print(f"  jetbrains.css + {len(urls)} woff2 faces")
-    return len(urls)
+        (VENDOR_DIR / css_name).write_text(css, encoding="utf-8")
+        remaining = re.findall(r"https?://", css)
+        if remaining:
+            print(f"  WARNING: {len(remaining)} remote reference(s) still in {css_name}")
+        print(f"  {css_name:<18} + {len(faces)} woff2 faces")
+        total += len(faces)
+    return total
 
 
 def main() -> int:
     print("Refreshing vendored dashboard assets into dashboard/vendor/ ...")
     try:
         n_scripts = fetch_scripts()
-        n_faces = fetch_font()
+        n_faces = fetch_fonts()
     except Exception as e:
         print(f"FAILED: {e}", file=sys.stderr)
         print("The committed copies under dashboard/vendor/ are unchanged.", file=sys.stderr)

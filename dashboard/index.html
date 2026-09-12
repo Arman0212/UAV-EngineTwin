@@ -18,6 +18,8 @@
   <script src="/static/vendor/OrbitControls.js"></script>
   <!-- Monospace throughout: certified-display convention -->
   <link rel="stylesheet" href="/static/vendor/jetbrains.css">
+  <link rel="stylesheet" href="/static/vendor/plex-mono.css">
+  <link rel="stylesheet" href="/static/vendor/plex-sans.css">
   <!-- GLASS COCKPIT THEME: single source of truth for colour and type -->
   <link rel="stylesheet" href="/static/theme.css?v=2.0">
   <style>
@@ -40,17 +42,17 @@
       overflow: hidden !important;
       cursor: pointer !important;
       border-radius: 9999px !important;
-      border: 1px solid rgba(124, 108, 255, 0.45) !important;
-      background: rgba(23, 23, 37, 0.94) !important;
+      border: 1px solid rgba(76, 141, 255, 0.45) !important;
+      background: rgba(18, 24, 33, 0.94) !important;
       backdrop-filter: blur(14px) !important;
       -webkit-backdrop-filter: blur(14px) !important;
-      font-family: var(--font-mono, "JetBrains Mono", monospace) !important;
+      font-family: var(--font-mono) !important;
       font-size: 12px !important;
       font-weight: 700 !important;
       letter-spacing: 0.12em !important;
       text-transform: uppercase !important;
-      color: #FFFFFF !important;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), 0 0 16px rgba(124, 108, 255, 0.25) !important;
+      color: var(--on-accent) !important;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), 0 0 16px rgba(76, 141, 255, 0.25) !important;
       transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.15s ease !important;
     }
 
@@ -58,7 +60,7 @@
       display: inline-block;
       transform: translateX(4px);
       transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-      color: #FFFFFF;
+      color: var(--on-accent);
       position: relative;
       z-index: 2;
     }
@@ -80,7 +82,7 @@
       gap: 7px;
       z-index: 10;
       opacity: 0;
-      color: #FFFFFF;
+      color: var(--on-accent);
       transform: translateX(40px);
       transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
       pointer-events: none;
@@ -94,7 +96,7 @@
     #btn-skip-cover.interactive-hover-btn .lucide-arrow {
       width: 15px;
       height: 15px;
-      stroke: #FFFFFF;
+      stroke: var(--on-accent);
       stroke-width: 2.5;
       transition: transform 0.25s ease;
     }
@@ -110,7 +112,7 @@
       width: 8px;
       height: 8px;
       border-radius: 9999px;
-      background: #7C6CFF;
+      background: var(--accent);
       transform: scale(1);
       z-index: 1;
       transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
@@ -124,12 +126,12 @@
       height: 100%;
       transform: scale(1.8);
       border-radius: 9999px;
-      background: #7C6CFF;
+      background: var(--accent);
     }
 
     #btn-skip-cover.interactive-hover-btn:hover {
-      border-color: #9C90FF !important;
-      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.65), 0 0 24px rgba(124, 108, 255, 0.5) !important;
+      border-color: var(--instrument-hover) !important;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.65), 0 0 24px rgba(76, 141, 255, 0.5) !important;
     }
 
     #btn-skip-cover.interactive-hover-btn:active {
