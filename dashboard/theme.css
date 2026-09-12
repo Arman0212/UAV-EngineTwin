@@ -2092,3 +2092,33 @@ body, button, input, select, textarea,
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: "tnum" 1;
 }
+
+/* ======================================================================
+   CYLINDER IDENTITY
+   The same four hues identify a cylinder in the charts, these tiles, the 3D
+   model and the attribution rows. A tile carries its colour as a left
+   stripe rather than as text or fill, so identity never competes with the
+   state colour the tile takes when that cylinder is in trouble.
+   ====================================================================== */
+.cyl-strip-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 6px 10px 4px; font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+.cyl-strip-head-keys { font-family: var(--font-mono); letter-spacing: 0.04em; }
+.cyl-strip-head-keys .unit { margin-left: 6px; text-transform: none; letter-spacing: 0; }
+
+.cyl-cell { position: relative; }
+.cyl-cell::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--cyl-1); border-radius: var(--radius) 0 0 var(--radius);
+}
+.cyl-cell[data-cyl="2"]::before { background: var(--cyl-2); }
+.cyl-cell[data-cyl="3"]::before { background: var(--cyl-3); }
+.cyl-cell[data-cyl="4"]::before { background: var(--cyl-4); }
+
+.cyl-chip {
+  display: inline-block; width: 8px; height: 8px; border-radius: 2px;
+  margin-right: 6px; vertical-align: baseline; flex: none;
+}

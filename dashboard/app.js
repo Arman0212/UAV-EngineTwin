@@ -139,13 +139,27 @@ const CHART_UPDATE_INTERVAL_MS = 100; // 10 Hz
 
 // Telemetry history buffers
 const historyData = {
-  time: [],
+  time: [], t_s: [],
   sensor_egt1: [], sensor_egt2: [], sensor_egt3: [], sensor_egt4: [],
   mvem_egt: [],
+  mvem_egt1: [], mvem_egt2: [], mvem_egt3: [], mvem_egt4: [],
   sensor_oil_p: [], mvem_oil_p: [],
   sensor_map: [], mvem_map: [],
   sensor_vib: [], mvem_vib: []
 };
+
+/* Per-channel measurement sigma, matching digital_twin/health_index.py. The
+   +/-3 sigma envelope drawn on the charts is the same tolerance the residual
+   normalisation divides by, so "the trace left the band" on screen and "the
+   residual exceeded 3 sigma" in the health index are the same statement. */
+const SIGMA = { egt: 3.5, cht: 1.8, oilP: 0.06, map: 0.02, vib: 0.08 };
+const ENVELOPE_K = 3;
+
+/* Axis autoscaling. Recomputed on a slow cadence rather than every frame: a
+   range that chases the data jitters, and a jittering axis is harder to read
+   than a slightly stale one. */
+const AXIS_RESCALE_MS = 2500;
+let lastAxisRescale = 0;
 
 // ------------------------------------------------------------------
 // DOM HELPERS
@@ -523,7 +537,7 @@ function updateDashboard(state) {
     );
 
     setText(`txt-cyl${i+1}-temp`, egt.toFixed(0));
-    setText(`txt-cyl${i+1}-dev`, `Δ ${dEgt >= 0 ? '+' : ''}${dEgt.toFixed(0)} / ${dCht >= 0 ? '+' : ''}${dCht.toFixed(0)}`);
+    setText(`txt-cyl${i+1}-dev`, `${dEgt >= 0 ? '+' : ''}${dEgt.toFixed(0)} / ${dCht >= 0 ? '+' : ''}${dCht.toFixed(0)}`);
     setState(document.getElementById(`cyl-cell-${i}`), st);
   }
 
@@ -750,6 +764,17 @@ function updateRul(ai) {
 // ------------------------------------------------------------------
 // 7. LOCAL ATTRIBUTION — ranked horizontal bars, top five
 // ------------------------------------------------------------------
+/* A channel that names a cylinder gets that cylinder's colour as a chip, so
+   the same four hues identify a cylinder in the charts, the tiles, the 3D
+   model and here. The bar itself keeps its state colour: identity and state
+   are different questions and should not share one channel. */
+function cylChip(name) {
+  const m = /(?:cylinder|cyl)\s*([1-4])|EGT([1-4])|CHT([1-4])/i.exec(name || '');
+  if (!m) return '';
+  const n = parseInt(m[1] || m[2] || m[3], 10);
+  return `<i class="cyl-chip" style="background:${THEME.cyl[n - 1]}"></i>`;
+}
+
 function updateShapDrawer(shapItems) {
   const container = document.getElementById("container-shap");
   if (!container) return;
@@ -782,7 +807,7 @@ function updateShapDrawer(shapItems) {
     const width = Math.max(2, (pct / maxPct) * 100);
     return `
       <div class="hbar-row">
-        <span class="hbar-label">${item.display_name}</span>
+        <span class="hbar-label">${cylChip(item.display_name)}${item.display_name}</span>
         <span class="hbar-val">${pct.toFixed(1)}% · ${arrow}${absSigma.toFixed(1)}σ</span>
         <span class="hbar-track"><span class="hbar-fill"${stAttr} style="width:${width}%"></span></span>
       </div>`;
@@ -792,6 +817,72 @@ function updateShapDrawer(shapItems) {
 // ------------------------------------------------------------------
 // 8. CHARTS
 // ------------------------------------------------------------------
+
+/**
+ * Paints the +/-k sigma envelope as a filled band that follows the
+ * model-expected centreline, behind the sensor traces.
+ *
+ * Previously the envelope existed only as a dashed centreline and the solid
+ * sensor trace drew straight over it, which made the question "is this line
+ * above that line?" -- a comparison the eye is bad at. A filled band turns it
+ * into "did the line leave the band?", which is read instantly.
+ *
+ * Bands are per series so a cylinder's band carries that cylinder's colour.
+ * The twin's baseline currently models four identical cylinders, so all four
+ * expectations coincide; identical bands are therefore drawn once, in neutral
+ * --model-expected, rather than four times at stacking alpha. If the baseline
+ * ever differentiates cylinders the bands separate and colour themselves
+ * without any change here.
+ *
+ * options.plugins.envelope.series = [{ centre:[], sigma, color }]
+ */
+const envelopePlugin = {
+  id: 'envelope',
+  beforeDatasetsDraw(chart, args, opts) {
+    const series = (opts && opts.series) || [];
+    if (!series.length) return;
+    const { ctx, chartArea, scales } = chart;
+    if (!chartArea) return;
+
+    // Group series whose centreline is identical, so coincident bands paint once.
+    const groups = new Map();
+    series.forEach(sv => {
+      const centre = sv.centre || [];
+      if (!centre.length) return;
+      const key = (sv.axis || 'y') + '|' + sv.sigma + '|' + centre.join(',');
+      if (!groups.has(key)) groups.set(key, { ...sv, members: 1 });
+      else groups.get(key).members += 1;
+    });
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(chartArea.left, chartArea.top,
+             chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+    ctx.clip();
+
+    groups.forEach(g => {
+      const y = scales[g.axis || 'y'];
+      const x = scales.x;
+      if (!y || !x) return;
+      const centre = g.centre;
+      const half = g.sigma * ENVELOPE_K;
+      // A shared band belongs to no single cylinder, so it is neutral.
+      ctx.fillStyle = g.members > 1 ? THEME.modelExpected + '1A' : g.color;
+      ctx.beginPath();
+      for (let i = 0; i < centre.length; i++) {
+        const px = x.getPixelForValue(i);
+        const py = y.getPixelForValue(centre[i] + half);
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      for (let i = centre.length - 1; i >= 0; i--) {
+        ctx.lineTo(x.getPixelForValue(i), y.getPixelForValue(centre[i] - half));
+      }
+      ctx.closePath();
+      ctx.fill();
+    });
+    ctx.restore();
+  }
+};
 
 /**
  * Paints translucent tolerance bands across a y-axis region.
@@ -840,13 +931,84 @@ function envelopeSegmentColorLow(cautionLow, limitLow, baseColor) {
   };
 }
 
+/**
+ * Clips a y-axis to what is actually on it.
+ *
+ * Every chart previously ran a fixed axis several times taller than its data
+ * -- EGT on 0-1000 with the traces sitting near 500 -- so a real divergence
+ * was a few pixels and every trace read as a flat line mid-panel.
+ *
+ * The range is the union of the plotted series, their model-expected
+ * centrelines and the +/-3 sigma envelope around them, plus 8% headroom. It
+ * is recomputed on AXIS_RESCALE_MS rather than per frame so the axis does not
+ * chase the data, and it is floored at a minimum span so a dead-flat healthy
+ * trace does not get magnified into noise.
+ */
+function fitAxis(scale, series, opts) {
+  const o = opts || {};
+  let lo = Infinity, hi = -Infinity;
+  series.forEach(sv => {
+    const arr = sv.data || [];
+    const pad = (sv.sigma || 0) * ENVELOPE_K;
+    for (let i = 0; i < arr.length; i++) {
+      const v = arr[i];
+      if (v === null || v === undefined || !isFinite(v)) continue;
+      if (v - pad < lo) lo = v - pad;
+      if (v + pad > hi) hi = v + pad;
+    }
+  });
+  if (!isFinite(lo) || !isFinite(hi)) return false;
+
+  let span = hi - lo;
+  const minSpan = o.minSpan || 0;
+  if (span < minSpan) {                      // flat trace: open out around it
+    const mid = (hi + lo) / 2;
+    lo = mid - minSpan / 2; hi = mid + minSpan / 2; span = minSpan;
+  }
+  const head = span * 0.08;
+  lo -= head; hi += head;
+  if (o.floorAtZero && lo < 0) lo = 0;
+  if (o.clampMin !== undefined) lo = Math.min(lo, o.clampMin);
+  if (o.clampMax !== undefined) hi = Math.max(hi, o.clampMax);
+
+  const changed = scale.min !== lo || scale.max !== hi;
+  scale.min = lo; scale.max = hi;
+  return changed;
+}
+
+/** Recomputes all three charts' y-ranges from the live buffers. */
+function rescaleAxes() {
+  const H = historyData;
+  if (charts.temp) {
+    fitAxis(charts.temp.options.scales.y, [
+      { data: H.sensor_egt1 }, { data: H.sensor_egt2 },
+      { data: H.sensor_egt3 }, { data: H.sensor_egt4 },
+      { data: H.mvem_egt, sigma: SIGMA.egt }
+    ], { minSpan: 60 });
+  }
+  if (charts.pressures) {
+    fitAxis(charts.pressures.options.scales.y, [
+      { data: H.sensor_oil_p }, { data: H.mvem_oil_p, sigma: SIGMA.oilP }
+    ], { minSpan: 1.2, floorAtZero: false });
+    fitAxis(charts.pressures.options.scales.y1, [
+      { data: H.sensor_map }, { data: H.mvem_map, sigma: SIGMA.map }
+    ], { minSpan: 0.6 });
+  }
+  if (charts.vibration) {
+    fitAxis(charts.vibration.options.scales.y, [
+      { data: H.sensor_vib, sigma: SIGMA.vib }
+    ], { minSpan: 0.8, floorAtZero: true });
+    fitAxis(charts.vibration.options.scales.y1, [{ data: H.mvem_vib }], { minSpan: 40 });
+  }
+}
+
 function initCharts() {
   if (typeof Chart === "undefined") {
     console.warn("Chart.js not loaded yet.");
     return;
   }
 
-  Chart.register(bandsPlugin);
+  Chart.register(bandsPlugin, envelopePlugin);
   Chart.defaults.font.family = THEME.fontMono;
   Chart.defaults.font.size = THEME.fsTick;
   Chart.defaults.color = THEME.textMuted;
@@ -857,8 +1019,10 @@ function initCharts() {
     maxTicksLimit: 6,
     padding: 4
   };
-  const gridMajor = { color: THEME.border, lineWidth: 1, drawTicks: false };
-  const gridMinor = { color: THEME.border, lineWidth: 1, borderDash: [2, 3], drawTicks: false };
+  // Horizontal gridlines only. Vertical rules added nothing -- the x axis is
+  // uniform time -- and crossed the traces they were meant to support.
+  const gridY = { color: THEME.grid, lineWidth: 1, drawTicks: false, drawOnChartArea: true };
+  const gridX = { display: false };
 
   const commonOptions = {
     responsive: true,
@@ -868,8 +1032,15 @@ function initCharts() {
     layout: { padding: { top: 2, right: 2, bottom: 0, left: 0 } },
     elements: { line: { tension: 0.12, borderWidth: 2 }, point: { radius: 0 } },
     scales: {
-      x: { display: false, grid: { display: false } },
-      y: { grid: gridMinor, border: { color: THEME.border }, ticks: axisTicks }
+      // There was no x axis at all, so a trace carried no sense of how much
+      // history was on screen or how fast anything moved.
+      x: {
+        display: true,
+        grid: gridX,
+        border: { color: THEME.border },
+        ticks: { ...axisTicks, maxTicksLimit: 7, maxRotation: 0, autoSkip: true }
+      },
+      y: { grid: gridY, border: { color: THEME.border }, ticks: axisTicks }
     },
     plugins: {
       legend: {
@@ -933,10 +1104,9 @@ function initCharts() {
         scales: {
           x: commonOptions.scales.x,
           y: {
-            grid: gridMinor,
+            grid: gridY,
             border: { color: THEME.border },
-            min: LIMITS.egt.min,
-            max: LIMITS.egt.max,
+            // range set by rescaleAxes()
             title: { display: true, text: '°C', color: THEME.textDim,
                      font: { size: THEME.fsTick, family: THEME.fontMono } },
             ticks: { ...axisTicks, callback: (v) => Number(v).toFixed(0) }
@@ -949,7 +1119,8 @@ function initCharts() {
               { from: LIMITS.egt.caution, to: LIMITS.egt.limit, color: THEME.cautionBand },
               { from: LIMITS.egt.limit, to: LIMITS.egt.max, color: THEME.warningBand }
             ]
-          }
+          },
+          envelope: { series: [] }   // filled each tick from the live buffers
         }
       }
     });
@@ -978,25 +1149,24 @@ function initCharts() {
         scales: {
           x: commonOptions.scales.x,
           y: {
-            grid: gridMinor,
+            grid: gridY,
             border: { color: THEME.border },
-            min: LIMITS.oilP.min,
-            max: LIMITS.oilP.max,
+            // range set by rescaleAxes()
             title: { display: true, text: 'Oil bar', color: THEME.textDim,
                      font: { size: THEME.fsTick, family: THEME.fontMono } },
             ticks: { ...axisTicks, stepSize: 1, callback: (v) => Number(v).toFixed(1) }
           },
           y1: {
             position: 'right',
-            grid: { drawOnChartArea: false, color: THEME.border },
+            grid: { drawOnChartArea: false, color: THEME.grid },
             border: { color: THEME.border },
-            min: 0, max: 3.5,
+            // range set by rescaleAxes()
             title: { display: true, text: 'MAP bar', color: THEME.textDim,
                      font: { size: THEME.fsTick, family: THEME.fontMono } },
             ticks: { ...axisTicks, callback: (v) => Number(v).toFixed(1) }
           }
         },
-        plugins: commonOptions.plugins
+        plugins: { ...commonOptions.plugins, envelope: { series: [] } }
       }
     });
   }
@@ -1020,25 +1190,24 @@ function initCharts() {
         scales: {
           x: commonOptions.scales.x,
           y: {
-            grid: gridMinor,
+            grid: gridY,
             border: { color: THEME.border },
-            min: LIMITS.vib.min,
-            max: LIMITS.vib.max,
+            // range set by rescaleAxes()
             title: { display: true, text: 'g RMS', color: THEME.textDim,
                      font: { size: THEME.fsTick, family: THEME.fontMono } },
             ticks: { ...axisTicks, callback: (v) => Number(v).toFixed(1) }
           },
           y1: {
             position: 'right',
-            grid: { drawOnChartArea: false, color: THEME.border },
+            grid: { drawOnChartArea: false, color: THEME.grid },
             border: { color: THEME.border },
-            min: 0, max: 220,
+            // range set by rescaleAxes()
             title: { display: true, text: 'HP', color: THEME.textDim,
                      font: { size: THEME.fsTick, family: THEME.fontMono } },
             ticks: { ...axisTicks, callback: (v) => Number(v).toFixed(0) }
           }
         },
-        plugins: commonOptions.plugins
+        plugins: { ...commonOptions.plugins, envelope: { series: [] } }
       }
     });
   }
@@ -1048,14 +1217,23 @@ function updateChartData(state) {
   if (!state) return;
   historyData.time.push(`${(state.timestamp_s || 0).toFixed(1)}s`);
 
+  historyData.t_s.push(state.timestamp_s || 0);
+
   const egts = state.sensor_egt_c || [810, 810, 810, 810];
-  const mvemEgt = (state.mvem_expected_egt_c && state.mvem_expected_egt_c[0]) || 810;
+  const mv = state.mvem_expected_egt_c || [];
+  const mvemEgt = mv[0] !== undefined ? mv[0] : 810;
 
   historyData.sensor_egt1.push(egts[0]);
   historyData.sensor_egt2.push(egts[1]);
   historyData.sensor_egt3.push(egts[2]);
   historyData.sensor_egt4.push(egts[3]);
   historyData.mvem_egt.push(mvemEgt);
+  // Kept per cylinder so each band tracks its own expectation. They coincide
+  // today because the baseline models identical cylinders; the envelope
+  // plugin collapses coincident bands rather than stacking their alpha.
+  for (let i = 0; i < 4; i++) {
+    historyData['mvem_egt' + (i + 1)].push(mv[i] !== undefined ? mv[i] : mvemEgt);
+  }
 
   historyData.sensor_oil_p.push(state.sensor_oil_pressure_bar !== undefined ? state.sensor_oil_pressure_bar : 4.2);
   historyData.mvem_oil_p.push(state.mvem_expected_oil_pressure_bar || 4.2);
@@ -1072,6 +1250,31 @@ function updateChartData(state) {
   const now = Date.now();
   if (now - lastChartUpdateTime < CHART_UPDATE_INTERVAL_MS) return;
   lastChartUpdateTime = now;
+
+  const nowMs = Date.now();
+  if (nowMs - lastAxisRescale >= AXIS_RESCALE_MS) {
+    lastAxisRescale = nowMs;
+    rescaleAxes();
+  }
+
+  if (charts.temp) {
+    charts.temp.options.plugins.envelope.series = [
+      { centre: historyData.mvem_egt1, sigma: SIGMA.egt, color: THEME.cylBand[0] },
+      { centre: historyData.mvem_egt2, sigma: SIGMA.egt, color: THEME.cylBand[1] },
+      { centre: historyData.mvem_egt3, sigma: SIGMA.egt, color: THEME.cylBand[2] },
+      { centre: historyData.mvem_egt4, sigma: SIGMA.egt, color: THEME.cylBand[3] }
+    ];
+  }
+  if (charts.pressures) {
+    charts.pressures.options.plugins.envelope.series = [
+      { centre: historyData.mvem_oil_p, sigma: SIGMA.oilP, color: THEME.cylBand[0], axis: 'y' },
+      { centre: historyData.mvem_map,   sigma: SIGMA.map,  color: THEME.cylBand[2], axis: 'y1' }
+    ];
+  }
+  // The vibration chart has no model-expected centreline to band: mvem_vib
+  // carries power on the right-hand axis, not an expected vibration level.
+  // Its tolerance is the absolute caution/limit region, which bandsPlugin
+  // already draws.
 
   if (charts.temp && charts.temp.data.datasets.length >= 5) {
     charts.temp.data.labels = historyData.time;

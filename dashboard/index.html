@@ -1172,27 +1172,42 @@
           Click any component in the model to inspect it · drag to orbit
         </div>
 
-        <!-- Per-cylinder thermal deviation strip -->
+        <!-- Per-cylinder thermal deviation strip.
+             The two deltas were previously unlabelled ("d -4 / -3"), so the
+             numbers carried no unit and no identity. The header names them
+             once for the row. -->
+        <div class="cyl-strip-head">
+          <span>Cylinder</span>
+          <span class="cyl-strip-head-keys">
+            <b style="color:var(--text-secondary)">EGT &Delta;</b> /
+            <b style="color:var(--text-secondary)">CHT &Delta;</b>
+            <span class="unit">&deg;C vs model expected</span>
+          </span>
+        </div>
         <div class="cyl-strip">
-          <div id="cyl-cell-0" class="cyl-cell" onclick="selectComponent('cyl-0')" title="Inspect cylinder 1">
+          <div id="cyl-cell-0" class="cyl-cell" data-cyl="1"
+               onclick="selectComponent('cyl-0')" title="Inspect cylinder 1">
             <span class="label-sm">Cyl 1</span>
             <span class="cyl-egt"><span id="txt-cyl1-temp">810</span><span class="unit"> °C</span></span>
-            <span id="txt-cyl1-dev" class="cyl-dev">Δ +0 / +0</span>
+            <span id="txt-cyl1-dev" class="cyl-dev">+0 / +0</span>
           </div>
-          <div id="cyl-cell-1" class="cyl-cell" onclick="selectComponent('cyl-1')" title="Inspect cylinder 2">
+          <div id="cyl-cell-1" class="cyl-cell" data-cyl="2"
+               onclick="selectComponent('cyl-1')" title="Inspect cylinder 2">
             <span class="label-sm">Cyl 2</span>
             <span class="cyl-egt"><span id="txt-cyl2-temp">810</span><span class="unit"> °C</span></span>
-            <span id="txt-cyl2-dev" class="cyl-dev">Δ +0 / +0</span>
+            <span id="txt-cyl2-dev" class="cyl-dev">+0 / +0</span>
           </div>
-          <div id="cyl-cell-2" class="cyl-cell" onclick="selectComponent('cyl-2')" title="Inspect cylinder 3">
+          <div id="cyl-cell-2" class="cyl-cell" data-cyl="3"
+               onclick="selectComponent('cyl-2')" title="Inspect cylinder 3">
             <span class="label-sm">Cyl 3</span>
             <span class="cyl-egt"><span id="txt-cyl3-temp">810</span><span class="unit"> °C</span></span>
-            <span id="txt-cyl3-dev" class="cyl-dev">Δ +0 / +0</span>
+            <span id="txt-cyl3-dev" class="cyl-dev">+0 / +0</span>
           </div>
-          <div id="cyl-cell-3" class="cyl-cell" onclick="selectComponent('cyl-3')" title="Inspect cylinder 4">
+          <div id="cyl-cell-3" class="cyl-cell" data-cyl="4"
+               onclick="selectComponent('cyl-3')" title="Inspect cylinder 4">
             <span class="label-sm">Cyl 4</span>
             <span class="cyl-egt"><span id="txt-cyl4-temp">810</span><span class="unit"> °C</span></span>
-            <span id="txt-cyl4-dev" class="cyl-dev">Δ +0 / +0</span>
+            <span id="txt-cyl4-dev" class="cyl-dev">+0 / +0</span>
           </div>
         </div>
       </div>

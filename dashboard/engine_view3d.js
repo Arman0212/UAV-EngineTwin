@@ -27,7 +27,17 @@ const VIEW_TOKENS = (() => {
     border: hex(css('--border', '#2A2D31')),
     textPrimary: hex(css('--text-primary', '#E8E6E1')),
     textMuted: hex(css('--text-muted', '#8A8F96')),
-    textDim: hex(css('--text-dim', '#6B7076')),
+    textDim: hex(css('--text-dim', '#5C6878')),
+    // Per-cylinder identity, the same four hues the charts, tiles and
+    // attribution rows use. Carried on the head ring only: the jug stays
+    // neutral so a healthy engine is not four saturated colours, and the
+    // head still takes the state colour the moment that cylinder deviates.
+    cyl: [
+      hex(css('--cyl-1', '#56C6F5')),
+      hex(css('--cyl-2', '#7B94FF')),
+      hex(css('--cyl-3', '#A78BFA')),
+      hex(css('--cyl-4', '#DE7BD0'))
+    ],
     caution: hex(css('--caution', '#DFA33A')),
     cautionDim: hex(css('--caution-dim', '#BA7517')),
     warning: hex(css('--warning', '#DD5A4E')),
@@ -617,7 +627,7 @@ class Engine3DView {
       const st = Engine3DView.gradeDeviation(Math.max(Math.abs(dEgt), Math.abs(dCht)));
 
       cyl.jugMat.color.setHex(this.colourForState(st, VIEW_TOKENS.textDim));
-      cyl.headMat.color.setHex(this.colourForState(st, VIEW_TOKENS.textMuted));
+      cyl.headMat.color.setHex(this.colourForState(st, VIEW_TOKENS.cyl[i]));
       cyl.state = st;
     }
 
