@@ -829,10 +829,17 @@ function updateStatusBand(state, ai, rulSettled) {
   const cls = (ai.fault_class || state.active_fault || "HEALTHY");
 
   // Same 85/70/50/25 banding the health index uses; nothing new is decided here.
-  const st = overall >= 85 ? "nominal"
-           : overall >= 70 ? "advisory"
-           : overall >= 50 ? "caution"
-           : overall >= 25 ? "warning" : "critical";
+  let st = overall >= 85 ? "nominal"
+         : overall >= 70 ? "advisory"
+         : overall >= 50 ? "caution"
+         : overall >= 25 ? "warning" : "critical";
+
+  // A named condition can coexist with a high composite health score -- a
+  // boost deficiency during an altitude sweep sits near 89% overall. Painting
+  // that band nominal green while it reads "TURBO BOOST DEFICIENCY" is the
+  // same contradiction this band exists to remove, so a named condition
+  // floors the band at caution regardless of the composite.
+  if (cls !== "HEALTHY" && (st === "nominal" || st === "advisory")) st = "caution";
   if (band.dataset.state !== st) band.dataset.state = st;
 
   setText("sb-condition", cls.replace(/_/g, ' '));
