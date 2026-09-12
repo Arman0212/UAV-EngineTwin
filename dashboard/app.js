@@ -413,6 +413,10 @@ function updateDashboard(state) {
   // place the dashboard cares which it is rendering.
   updateReplayBadge(state);
 
+  // The verdict band and brief mode are two more views of this same frame,
+  // so they update here rather than anywhere that could drift from it.
+  updateVerdict(state);
+
   // The inspector reads the same frame everything else does, so its numbers
   // never lag the panel beside them.
   if (selectedComponentId) renderInspector();
@@ -1859,3 +1863,157 @@ function updateDispHint() {
   if (!isFinite(cc) || cc <= 0) { hint.innerHTML = "&nbsp;"; return; }
   hint.textContent = `${(cc / 1000).toFixed(3)} L`;
 }
+
+// ------------------------------------------------------------------
+// 16. VERDICT BAND & BRIEF MODE
+//
+// Two additional views of the frame the station is already rendering.
+// Neither computes anything: they read `state` exactly as the panels do,
+// so a value can never disagree between views. Operate mode keeps every
+// panel and control it has today — nothing was moved out of it.
+// ------------------------------------------------------------------
+
+/** Nominal / caution / warning for a diagnosis, on the station's own scale. */
+function verdictState(ai) {
+  const cls = (ai && ai.fault_class) || "HEALTHY";
+  if (cls === "HEALTHY") return "nominal";
+  if (ai.is_sensor_fault || cls.startsWith("SENSOR_FAULT")) return "caution";
+  return (ai.fault_severity || 0) >= 0.6 ? "warning" : "caution";
+}
+
+/** Human-readable name for the residual channel that drove the decision. */
+function topDriver(ai) {
+  const top = (ai && ai.top_contributing_channels) || [];
+  if (!top.length) return null;
+  return {
+    name: top[0].display_name || top[0].channel_key || "—",
+    pct: top[0].importance_pct,
+  };
+}
+
+function updateVerdict(state) {
+  const ai = state.ai_prognostics || {};
+  const health = state.health || {};
+  const cls = (ai.fault_class || "HEALTHY").replace(/_/g, " ");
+  const st = verdictState(ai);
+  const driver = topDriver(ai);
+
+  // --- the band above the workspace --------------------------------
+  const band = document.getElementById("verdict-band");
+  if (band && band.getAttribute("data-state") !== st) {
+    band.setAttribute("data-state", st);
+  }
+  setText("txt-verdict-class", cls);
+  setText("txt-verdict-meta",
+    `${(ai.fault_confidence_pct ?? 100).toFixed(0)} % confidence`);
+  setText("txt-verdict-action",
+    ai.recommended_action || "Continue nominal mission profile.");
+  setText("txt-verdict-health",
+    `${(health.overall_health ?? 100).toFixed(1)} %`);
+  setText("txt-verdict-rul", formatRul(ai));
+  setText("txt-verdict-driver",
+    driver ? `${driver.name} · ${driver.pct.toFixed(0)} %` : "—");
+
+  // --- brief mode ---------------------------------------------------
+  // Written even while operate mode is showing. It is a handful of
+  // setText calls against a cached frame, and it means switching modes
+  // never shows a stale screen for a frame.
+  document.body.setAttribute("data-verdict", st);
+  setText("txt-brief-class", cls);
+  setText("txt-brief-meta",
+    `${(ai.fault_confidence_pct ?? 100).toFixed(0)} % confidence` +
+    (ai.is_sensor_fault ? " · instrumentation, not the engine" : ""));
+  setText("txt-brief-action",
+    ai.recommended_action || "Continue nominal mission profile.");
+
+  setText("txt-brief-health", (health.overall_health ?? 100).toFixed(1));
+  setText("txt-brief-rul", formatRul(ai, true));
+  setText("txt-brief-alt",
+    Math.round(state.altitude_ft || 0).toLocaleString());
+  setText("txt-brief-driver", driver ? driver.name : "—");
+  setText("txt-brief-driver-sub",
+    driver ? `${driver.pct.toFixed(0)} % of the decision` : "no anomaly");
+
+  const engineName = (state.engine && state.engine.name) || "";
+  if (engineName) setText("txt-brief-engine", engineName.replace(/[-_]/g, " "));
+
+  setState(document.getElementById("tile-brief-health"),
+    healthState(health.overall_health ?? 100, "brief-health"));
+  setState(document.getElementById("tile-brief-rul"),
+    st === "warning" ? "warning" : (st === "caution" ? "caution" : null));
+  setState(document.getElementById("tile-brief-driver"), driver ? "accent" : null);
+}
+
+/** Remaining life, formatted for a readout rather than a table. */
+function formatRul(ai, bare) {
+  const lo = ai.rul_hours_min, hi = ai.rul_hours_max;
+  if (lo === undefined || hi === undefined) return bare ? "—" : "—";
+  if (bare) return (lo === hi) ? `${lo.toFixed(0)}` : `${lo.toFixed(0)}–${hi.toFixed(0)}`;
+  return (lo === hi) ? `${lo.toFixed(1)} h` : `${lo.toFixed(0)}–${hi.toFixed(0)} h`;
+}
+
+// ------------------------------------------------------------------
+// Mode switching
+//
+// The 3D viewport is MOVED between the two layouts, never copied. A WebGL
+// canvas cannot be cloned, and two of them would be two engines drifting
+// apart. Moving the element preserves its context; the renderer only needs
+// telling that its box changed size.
+// ------------------------------------------------------------------
+let briefMode = false;
+
+function toggleBriefMode() {
+  setBriefMode(!briefMode);
+}
+
+function setBriefMode(on) {
+  briefMode = !!on;
+
+  const brief = document.getElementById("brief-view");
+  const slot = document.getElementById("brief-3d-slot");
+  const home = document.getElementById("panel-3d");
+  const viewport = document.getElementById("container-3d");
+  const btn = document.getElementById("btn-mode");
+
+  document.body.setAttribute("data-mode", briefMode ? "brief" : "operate");
+  if (brief) brief.hidden = !briefMode;
+
+  if (viewport && slot && home) {
+    if (briefMode) {
+      slot.appendChild(viewport);
+    } else {
+      // Back to its original position: first child of its panel, above the
+      // cylinder strip and the inspector.
+      home.insertBefore(viewport, home.children[1] || null);
+    }
+  }
+
+  if (btn) {
+    btn.innerText = briefMode ? "Mode: brief" : "Mode: operate";
+    btn.classList.toggle("is-active", briefMode);
+  }
+
+  // The viewport has a different box in each mode, so the renderer has to
+  // remeasure or the model arrives letterboxed.
+  if (engine3D && typeof engine3D.onWindowResize === "function") {
+    requestAnimationFrame(() => engine3D.onWindowResize());
+    setTimeout(() => engine3D.onWindowResize(), 60);
+  }
+
+  if (latestTwinState) updateVerdict(latestTwinState);
+  addEventLog("SYS", briefMode
+    ? "Switched to brief mode — same telemetry, sized for a room."
+    : "Returned to the operator station.");
+}
+
+// B toggles modes, but never while something is being typed into.
+window.addEventListener("keydown", (ev) => {
+  if (ev.key !== "b" && ev.key !== "B") return;
+  if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  const t = ev.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" ||
+            t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+  if (document.body.getAttribute("data-phase") !== "app") return;
+  ev.preventDefault();
+  toggleBriefMode();
+});

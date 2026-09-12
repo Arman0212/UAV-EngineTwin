@@ -954,6 +954,8 @@
     <div class="flex items-center gap-1.5">
       <button id="btn-sandbox-open" onclick="toggleSandbox()" class="btn" title="Developer flight sandbox controls">Sandbox ▾</button>
       <button id="btn-debrief-open" onclick="toggleDebrief()" class="btn" title="Post-flight analysis and mission replay">Debrief ▾</button>
+      <button id="btn-mode" onclick="toggleBriefMode()" class="btn"
+              title="Switch between the operator station and a view sized for a room (B)">Mode: operate</button>
       <button id="btn-engine-open" onclick="toggleEnginePanel()" class="btn" title="Fit a different engine, or define your own">Engine ▾</button>
       <button onclick="returnToCover()" class="btn btn-cover-return"
               title="Scroll back up to the cover">↑ Cover</button>
@@ -1129,6 +1131,80 @@
   <!-- ====================================================================
        2. OPERATOR WORKSPACE
        ==================================================================== -->
+
+  <!-- ====================================================================
+       VERDICT BAND
+       The station's conclusion, at headline scale, above everything else.
+       Previously a fault was shown the same way a healthy engine was: one
+       panel among nine. A five-minute demo lives or dies on whether the room
+       sees the verdict land, so it now leads.
+
+       Every value here is the same value the diagnosis panel shows; this reads
+       from the same frame rather than computing anything of its own.
+       ==================================================================== -->
+  <div id="verdict-band" class="verdict" data-state="nominal">
+    <div class="verdict-main">
+      <span id="txt-verdict-class" class="verdict-class">HEALTHY</span>
+      <span id="txt-verdict-meta" class="verdict-meta">100 % confidence</span>
+    </div>
+    <div id="txt-verdict-action" class="verdict-action">Continue nominal mission profile.</div>
+    <div class="verdict-facts">
+      <span><i>Health</i><b id="txt-verdict-health">100.0 %</b></span>
+      <span><i>Remaining life</i><b id="txt-verdict-rul">500 h</b></span>
+      <span><i>Driven by</i><b id="txt-verdict-driver">&mdash;</b></span>
+    </div>
+  </div>
+
+
+  <!-- ====================================================================
+       BRIEF MODE
+       The same telemetry, sized for a room. Operate mode below is untouched;
+       this is a second view of one frame, not a second copy of the station.
+       The 3D viewport is relocated here on switch and handed back on return.
+       ==================================================================== -->
+  <div id="brief-view" class="brief" hidden>
+    <div class="brief-verdict">
+      <span id="txt-brief-class" class="brief-class">HEALTHY</span>
+      <span id="txt-brief-meta" class="brief-meta">100 % confidence</span>
+      <span id="txt-brief-action" class="brief-action">Continue nominal mission profile.</span>
+    </div>
+
+    <div class="brief-body">
+      <div class="brief-engine">
+        <div id="brief-3d-slot" class="brief-3d-slot"></div>
+        <div id="txt-brief-engine" class="brief-engine-name">VRDE 2.2L Aero-Diesel</div>
+      </div>
+
+      <div class="brief-tiles">
+        <div class="brief-tile" id="tile-brief-health">
+          <span class="brief-tile-label">Overall health</span>
+          <span id="txt-brief-health" class="brief-tile-value">100.0</span>
+          <span class="brief-tile-unit">percent</span>
+        </div>
+        <div class="brief-tile" id="tile-brief-driver">
+          <span class="brief-tile-label">Driven by</span>
+          <span id="txt-brief-driver" class="brief-tile-value brief-tile-text">&mdash;</span>
+          <span id="txt-brief-driver-sub" class="brief-tile-unit">no anomaly</span>
+        </div>
+        <div class="brief-tile" id="tile-brief-rul">
+          <span class="brief-tile-label">Remaining life</span>
+          <span id="txt-brief-rul" class="brief-tile-value">500</span>
+          <span class="brief-tile-unit">flight hours</span>
+        </div>
+        <div class="brief-tile" id="tile-brief-alt">
+          <span class="brief-tile-label">Altitude</span>
+          <span id="txt-brief-alt" class="brief-tile-value">28,500</span>
+          <span class="brief-tile-unit">feet</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="brief-foot">
+      Every figure on this screen is the same frame the operator view is reading.
+      Press <span class="kbd-lite">B</span> or use Mode to return.
+    </div>
+  </div>
+
   <main class="flex-1 grid grid-cols-12 gap-2 p-2 overflow-hidden">
 
     <!-- ---------------- LEFT: ENGINE MODEL + HEALTH ---------------- -->
