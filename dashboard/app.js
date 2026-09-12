@@ -125,6 +125,7 @@ let maxEventLogs = 30;
 
 // RUL revision tracking — the previous range stays on screen as evidence.
 let rulCurrent = null;      // { min, max }
+let rulSettledFlag = null;  // whether updateRul's window settled this frame
 let rulPrevious = null;     // { min, max }
 
 // Auto demo state machine
@@ -203,6 +204,10 @@ function healthState(pct, key) {
 }
 
 // Applies an annunciation state to a numeral and, optionally, its tile.
+// Length of the gauge arc path, in user units. The semicircle is r=42, so
+// pi*r = 131.9; it is stated once here and in the markup's dasharray.
+const GAUGE_ARC_LEN = 131.9;
+
 function setMetric(valueId, text, pct, tileId) {
   const st = healthState(pct, valueId);
   const el = document.getElementById(valueId);
@@ -212,6 +217,15 @@ function setMetric(valueId, text, pct, tileId) {
     if (el.className !== cls) el.className = cls;
   }
   if (tileId) setState(document.getElementById(tileId), st);
+
+  // The arc carries the same number the label does. Six identical "100.0 %"
+  // readouts had to all be read to know the state; a collapsing arc does not.
+  const arc = document.getElementById(valueId.replace('val-health-', 'arc-health-'));
+  if (arc) {
+    const frac = Math.max(0, Math.min(1, (Number(pct) || 0) / 100));
+    arc.style.strokeDashoffset = (GAUGE_ARC_LEN * (1 - frac)).toFixed(2);
+    arc.style.stroke = THEME.forHealth(Number(pct) || 0);
+  }
 }
 
 // Envelope check for a rising parameter (EGT, CHT, vibration).
@@ -274,10 +288,15 @@ function bootDegradedScenario() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(BOOT_SCENARIO)
-  }).then(() => {
-    addEventLog("FLT", `Opening condition: turbocharger boost deficiency, ${(BOOT_SCENARIO.severity * 100).toFixed(0)}% severity.`);
-    addEventLog("AI", "Residual excursion on the manifold pressure channel — under diagnosis.");
   }).catch(() => {});
+  // Deliberately logs nothing here. The previous version wrote "Opening
+  // condition: turbocharger boost deficiency, 38% severity" the instant this
+  // POST resolved -- before the twin had ramped the fault, and with nothing to
+  // retract it if the fault was later cleared. That produced three panels
+  // contradicting each other on screen: an open turbo condition in the log,
+  // HEALTHY at severity 0.00 in the diagnosis panel, and all channels within
+  // tolerance in attribution. Conditions are now logged by logConditionChange()
+  // from what the twin actually reports.
 }
 
 // ------------------------------------------------------------------
@@ -455,7 +474,35 @@ function votedAiState(ai) {
 // ------------------------------------------------------------------
 // 4. TELEMETRY → UI
 // ------------------------------------------------------------------
+/* The event log records what the twin reports, not what the operator asked
+   for. An injection request is an operator ACTION and is logged as one; the
+   resulting CONDITION is logged only once the twin's own diagnosis carries it,
+   and a return to HEALTHY is logged too, so the log can never keep asserting a
+   fault the rest of the console says is gone. */
+let lastLoggedCondition = null;
+
+function logConditionChange(state) {
+  const ai = state.ai_prognostics || {};
+  const cls = ai.fault_class || state.active_fault || "HEALTHY";
+  if (cls === lastLoggedCondition) return;
+
+  // First frame establishes the baseline silently: on connect the twin is
+  // simply in whatever state it is in, and that is not an event.
+  if (lastLoggedCondition === null) { lastLoggedCondition = cls; return; }
+
+  if (cls === "HEALTHY") {
+    addEventLog("FLT", "Condition cleared — all subsystems returned to nominal.");
+  } else {
+    const sev = ai.fault_severity !== undefined ? ai.fault_severity : 0;
+    const conf = ai.fault_confidence_pct !== undefined ? ai.fault_confidence_pct : 0;
+    addEventLog("AI", `Condition: ${cls.replace(/_/g, ' ').toLowerCase()} — ` +
+                      `severity ${Number(sev).toFixed(2)}, confidence ${Number(conf).toFixed(1)}%.`);
+  }
+  lastLoggedCondition = cls;
+}
+
 function updateDashboard(state) {
+  logConditionChange(state);
   if (!state || state.status === "initializing") return;
 
   latestTwinState = state;
@@ -584,6 +631,8 @@ function updateDashboard(state) {
   setText("val-sev", (val(ai.fault_severity, 0.0)).toFixed(2));
 
   updateRul(ai);
+  // After updateRul, so the band and the diagnosis panel report one verdict.
+  updateStatusBand(state, ai, rulSettledFlag);
   updateShapDrawer(ai.top_contributing_channels || []);
   updateRecommendedAction(state, ai);
 
@@ -746,6 +795,11 @@ function updateRul(ai) {
     }
   }
 
+  // Reported back so the status band can show the same verdict this function
+  // settled on, rather than re-deriving it from the raw frame and disagreeing
+  // with the panel beside it.
+  rulSettledFlag = settled;
+
   if (prevEl) {
     if (rulPrevious) {
       const txt = `revised from ${rulPrevious.min.toFixed(1)} – ${rulPrevious.max.toFixed(1)} h`;
@@ -761,6 +815,42 @@ function updateRul(ai) {
   }
 }
 
+/**
+ * The full-width verdict strip: condition, confidence, severity, remaining
+ * life and the recommended action, on one line. Its ground carries the
+ * semantic state colour, which is what makes it the first thing read.
+ */
+function updateStatusBand(state, ai, rulSettled) {
+  const band = document.getElementById("status-band");
+  if (!band) return;
+
+  const h = state.health || {};
+  const overall = h.overall_health !== undefined ? h.overall_health : 100;
+  const cls = (ai.fault_class || state.active_fault || "HEALTHY");
+
+  // Same 85/70/50/25 banding the health index uses; nothing new is decided here.
+  const st = overall >= 85 ? "nominal"
+           : overall >= 70 ? "advisory"
+           : overall >= 50 ? "caution"
+           : overall >= 25 ? "warning" : "critical";
+  if (band.dataset.state !== st) band.dataset.state = st;
+
+  setText("sb-condition", cls.replace(/_/g, ' '));
+  setText("sb-confidence", `${Number(ai.fault_confidence_pct ?? 100).toFixed(1)} %`);
+  setText("sb-severity", Number(ai.fault_severity ?? 0).toFixed(2));
+
+  // The diagnosis panel damps this interval so it does not flap frame to
+  // frame. Read the damped value, not the raw frame, or the band and the
+  // panel next to it report different remaining life for the same engine.
+  const lo = rulCurrent ? rulCurrent.min : ai.rul_hours_min;
+  const hi = rulCurrent ? rulCurrent.max : ai.rul_hours_max;
+  setText("sb-rul", (rulSettled === false || lo === undefined || hi === undefined)
+    ? "not settled"
+    : `${Number(lo).toFixed(lo < 10 ? 1 : 0)} – ${Number(hi).toFixed(hi < 10 ? 1 : 0)} h`);
+
+  setText("sb-action", ai.recommended_action || "Continue nominal mission profile.");
+}
+
 // ------------------------------------------------------------------
 // 7. LOCAL ATTRIBUTION — ranked horizontal bars, top five
 // ------------------------------------------------------------------
@@ -768,6 +858,16 @@ function updateRul(ai) {
    the same four hues identify a cylinder in the charts, the tiles, the 3D
    model and here. The bar itself keeps its state colour: identity and state
    are different questions and should not share one channel. */
+/* Shown when the twin reports nothing above tolerance, so the panel keeps
+   its shape and the reader sees a quiet system rather than an empty box. */
+const RESIDUAL_CHANNEL_LABELS = [
+  'Cylinder 1 Exhaust Gas Temp (EGT1)',
+  'Cylinder 2 Exhaust Gas Temp (EGT2)',
+  'Cylinder 3 Exhaust Gas Temp (EGT3)',
+  'Cylinder 4 Exhaust Gas Temp (EGT4)',
+  'Manifold pressure (MAP)'
+];
+
 function cylChip(name) {
   const m = /(?:cylinder|cyl)\s*([1-4])|EGT([1-4])|CHT([1-4])/i.exec(name || '');
   if (!m) return '';
@@ -783,8 +883,17 @@ function updateShapDrawer(shapItems) {
   if (signature === lastShapSignature) return;
   lastShapSignature = signature;
 
+  // Previously a nominal engine swapped the bars for a placeholder sentence,
+  // so the panel was empty most of the time and its height jumped whenever a
+  // fault appeared. The bars now stay, showing their true small magnitudes:
+  // "every channel is inside tolerance" is more convincing shown than stated.
   if (!shapItems || shapItems.length === 0) {
-    container.innerHTML = `<div class="empty-note">All channels within tolerance.</div>`;
+    container.innerHTML = RESIDUAL_CHANNEL_LABELS.map(ch => `
+      <div class="hbar-row">
+        <span class="hbar-label">${cylChip(ch)}${ch}</span>
+        <span class="hbar-val">0.0% · 0.0σ</span>
+        <span class="hbar-track"><span class="hbar-fill" style="width:2%"></span></span>
+      </div>`).join('');
     return;
   }
 
@@ -1374,14 +1483,16 @@ async function injectFault(faultType, severity = 1.0) {
   try {
     if (faultType === 'HEALTHY') {
       await fetch('/api/fault/clear', { method: 'POST' });
-      addEventLog("FLT", "Engine reset to healthy baseline; all trims normalised.");
+      addEventLog("SYS", "Operator cleared all injected faults.");
     } else {
       await fetch('/api/fault/inject', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fault_type: faultType, severity: severity, ramp_duration_s: 1.0 })
       });
-      addEventLog("FLT", `Injected ${faultType.replace(/_/g, ' ').toLowerCase()} (ramp 1.0 s).`);
+      // An action, not a condition. The condition appears in the log when
+      // the twin's diagnosis actually carries it.
+      addEventLog("SYS", `Operator requested ${faultType.replace(/_/g, ' ').toLowerCase()} (ramp 1.0 s).`);
     }
   } catch (e) {
     console.error("Fault injection error:", e);

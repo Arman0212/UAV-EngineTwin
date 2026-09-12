@@ -319,10 +319,16 @@ class Engine3DView {
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.minFilter = THREE.LinearFilter;
+    // sizeAttenuation off: a label is chrome, not geometry. With it on, the
+    // nearest cylinder's label rendered visibly larger and higher than its
+    // neighbours -- CYL 4 broke the row -- because sprite size and anchor
+    // both scaled with depth. Constant screen size puts the four back on one
+    // line and keeps every label legible at any orbit distance.
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: tex, transparent: true, depthTest: true
+      map: tex, transparent: true, depthTest: false, sizeAttenuation: false
     }));
-    const scale = 0.0042;
+    sprite.renderOrder = 10;
+    const scale = 0.00082;          // screen-relative now, not world-relative
     sprite.scale.set(w * scale, h * scale, 1);
     return sprite;
   }

@@ -2122,3 +2122,103 @@ body, button, input, select, textarea,
   display: inline-block; width: 8px; height: 8px; border-radius: 2px;
   margin-right: 6px; vertical-align: baseline; flex: none;
 }
+
+/* ======================================================================
+   STATUS BAND
+   The whole verdict on one strip. Its ground carries the semantic state
+   colour at low alpha with a full-strength left edge, so on a healthy
+   console this is the only saturated region and the eye lands here first.
+   ====================================================================== */
+.status-band {
+  display: flex; align-items: stretch; gap: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  border-left: var(--accent-w) solid var(--nominal);
+  flex-shrink: 0;
+}
+.status-band[data-state="nominal"]  { border-left-color: var(--nominal);  background: color-mix(in srgb, var(--nominal) 7%, var(--bg-panel)); }
+.status-band[data-state="advisory"] { border-left-color: var(--advisory); background: color-mix(in srgb, var(--advisory) 8%, var(--bg-panel)); }
+.status-band[data-state="caution"]  { border-left-color: var(--caution);  background: color-mix(in srgb, var(--caution) 10%, var(--bg-panel)); }
+.status-band[data-state="warning"]  { border-left-color: var(--warning);  background: color-mix(in srgb, var(--warning) 12%, var(--bg-panel)); }
+.status-band[data-state="critical"] { border-left-color: var(--critical); background: color-mix(in srgb, var(--critical) 14%, var(--bg-panel)); }
+
+.status-band > * { padding: 7px 16px; display: flex; flex-direction: column; gap: 1px; justify-content: center; }
+.status-band > * + * { border-left: 1px solid var(--border); }
+.sb-label {
+  font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--text-muted); font-family: var(--font-sans);
+}
+.sb-condition {
+  font-family: var(--font-mono); font-size: 17px; font-weight: 600;
+  letter-spacing: 0.02em; color: var(--text-primary); white-space: nowrap;
+}
+.sb-value {
+  font-family: var(--font-mono); font-size: 15px; font-weight: 500;
+  color: var(--text-primary); font-variant-numeric: tabular-nums;
+}
+.sb-primary { min-width: 240px; }
+.sb-metric  { min-width: 116px; }
+.sb-action  { flex: 1; min-width: 0; }
+.sb-action-text {
+  font-family: var(--font-sans); font-size: 13px; color: var(--text-primary);
+  line-height: 1.35; overflow: hidden; text-overflow: ellipsis;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+@media (max-width: 1280px) { .sb-metric { min-width: 96px; } .sb-primary { min-width: 180px; } }
+
+/* ======================================================================
+   ARC GAUGES
+   ====================================================================== */
+.gauge-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+}
+.gauge {
+  position: relative; display: flex; flex-direction: column; align-items: center;
+  padding: 8px 4px 6px; background: var(--bg-elevated);
+  border: 1px solid var(--border); border-radius: var(--radius);
+}
+.gauge.is-selectable { cursor: pointer; }
+.gauge.is-selectable:hover { border-color: var(--border-strong); }
+.gauge-arc { width: 100%; max-width: 92px; height: auto; display: block; }
+.gauge-track { fill: none; stroke: var(--grid); stroke-width: 7; stroke-linecap: round; }
+.gauge-fill {
+  fill: none; stroke: var(--nominal); stroke-width: 7; stroke-linecap: round;
+  transition: stroke-dashoffset var(--dur-settle) var(--ease), stroke var(--dur-quick) linear;
+}
+.gauge-readout {
+  position: absolute; top: 38px; left: 0; right: 0; text-align: center;
+  font-family: var(--font-mono); font-size: 15px; font-weight: 600;
+  color: var(--text-primary); font-variant-numeric: tabular-nums;
+}
+.gauge-readout .unit { font-size: 10px; color: var(--text-muted); }
+.gauge-label {
+  margin-top: 2px; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-secondary); text-align: center; line-height: 1.2;
+}
+@media (prefers-reduced-motion: reduce) { .gauge-fill { transition: none; } }
+
+/* ======================================================================
+   FAULT RAIL — one scrollable row rather than a wrapping grid
+   ====================================================================== */
+.fault-rail {
+  display: flex; gap: 6px; overflow-x: auto; overflow-y: hidden;
+  padding-bottom: 2px; scrollbar-width: thin;
+}
+.fault-rail .btn-fault { flex: 0 0 auto; min-width: 208px; }
+.fault-rail::-webkit-scrollbar { height: 6px; }
+.fault-rail::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+.ctrl-sep {
+  width: 1px; align-self: stretch; background: var(--border); margin: 0 2px;
+}
+
+/* ======================================================================
+   3D VIEW
+   The model previously occupied about a third of a large, mostly empty
+   panel. The viewport now takes the panel's width and a height set from
+   the console's own scale rather than a fixed small box.
+   ====================================================================== */
+.panel-3d-fill .viewport-3d {
+  width: 100%;
+  height: clamp(230px, 26vh, 360px);
+}
+.panel-3d-fill .viewport-3d canvas { display: block; width: 100% !important; height: 100% !important; }
