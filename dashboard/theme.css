@@ -22,15 +22,15 @@
      elevations let a panel separate from the page by tone, and --border is
      then spent only where two panels of the SAME elevation meet.
      ====================================================================== */
-  --bg-page:      #0B0F14;
-  --bg-panel:     #121821;
-  --bg-elevated:  #1A2230;
-  --border:       #232C38;
-  --border-strong:#313D4D;
+  --bg-page:      #151D28;
+  --bg-panel:     #1E2938;
+  --bg-elevated:  #2B384C;
+  --border:       #36465D;
+  --border-strong:#4D6282;
 
-  --text-primary: #E4E9F0;
-  --text-secondary:#94A1B2;
-  --text-muted:   #5C6878;
+  --text-primary: #F3F6FA;
+  --text-secondary:#A2B4CA;
+  --text-muted:   #6F849E;
 
   /* --- Semantic state --------------------------------------------------
      Mapped onto the existing health bands (85 / 70 / 50 / 25). Banding
@@ -59,27 +59,27 @@
   --accent: #4C8DFF;
 
   /* --- Chart furniture ------------------------------------------------- */
-  --model-expected: #6B7684;
-  --grid: #1C242F;
+  --model-expected: #8598AD;
+  --grid: #28374A;
 
   /* --- Translucent derivatives ----------------------------------------- */
-  --cyl-1-band: rgba(86, 198, 245, 0.10);
-  --cyl-2-band: rgba(123, 148, 255, 0.10);
-  --cyl-3-band: rgba(167, 139, 250, 0.10);
-  --cyl-4-band: rgba(222, 123, 208, 0.10);
-  --caution-band: rgba(240, 180, 41, 0.13);
-  --warning-band: rgba(229, 72, 77, 0.13);
-  --accent-band:  rgba(76, 141, 255, 0.12);
-  --accent-glow:  rgba(76, 141, 255, 0.26);
+  --cyl-1-band: rgba(86, 198, 245, 0.12);
+  --cyl-2-band: rgba(123, 148, 255, 0.12);
+  --cyl-3-band: rgba(167, 139, 250, 0.12);
+  --cyl-4-band: rgba(222, 123, 208, 0.12);
+  --caution-band: rgba(240, 180, 41, 0.15);
+  --warning-band: rgba(229, 72, 77, 0.15);
+  --accent-band:  rgba(76, 141, 255, 0.14);
+  --accent-glow:  rgba(76, 141, 255, 0.28);
 
   /* --- Compatibility aliases -------------------------------------------
      theme.css is shared with the scroll cover and the printed brief. These
      keep those surfaces resolving against the new system rather than
      forking a second palette. */
-  --bg-void:      #06090D;
-  --bg-chrome:    #0F141C;
-  --border-soft:  #1A2230;
-  --text-dim:     #5C6878;
+  --bg-void:      #0F151E;
+  --bg-chrome:    #1A2432;
+  --border-soft:  #273446;
+  --text-dim:     #6F849E;
   --ok:           var(--nominal);
   --caution-dim:  #A87C1A;
   --instrument:       var(--accent);

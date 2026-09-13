@@ -24,15 +24,15 @@ const THEME = (() => {
   const t = {
     /* Surfaces — three levels, so a panel separates from the page by tone
        rather than by a drawn border. */
-    bgPage:     css('--bg-page', '#0B0F14'),
-    bgPanel:    css('--bg-panel', '#121821'),
-    bgElevated: css('--bg-elevated', '#1A2230'),
-    border:       css('--border', '#232C38'),
-    borderStrong: css('--border-strong', '#313D4D'),
+    bgPage:     css('--bg-page', '#151D28'),
+    bgPanel:    css('--bg-panel', '#1E2938'),
+    bgElevated: css('--bg-elevated', '#2B384C'),
+    border:       css('--border', '#36465D'),
+    borderStrong: css('--border-strong', '#4D6282'),
 
-    textPrimary:   css('--text-primary', '#E4E9F0'),
-    textSecondary: css('--text-secondary', '#94A1B2'),
-    textMuted:     css('--text-muted', '#5C6878'),
+    textPrimary:   css('--text-primary', '#F3F6FA'),
+    textSecondary: css('--text-secondary', '#A2B4CA'),
+    textMuted:     css('--text-muted', '#6F849E'),
 
     /* Semantic state, on the existing 85/70/50/25 health bands. */
     nominal:  css('--nominal',  '#3DD68C'),
@@ -45,8 +45,8 @@ const THEME = (() => {
     accent: css('--accent', '#4C8DFF'),
 
     /* Chart furniture. */
-    modelExpected: css('--model-expected', '#6B7684'),
-    grid:          css('--grid', '#1C242F'),
+    modelExpected: css('--model-expected', '#8598AD'),
+    grid:          css('--grid', '#28374A'),
 
     /* Per-cylinder identity. Index 0..3 is cylinder 1..4, and this is the
        single source for that mapping: charts, tiles, the 3D model and the
