@@ -355,6 +355,10 @@ class EngineTwinRuntime:
             throttle_pct=round(flight.throttle_pct, 1),
             airspeed_mps=round(flight.airspeed_mps, 1),
             mission_phase=flight.phase,
+            # Which fault is injected, if any. This was tracked on the runtime
+            # but never emitted, so every client read the dataclass default of
+            # HEALTHY and the console's fault annunciation never fired.
+            active_fault=self.active_fault_name,
             # Sensor
             sensor_rpm=round(sensor_meas.rpm, 1),
             sensor_map_bar=round(sensor_meas.manifold_pressure_bar, 3),
