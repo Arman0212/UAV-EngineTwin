@@ -1,9 +1,19 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ENGINE-TWIN | DRDO MALE UAV Aero Piston Engine Ground Control Station</title>
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem('engine_twin_theme') || 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
   <!--
     All third-party assets are vendored under dashboard/vendor/ and served from
     this host. The ground station has to come up on a closed network with no
@@ -18,8 +28,10 @@
   <script src="/static/vendor/OrbitControls.js"></script>
   <!-- Monospace throughout: certified-display convention -->
   <link rel="stylesheet" href="/static/vendor/jetbrains.css">
+  <link rel="stylesheet" href="/static/vendor/plex-mono.css">
+  <link rel="stylesheet" href="/static/vendor/plex-sans.css">
   <!-- GLASS COCKPIT THEME: single source of truth for colour and type -->
-  <link rel="stylesheet" href="/static/theme.css?v=2.0">
+  <link rel="stylesheet" href="/static/theme.css?v=3.0">
   <style>
     /* ====================================================================
        INTERACTIVE HOVER BUTTON (Top-Right "CONSOLE" Shortcut)
@@ -40,17 +52,17 @@
       overflow: hidden !important;
       cursor: pointer !important;
       border-radius: 9999px !important;
-      border: 1px solid rgba(124, 108, 255, 0.45) !important;
-      background: rgba(23, 23, 37, 0.94) !important;
+      border: 1px solid rgba(76, 141, 255, 0.45) !important;
+      background: rgba(18, 24, 33, 0.94) !important;
       backdrop-filter: blur(14px) !important;
       -webkit-backdrop-filter: blur(14px) !important;
-      font-family: var(--font-mono, "JetBrains Mono", monospace) !important;
+      font-family: var(--font-mono) !important;
       font-size: 12px !important;
       font-weight: 700 !important;
       letter-spacing: 0.12em !important;
       text-transform: uppercase !important;
-      color: #FFFFFF !important;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), 0 0 16px rgba(124, 108, 255, 0.25) !important;
+      color: var(--on-accent) !important;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), 0 0 16px rgba(76, 141, 255, 0.25) !important;
       transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.15s ease !important;
     }
 
@@ -58,7 +70,7 @@
       display: inline-block;
       transform: translateX(4px);
       transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-      color: #FFFFFF;
+      color: var(--on-accent);
       position: relative;
       z-index: 2;
     }
@@ -80,7 +92,7 @@
       gap: 7px;
       z-index: 10;
       opacity: 0;
-      color: #FFFFFF;
+      color: var(--on-accent);
       transform: translateX(40px);
       transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
       pointer-events: none;
@@ -94,7 +106,7 @@
     #btn-skip-cover.interactive-hover-btn .lucide-arrow {
       width: 15px;
       height: 15px;
-      stroke: #FFFFFF;
+      stroke: var(--on-accent);
       stroke-width: 2.5;
       transition: transform 0.25s ease;
     }
@@ -110,7 +122,7 @@
       width: 8px;
       height: 8px;
       border-radius: 9999px;
-      background: #7C6CFF;
+      background: var(--accent);
       transform: scale(1);
       z-index: 1;
       transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
@@ -124,12 +136,12 @@
       height: 100%;
       transform: scale(1.8);
       border-radius: 9999px;
-      background: #7C6CFF;
+      background: var(--accent);
     }
 
     #btn-skip-cover.interactive-hover-btn:hover {
-      border-color: #9C90FF !important;
-      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.65), 0 0 24px rgba(124, 108, 255, 0.5) !important;
+      border-color: var(--instrument-hover) !important;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.65), 0 0 24px rgba(76, 141, 255, 0.5) !important;
     }
 
     #btn-skip-cover.interactive-hover-btn:active {
@@ -950,28 +962,47 @@
       <div class="tape"><span class="label-sm">Throttle</span><span id="txt-throttle" class="tape-val">72.0 %</span></div>
     </div>
 
-    <!-- Station controls -->
-    <div class="flex items-center gap-1.5">
-      <button id="btn-sandbox-open" onclick="toggleSandbox()" class="btn" title="Developer flight sandbox controls">Sandbox ▾</button>
-      <button id="btn-debrief-open" onclick="toggleDebrief()" class="btn" title="Post-flight analysis and mission replay">Debrief ▾</button>
-      <button id="btn-mode" onclick="toggleBriefMode()" class="btn"
-              title="Switch between the operator station and a view sized for a room (B)">Mode: operate</button>
-      <button id="btn-engine-open" onclick="toggleEnginePanel()" class="btn" title="Fit a different engine, or define your own">Engine ▾</button>
-      <button onclick="returnToCover()" class="btn btn-cover-return"
-              title="Scroll back up to the cover">↑ Cover</button>
-      <a href="https://claude.ai/code/artifact/fd59ade8-7421-4f96-9720-96d8f2a0bea0"
-         target="_blank" rel="noopener" class="btn"
-         title="Open the SIH26054 project brief">Brief ↗</a>
-      <button id="btn-audio" onclick="toggleAudio()" class="btn" title="Toggle aural alerts">
-        <span id="lbl-audio">Audio: muted</span>
-      </button>
+    <!-- Flight bar controls & telemetry connection indicator -->
+    <div class="flex items-center gap-2">
+      <button id="btn-theme-toggle" onclick="toggleTheme()" class="btn" title="Toggle Day / Night mode" style="padding: 2px 9px; font-weight: 500;">☀️ Day</button>
       <div id="badge-connection" class="badge" data-state="ok">
         <span class="dot" data-state="ok"></span>
         <span id="lbl-connection">Telemetry live · 20 Hz</span>
       </div>
-      <button onclick="resetSimulation()" class="btn" title="Reset simulation to initial state">Reset</button>
     </div>
   </header>
+
+  <!-- ====================================================================
+       STATUS BAND
+       One full-width strip carrying the whole verdict: condition, confidence,
+       severity, remaining life and what to do about it. Its ground takes the
+       semantic state colour, so on a healthy console this is the only
+       saturated region on screen and the eye lands here first. The separate
+       "Recommended action" panel is gone -- it was one sentence owning a
+       whole panel, and it belongs with the verdict it follows from.
+       ==================================================================== -->
+  <section id="status-band" class="status-band" data-state="nominal">
+    <div class="sb-primary">
+      <span class="sb-label">Condition</span>
+      <span id="sb-condition" class="sb-condition">HEALTHY</span>
+    </div>
+    <div class="sb-metric">
+      <span class="sb-label">Confidence</span>
+      <span id="sb-confidence" class="sb-value">99.8 %</span>
+    </div>
+    <div class="sb-metric">
+      <span class="sb-label">Severity</span>
+      <span id="sb-severity" class="sb-value">0.00</span>
+    </div>
+    <div class="sb-metric">
+      <span class="sb-label">Remaining life</span>
+      <span id="sb-rul" class="sb-value">450 – 550 h</span>
+    </div>
+    <div class="sb-action">
+      <span class="sb-label">Recommended action</span>
+      <span id="sb-action" class="sb-action-text">Continue nominal mission profile.</span>
+    </div>
+  </section>
 
   <!-- ====================================================================
        FLIGHT SANDBOX — collapsible developer controls, closed by default.
@@ -1212,7 +1243,7 @@
 
       <!-- 3D digital twin — half height, and load-bearing: cylinders are
            coloured by thermal deviation, faulted components are marked. -->
-      <div id="panel-3d" class="panel flex-shrink-0">
+      <div id="panel-3d" class="panel panel-3d-fill flex-shrink-0">
         <div class="panel-head">
           <span class="panel-title">Engine model</span>
           <span class="panel-note">Δ EGT / CHT vs expected</span>
@@ -1248,27 +1279,42 @@
           Click any component in the model to inspect it · drag to orbit
         </div>
 
-        <!-- Per-cylinder thermal deviation strip -->
+        <!-- Per-cylinder thermal deviation strip.
+             The two deltas were previously unlabelled ("d -4 / -3"), so the
+             numbers carried no unit and no identity. The header names them
+             once for the row. -->
+        <div class="cyl-strip-head">
+          <span>Cylinder</span>
+          <span class="cyl-strip-head-keys">
+            <b style="color:var(--text-secondary)">EGT &Delta;</b> /
+            <b style="color:var(--text-secondary)">CHT &Delta;</b>
+            <span class="unit">&deg;C vs model expected</span>
+          </span>
+        </div>
         <div class="cyl-strip">
-          <div id="cyl-cell-0" class="cyl-cell" onclick="selectComponent('cyl-0')" title="Inspect cylinder 1">
+          <div id="cyl-cell-0" class="cyl-cell" data-cyl="1"
+               onclick="selectComponent('cyl-0')" title="Inspect cylinder 1">
             <span class="label-sm">Cyl 1</span>
             <span class="cyl-egt"><span id="txt-cyl1-temp">810</span><span class="unit"> °C</span></span>
-            <span id="txt-cyl1-dev" class="cyl-dev">Δ +0 / +0</span>
+            <span id="txt-cyl1-dev" class="cyl-dev">+0 / +0</span>
           </div>
-          <div id="cyl-cell-1" class="cyl-cell" onclick="selectComponent('cyl-1')" title="Inspect cylinder 2">
+          <div id="cyl-cell-1" class="cyl-cell" data-cyl="2"
+               onclick="selectComponent('cyl-1')" title="Inspect cylinder 2">
             <span class="label-sm">Cyl 2</span>
             <span class="cyl-egt"><span id="txt-cyl2-temp">810</span><span class="unit"> °C</span></span>
-            <span id="txt-cyl2-dev" class="cyl-dev">Δ +0 / +0</span>
+            <span id="txt-cyl2-dev" class="cyl-dev">+0 / +0</span>
           </div>
-          <div id="cyl-cell-2" class="cyl-cell" onclick="selectComponent('cyl-2')" title="Inspect cylinder 3">
+          <div id="cyl-cell-2" class="cyl-cell" data-cyl="3"
+               onclick="selectComponent('cyl-2')" title="Inspect cylinder 3">
             <span class="label-sm">Cyl 3</span>
             <span class="cyl-egt"><span id="txt-cyl3-temp">810</span><span class="unit"> °C</span></span>
-            <span id="txt-cyl3-dev" class="cyl-dev">Δ +0 / +0</span>
+            <span id="txt-cyl3-dev" class="cyl-dev">+0 / +0</span>
           </div>
-          <div id="cyl-cell-3" class="cyl-cell" onclick="selectComponent('cyl-3')" title="Inspect cylinder 4">
+          <div id="cyl-cell-3" class="cyl-cell" data-cyl="4"
+               onclick="selectComponent('cyl-3')" title="Inspect cylinder 4">
             <span class="label-sm">Cyl 4</span>
             <span class="cyl-egt"><span id="txt-cyl4-temp">810</span><span class="unit"> °C</span></span>
-            <span id="txt-cyl4-dev" class="cyl-dev">Δ +0 / +0</span>
+            <span id="txt-cyl4-dev" class="cyl-dev">+0 / +0</span>
           </div>
         </div>
       </div>
@@ -1279,45 +1325,123 @@
           <span class="panel-title">Subsystem health</span>
           <span id="badge-status-level" class="badge" data-state="ok">Nominal</span>
         </div>
-        <div class="panel-body grid grid-cols-3 gap-1.5">
-          <div id="stat-overall" class="stat">
-            <span class="label">Overall</span>
-            <span class="readout"><span id="val-health-overall">100.0</span><span class="unit"> %</span></span>
+        <!-- Six identical "100.0 %" readouts encoded nothing visually: you
+             had to read all six to know the state. An arc collapsing is
+             legible without reading. Same six subsystems, same numbers, kept
+             as the label inside each arc. -->
+        <div class="panel-body gauge-grid">
+          <div id="stat-overall" class="gauge">
+            <svg class="gauge-arc" viewBox="0 0 100 62" aria-hidden="true">
+              <path class="gauge-track" d="M 8 56 A 42 42 0 0 1 92 56" />
+              <path id="arc-health-overall" class="gauge-fill" d="M 8 56 A 42 42 0 0 1 92 56"
+                    stroke-dasharray="131.9" stroke-dashoffset="0" />
+            </svg>
+            <span class="gauge-readout"><span id="val-health-overall">100.0</span><span class="unit"> %</span></span>
+            <span class="label gauge-label">Overall</span>
           </div>
-          <div id="stat-oil" class="stat is-selectable" onclick="selectComponent('sump')" title="Inspect the oil circuit in the model">
-            <span class="label">Oil system</span>
-            <span class="readout"><span id="val-health-oil">100.0</span><span class="unit"> %</span></span>
+          <div id="stat-oil" class="gauge is-selectable" onclick="selectComponent('sump')" title="Inspect the oil circuit in the model">
+            <svg class="gauge-arc" viewBox="0 0 100 62" aria-hidden="true">
+              <path class="gauge-track" d="M 8 56 A 42 42 0 0 1 92 56" />
+              <path id="arc-health-oil" class="gauge-fill" d="M 8 56 A 42 42 0 0 1 92 56"
+                    stroke-dasharray="131.9" stroke-dashoffset="0" />
+            </svg>
+            <span class="gauge-readout"><span id="val-health-oil">100.0</span><span class="unit"> %</span></span>
+            <span class="label gauge-label">Oil system</span>
           </div>
-          <div id="stat-turbo" class="stat is-selectable" onclick="selectComponent('turbo')" title="Inspect the turbocharger in the model">
-            <span class="label">Turbo / boost</span>
-            <span class="readout"><span id="val-health-turbo">100.0</span><span class="unit"> %</span></span>
+          <div id="stat-turbo" class="gauge is-selectable" onclick="selectComponent('turbo')" title="Inspect the turbocharger in the model">
+            <svg class="gauge-arc" viewBox="0 0 100 62" aria-hidden="true">
+              <path class="gauge-track" d="M 8 56 A 42 42 0 0 1 92 56" />
+              <path id="arc-health-turbo" class="gauge-fill" d="M 8 56 A 42 42 0 0 1 92 56"
+                    stroke-dasharray="131.9" stroke-dashoffset="0" />
+            </svg>
+            <span class="gauge-readout"><span id="val-health-turbo">100.0</span><span class="unit"> %</span></span>
+            <span class="label gauge-label">Turbo / boost</span>
           </div>
-          <div id="stat-cyls" class="stat is-selectable" onclick="selectComponent('cyl-0')" title="Inspect cylinder 1 in the model">
-            <span class="label">Combustion</span>
-            <span class="readout"><span id="val-health-cyls">100.0</span><span class="unit"> %</span></span>
+          <div id="stat-cyls" class="gauge is-selectable" onclick="selectComponent('cyl-0')" title="Inspect cylinder 1 in the model">
+            <svg class="gauge-arc" viewBox="0 0 100 62" aria-hidden="true">
+              <path class="gauge-track" d="M 8 56 A 42 42 0 0 1 92 56" />
+              <path id="arc-health-cyls" class="gauge-fill" d="M 8 56 A 42 42 0 0 1 92 56"
+                    stroke-dasharray="131.9" stroke-dashoffset="0" />
+            </svg>
+            <span class="gauge-readout"><span id="val-health-cyls">100.0</span><span class="unit"> %</span></span>
+            <span class="label gauge-label">Combustion</span>
           </div>
-          <div id="stat-vib" class="stat is-selectable" onclick="selectComponent('crankcase')" title="Inspect the crankcase in the model">
-            <span class="label">Vibration 2X</span>
-            <span class="readout"><span id="val-health-vib">100.0</span><span class="unit"> %</span></span>
+          <div id="stat-vib" class="gauge is-selectable" onclick="selectComponent('crankcase')" title="Inspect the crankcase in the model">
+            <svg class="gauge-arc" viewBox="0 0 100 62" aria-hidden="true">
+              <path class="gauge-track" d="M 8 56 A 42 42 0 0 1 92 56" />
+              <path id="arc-health-vib" class="gauge-fill" d="M 8 56 A 42 42 0 0 1 92 56"
+                    stroke-dasharray="131.9" stroke-dashoffset="0" />
+            </svg>
+            <span class="gauge-readout"><span id="val-health-vib">100.0</span><span class="unit"> %</span></span>
+            <span class="label gauge-label">Vibration 2X</span>
           </div>
-          <div id="stat-elec" class="stat">
-            <span class="label">Avionics bus</span>
-            <span class="readout"><span id="val-health-elec">100.0</span><span class="unit"> %</span></span>
+          <div id="stat-elec" class="gauge">
+            <svg class="gauge-arc" viewBox="0 0 100 62" aria-hidden="true">
+              <path class="gauge-track" d="M 8 56 A 42 42 0 0 1 92 56" />
+              <path id="arc-health-elec" class="gauge-fill" d="M 8 56 A 42 42 0 0 1 92 56"
+                    stroke-dasharray="131.9" stroke-dashoffset="0" />
+            </svg>
+            <span class="gauge-readout"><span id="val-health-elec">100.0</span><span class="unit"> %</span></span>
+            <span class="label gauge-label">Avionics bus</span>
           </div>
         </div>
       </div>
 
-      <!-- Recommended action — the twin computes this; it belongs on screen -->
-      <div id="panel-action" class="panel flex-1 min-h-0">
+      <!-- Engine Core & Digital Twin State Fusion -->
+      <div id="panel-core-vitals" class="panel flex-shrink-0">
         <div class="panel-head">
-          <span class="panel-title">Recommended action</span>
-          <span id="badge-action-regime" class="panel-note">Stable</span>
+          <span class="panel-title">Engine core &amp; state fusion</span>
+          <span id="badge-fusion-status" class="badge" data-state="ok">12-State EKF</span>
         </div>
         <div class="panel-body flex flex-col gap-2">
-          <div id="txt-recommended-action" class="action-text">Continue nominal mission profile.</div>
-          <div id="txt-active-alert" class="action-alert" hidden></div>
+          <!-- 6 Vitals Tiles -->
+          <div class="grid grid-cols-3 gap-1.5">
+            <div class="stat">
+              <span class="label">Engine Speed</span>
+              <span class="readout"><span id="txt-vital-rpm">5,200</span><span class="unit"> RPM</span></span>
+            </div>
+            <div class="stat">
+              <span class="label">Fuel Flow</span>
+              <span class="readout"><span id="txt-vital-fuel">26.5</span><span class="unit"> L/h</span></span>
+            </div>
+            <div class="stat">
+              <span class="label">Coolant Temp</span>
+              <span class="readout"><span id="txt-vital-coolant">84</span><span class="unit"> °C</span></span>
+            </div>
+            <div class="stat">
+              <span class="label">Oil Temp</span>
+              <span class="readout"><span id="txt-vital-oilt">96</span><span class="unit"> °C</span></span>
+            </div>
+            <div class="stat">
+              <span class="label">Bus Voltage</span>
+              <span class="readout"><span id="txt-vital-bus">28.2</span><span class="unit"> V</span></span>
+            </div>
+            <div class="stat">
+              <span class="label">Thermal Spread</span>
+              <span class="readout"><span id="txt-vital-spread">Δ 12</span><span class="unit"> °C</span></span>
+            </div>
+          </div>
+
+          <!-- Digital Twin State Fusion & Estimator Diagnostic Strip -->
+          <div class="flex items-center justify-between px-2 py-1.5 rounded" style="background: var(--bg-elevated); border: 1px solid var(--border); font-size: var(--fs-tick);">
+            <div class="flex items-center gap-1">
+              <span class="label-sm">Estimator:</span>
+              <span id="txt-fusion-ekf" class="font-medium">Physics EKF</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="label-sm">Airframe:</span>
+              <span id="txt-fusion-adapt" class="badge" data-state="ok" style="padding: 1px 5px; font-size: 10px;">Calibrated</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="label-sm">Integrity:</span>
+              <span id="txt-fusion-disc" class="font-medium" style="color: var(--nominal);">Engine Valid</span>
+            </div>
+          </div>
         </div>
       </div>
+
+      <div id="txt-active-alert" class="action-alert" hidden></div>
+      <span id="badge-action-regime" hidden>Stable</span>
     </section>
 
     <!-- ---------------- CENTER: TELEMETRY ---------------- -->
@@ -1442,10 +1566,29 @@
           <button onclick="setSimSpeed(2.0)" id="btn-spd-2" class="btn">2x</button>
           <button onclick="setSimSpeed(5.0)" id="btn-spd-5" class="btn">5x</button>
         </div>
+
+        <!-- Station controls, moved out of the flight strip. They are
+             operator actions, and the other operator actions are here. -->
+        <span class="ctrl-sep" aria-hidden="true"></span>
+        <div class="flex items-center gap-1.5">
+          <button id="btn-sandbox-open" onclick="toggleSandbox()" class="btn" title="Developer flight sandbox controls">Sandbox ▾</button>
+          <button id="btn-debrief-open" onclick="toggleDebrief()" class="btn" title="Post-flight analysis and mission replay">Debrief ▾</button>
+          <button id="btn-mode" onclick="toggleBriefMode()" class="btn"
+                  title="Switch between the operator station and a view sized for a room (B)">Mode: operate</button>
+          <button id="btn-engine-open" onclick="toggleEnginePanel()" class="btn" title="Fit a different engine, or define your own">Engine ▾</button>
+          <button onclick="returnToCover()" class="btn btn-cover-return" title="Scroll back up to the cover">↑ Cover</button>
+          <a href="https://claude.ai/code/artifact/fd59ade8-7421-4f96-9720-96d8f2a0bea0"
+             target="_blank" rel="noopener" class="btn"
+             title="Open the SIH26054 project brief">Brief ↗</a>
+          <button id="btn-audio" onclick="toggleAudio()" class="btn" title="Toggle aural alerts">
+            <span id="lbl-audio">Audio: muted</span>
+          </button>
+          <button onclick="resetSimulation()" class="btn" title="Reset simulation to initial state">Reset</button>
+        </div>
       </div>
     </div>
 
-    <div class="grid grid-cols-4 gap-1.5">
+    <div class="fault-rail">
       <button onclick="injectFault('HEALTHY')" id="btn-flt-HEALTHY" class="btn-fault">
         <span class="ft-name">Healthy baseline</span>
         <span class="ft-sub">Clear all injected faults</span>
@@ -1478,6 +1621,17 @@
         <span class="ft-name">Cylinder misfire</span>
         <span class="ft-sub">Ignition timing jitter</span>
       </button>
+      <!-- Both classes exist in the backend taxonomy and the classifier is
+           trained on them, but neither had a control, so two of the ten
+           diagnosable conditions could not be demonstrated. -->
+      <button onclick="injectFault('RICH_MIXTURE_CYL1')" id="btn-flt-RICH_MIXTURE_CYL1" class="btn-fault">
+        <span class="ft-name">Rich mixture Cyl 1</span>
+        <span class="ft-sub">Fuel trim ↑ 35 % · CHT1 ↑ 21 °C</span>
+      </button>
+      <button onclick="injectFault('ELECTRICAL_VOLTAGE_SAG')" id="btn-flt-ELECTRICAL_VOLTAGE_SAG" class="btn-fault">
+        <span class="ft-name">Bus voltage sag</span>
+        <span class="ft-sub">Alternator ↓ 32 % · bus ↓ 9.0 V</span>
+      </button>
     </div>
   </footer>
   </div><!-- /#app-shell -->
@@ -1486,8 +1640,8 @@
        Both chapters are fixed layers, so this never pushes anything around. -->
   <div id="scroll-track" aria-hidden="true"></div>
 
-  <script src="/static/engine_view3d.js"></script>
-  <script src="/static/app.js"></script>
-  <script src="/static/cover.js"></script>
+  <script src="/static/engine_view3d.js?v=3.0"></script>
+  <script src="/static/app.js?v=3.0"></script>
+  <script src="/static/cover.js?v=3.0"></script>
 </body>
 </html>

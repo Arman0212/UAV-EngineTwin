@@ -20,20 +20,48 @@ const VIEW_TOKENS = (() => {
     } catch (e) { return fallback; }
   };
   const hex = (c) => parseInt(String(c).replace('#', ''), 16);
-  return {
+  const tokens = {
     raw: css,
-    bgPage: hex(css('--bg-page', '#0E0F11')),
-    bgElevated: hex(css('--bg-elevated', '#24272B')),
-    border: hex(css('--border', '#2A2D31')),
-    textPrimary: hex(css('--text-primary', '#E8E6E1')),
-    textMuted: hex(css('--text-muted', '#8A8F96')),
-    textDim: hex(css('--text-dim', '#6B7076')),
-    caution: hex(css('--caution', '#DFA33A')),
-    cautionDim: hex(css('--caution-dim', '#BA7517')),
-    warning: hex(css('--warning', '#DD5A4E')),
-    ok: hex(css('--ok', '#8CBE68')),
-    instrument: hex(css('--instrument', '#63A8D6'))
+    bgPage: hex(css('--bg-page', '#151D28')),
+    bgPanel: hex(css('--bg-panel', '#1E2938')),
+    bgElevated: hex(css('--bg-elevated', '#2B384C')),
+    border: hex(css('--border', '#36465D')),
+    textPrimary: hex(css('--text-primary', '#F3F6FA')),
+    textMuted: hex(css('--text-muted', '#6F849E')),
+    textDim: hex(css('--text-dim', '#6F849E')),
+    cyl: [
+      hex(css('--cyl-1', '#56C6F5')),
+      hex(css('--cyl-2', '#7B94FF')),
+      hex(css('--cyl-3', '#A78BFA')),
+      hex(css('--cyl-4', '#DE7BD0'))
+    ],
+    caution: hex(css('--caution', '#F0B429')),
+    cautionDim: hex(css('--caution-dim', '#A87C1A')),
+    warning: hex(css('--warning', '#F2822C')),
+    ok: hex(css('--nominal', '#3DD68C')),
+    instrument: hex(css('--accent', '#4C8DFF'))
   };
+  tokens.refresh = () => {
+    tokens.bgPage = hex(css('--bg-page', '#151D28'));
+    tokens.bgPanel = hex(css('--bg-panel', '#1E2938'));
+    tokens.bgElevated = hex(css('--bg-elevated', '#2B384C'));
+    tokens.border = hex(css('--border', '#36465D'));
+    tokens.textPrimary = hex(css('--text-primary', '#F3F6FA'));
+    tokens.textMuted = hex(css('--text-muted', '#6F849E'));
+    tokens.textDim = hex(css('--text-dim', '#6F849E'));
+    tokens.cyl = [
+      hex(css('--cyl-1', '#56C6F5')),
+      hex(css('--cyl-2', '#7B94FF')),
+      hex(css('--cyl-3', '#A78BFA')),
+      hex(css('--cyl-4', '#DE7BD0'))
+    ];
+    tokens.caution = hex(css('--caution', '#F0B429'));
+    tokens.cautionDim = hex(css('--caution-dim', '#A87C1A'));
+    tokens.warning = hex(css('--warning', '#F2822C'));
+    tokens.ok = hex(css('--nominal', '#3DD68C'));
+    tokens.instrument = hex(css('--accent', '#4C8DFF'));
+  };
+  return tokens;
 })();
 
 /**
@@ -114,7 +142,7 @@ class Engine3DView {
     const height = this.container.clientHeight || 210;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(VIEW_TOKENS.bgPage);
+    this.scene.background = null;
 
     // The viewport is short and wide, so frame tightly and look slightly
     // down the cylinder bank: the engine has to read at half the previous
@@ -122,7 +150,7 @@ class Engine3DView {
     this.camera = new THREE.PerspectiveCamera(34, width / height, 0.1, 100);
     this.camera.position.set(3.4, 1.9, 4.4);
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setSize(width, height);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.container.appendChild(this.renderer.domElement);
@@ -151,6 +179,7 @@ class Engine3DView {
     grid.material.opacity = 0.5;
     grid.material.transparent = true;
     this.scene.add(grid);
+    this.grid = grid;
 
     this.buildEngineGeometry();
     this.buildLabels();
@@ -309,10 +338,16 @@ class Engine3DView {
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.minFilter = THREE.LinearFilter;
+    // sizeAttenuation off: a label is chrome, not geometry. With it on, the
+    // nearest cylinder's label rendered visibly larger and higher than its
+    // neighbours -- CYL 4 broke the row -- because sprite size and anchor
+    // both scaled with depth. Constant screen size puts the four back on one
+    // line and keeps every label legible at any orbit distance.
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: tex, transparent: true, depthTest: true
+      map: tex, transparent: true, depthTest: false, sizeAttenuation: false
     }));
-    const scale = 0.0042;
+    sprite.renderOrder = 10;
+    const scale = 0.00082;          // screen-relative now, not world-relative
     sprite.scale.set(w * scale, h * scale, 1);
     return sprite;
   }
@@ -617,7 +652,7 @@ class Engine3DView {
       const st = Engine3DView.gradeDeviation(Math.max(Math.abs(dEgt), Math.abs(dCht)));
 
       cyl.jugMat.color.setHex(this.colourForState(st, VIEW_TOKENS.textDim));
-      cyl.headMat.color.setHex(this.colourForState(st, VIEW_TOKENS.textMuted));
+      cyl.headMat.color.setHex(this.colourForState(st, VIEW_TOKENS.cyl[i]));
       cyl.state = st;
     }
 
@@ -747,6 +782,16 @@ class Engine3DView {
     if (this.controls) this.controls.update();
     if (this.renderer && this.scene && this.camera) {
       this.renderer.render(this.scene, this.camera);
+    }
+  }
+
+  updateTheme() {
+    VIEW_TOKENS.refresh();
+    if (this.grid && this.grid.material) {
+      this.grid.material.color.setHex(VIEW_TOKENS.border);
+    }
+    if (this.lastState) {
+      this.updateState(this.lastState);
     }
   }
 

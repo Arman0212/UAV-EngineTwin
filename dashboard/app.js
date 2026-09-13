@@ -14,6 +14,16 @@
  * Read straight off :root in theme.css so CSS stays the only place a
  * colour is ever defined. Canvas and WebGL layers consume these.
  * ---------------------------------------------------------------- */
+// Apply saved theme early so initial paint matches user preference (defaults to 'light')
+const CURRENT_THEME = (() => {
+  try {
+    return localStorage.getItem('engine_twin_theme') || 'light';
+  } catch (e) {
+    return 'light';
+  }
+})();
+document.documentElement.setAttribute('data-theme', CURRENT_THEME);
+
 const THEME = (() => {
   const css = (name, fallback) => {
     try {
@@ -22,32 +32,109 @@ const THEME = (() => {
     } catch (e) { return fallback; }
   };
   const t = {
-    bgPage: css('--bg-page', '#0E0F11'),
-    bgChrome: css('--bg-chrome', '#141619'),
-    bgPanel: css('--bg-panel', '#17191C'),
-    bgElevated: css('--bg-elevated', '#24272B'),
-    border: css('--border', '#2A2D31'),
-    textPrimary: css('--text-primary', '#E8E6E1'),
-    textMuted: css('--text-muted', '#8A8F96'),
-    textDim: css('--text-dim', '#6B7076'),
-    caution: css('--caution', '#DFA33A'),
-    cautionDim: css('--caution-dim', '#A97A24'),
-    warning: css('--warning', '#DD5A4E'),
-    ok: css('--ok', '#8CBE68'),
-    instrument: css('--instrument', '#63A8D6'),
-    instrumentDim: css('--instrument-dim', '#3E7AA3'),
-    cautionBand: css('--caution-band', 'rgba(223,163,58,0.13)'),
-    warningBand: css('--warning-band', 'rgba(221,90,78,0.13)'),
-    trace: [
-      css('--trace-1', '#E8E6E1'),
-      css('--trace-2', '#C2BFB9'),
-      css('--trace-3', '#9B9992'),
-      css('--trace-4', '#74726D')
+    /* Surfaces — three levels, so a panel separates from the page by tone
+       rather than by a drawn border. */
+    bgPage:     css('--bg-page', '#151D28'),
+    bgPanel:    css('--bg-panel', '#1E2938'),
+    bgElevated: css('--bg-elevated', '#2B384C'),
+    border:       css('--border', '#36465D'),
+    borderStrong: css('--border-strong', '#4D6282'),
+
+    textPrimary:   css('--text-primary', '#F3F6FA'),
+    textSecondary: css('--text-secondary', '#A2B4CA'),
+    textMuted:     css('--text-muted', '#6F849E'),
+
+    /* Semantic state, on the existing 85/70/50/25 health bands. */
+    nominal:  css('--nominal',  '#3DD68C'),
+    advisory: css('--advisory', '#6BC4E8'),
+    caution:  css('--caution',  '#F0B429'),
+    warning:  css('--warning',  '#F2822C'),
+    critical: css('--critical', '#E5484D'),
+
+    /* UI accent. Selection and focus only — never state. */
+    accent: css('--accent', '#4C8DFF'),
+
+    /* Chart furniture. */
+    modelExpected: css('--model-expected', '#8598AD'),
+    grid:          css('--grid', '#28374A'),
+
+    /* Per-cylinder identity. Index 0..3 is cylinder 1..4, and this is the
+       single source for that mapping: charts, tiles, the 3D model and the
+       attribution bars all read it, so cylinder 3 is one colour everywhere. */
+    cyl: [
+      css('--cyl-1', '#56C6F5'),
+      css('--cyl-2', '#7B94FF'),
+      css('--cyl-3', '#A78BFA'),
+      css('--cyl-4', '#DE7BD0')
     ],
-    fontMono: "'JetBrains Mono', ui-monospace, Menlo, monospace",
+    cylBand: [
+      css('--cyl-1-band', 'rgba(86, 198, 245, 0.10)'),
+      css('--cyl-2-band', 'rgba(123, 148, 255, 0.10)'),
+      css('--cyl-3-band', 'rgba(167, 139, 250, 0.10)'),
+      css('--cyl-4-band', 'rgba(222, 123, 208, 0.10)')
+    ],
+    cautionBand: css('--caution-band', 'rgba(240, 180, 41, 0.13)'),
+    warningBand: css('--warning-band', 'rgba(229, 72, 77, 0.13)'),
+
+    fontMono: "'IBM Plex Mono', ui-monospace, Menlo, monospace",
+    fontSans: "'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif",
     fsTick: 11
   };
+  /* Back-compat aliases: older call sites still reference these names. */
+  t.ok = t.nominal;
+  t.instrument = t.accent;
+  t.instrumentDim = t.modelExpected;
+  t.textDim = t.textMuted;
+  t.bgChrome = t.bgPanel;
+  t.trace = t.cyl;
   t.hex = (c) => parseInt(String(c).replace('#', ''), 16);
+
+  t.refresh = () => {
+    t.bgPage = css('--bg-page', '#151D28');
+    t.bgPanel = css('--bg-panel', '#1E2938');
+    t.bgElevated = css('--bg-elevated', '#2B384C');
+    t.border = css('--border', '#36465D');
+    t.borderStrong = css('--border-strong', '#4D6282');
+    t.textPrimary = css('--text-primary', '#F3F6FA');
+    t.textSecondary = css('--text-secondary', '#A2B4CA');
+    t.textMuted = css('--text-muted', '#6F849E');
+    t.nominal = css('--nominal', '#3DD68C');
+    t.advisory = css('--advisory', '#6BC4E8');
+    t.caution = css('--caution', '#F0B429');
+    t.warning = css('--warning', '#F2822C');
+    t.critical = css('--critical', '#E5484D');
+    t.accent = css('--accent', '#4C8DFF');
+    t.modelExpected = css('--model-expected', '#8598AD');
+    t.grid = css('--grid', '#28374A');
+    t.cyl = [
+      css('--cyl-1', '#56C6F5'),
+      css('--cyl-2', '#7B94FF'),
+      css('--cyl-3', '#A78BFA'),
+      css('--cyl-4', '#DE7BD0')
+    ];
+    t.cylBand = [
+      css('--cyl-1-band', 'rgba(86, 198, 245, 0.10)'),
+      css('--cyl-2-band', 'rgba(123, 148, 255, 0.10)'),
+      css('--cyl-3-band', 'rgba(167, 139, 250, 0.10)'),
+      css('--cyl-4-band', 'rgba(222, 123, 208, 0.10)')
+    ];
+    t.cautionBand = css('--caution-band', 'rgba(240, 180, 41, 0.13)');
+    t.warningBand = css('--warning-band', 'rgba(229, 72, 77, 0.13)');
+    t.ok = t.nominal;
+    t.instrument = t.accent;
+    t.instrumentDim = t.modelExpected;
+    t.textDim = t.textMuted;
+    t.bgChrome = t.bgPanel;
+    t.trace = t.cyl;
+  };
+
+  /* Health band -> semantic colour. The 85/70/50/25 thresholds are the
+     existing ones; only the hues resolve here. */
+  t.forHealth = (h) => h >= 85 ? t.nominal
+                     : h >= 70 ? t.advisory
+                     : h >= 50 ? t.caution
+                     : h >= 25 ? t.warning
+                     : t.critical;
   return t;
 })();
 
@@ -88,6 +175,7 @@ let maxEventLogs = 30;
 
 // RUL revision tracking — the previous range stays on screen as evidence.
 let rulCurrent = null;      // { min, max }
+let rulSettledFlag = null;  // whether updateRul's window settled this frame
 let rulPrevious = null;     // { min, max }
 
 // Auto demo state machine
@@ -102,13 +190,27 @@ const CHART_UPDATE_INTERVAL_MS = 100; // 10 Hz
 
 // Telemetry history buffers
 const historyData = {
-  time: [],
+  time: [], t_s: [],
   sensor_egt1: [], sensor_egt2: [], sensor_egt3: [], sensor_egt4: [],
   mvem_egt: [],
+  mvem_egt1: [], mvem_egt2: [], mvem_egt3: [], mvem_egt4: [],
   sensor_oil_p: [], mvem_oil_p: [],
   sensor_map: [], mvem_map: [],
   sensor_vib: [], mvem_vib: []
 };
+
+/* Per-channel measurement sigma, matching digital_twin/health_index.py. The
+   +/-3 sigma envelope drawn on the charts is the same tolerance the residual
+   normalisation divides by, so "the trace left the band" on screen and "the
+   residual exceeded 3 sigma" in the health index are the same statement. */
+const SIGMA = { egt: 3.5, cht: 1.8, oilP: 0.06, map: 0.02, vib: 0.08 };
+const ENVELOPE_K = 3;
+
+/* Axis autoscaling. Recomputed on a slow cadence rather than every frame: a
+   range that chases the data jitters, and a jittering axis is harder to read
+   than a slightly stale one. */
+const AXIS_RESCALE_MS = 2500;
+let lastAxisRescale = 0;
 
 // ------------------------------------------------------------------
 // DOM HELPERS
@@ -152,6 +254,10 @@ function healthState(pct, key) {
 }
 
 // Applies an annunciation state to a numeral and, optionally, its tile.
+// Length of the gauge arc path, in user units. The semicircle is r=42, so
+// pi*r = 131.9; it is stated once here and in the markup's dasharray.
+const GAUGE_ARC_LEN = 131.9;
+
 function setMetric(valueId, text, pct, tileId) {
   const st = healthState(pct, valueId);
   const el = document.getElementById(valueId);
@@ -161,6 +267,15 @@ function setMetric(valueId, text, pct, tileId) {
     if (el.className !== cls) el.className = cls;
   }
   if (tileId) setState(document.getElementById(tileId), st);
+
+  // The arc carries the same number the label does. Six identical "100.0 %"
+  // readouts had to all be read to know the state; a collapsing arc does not.
+  const arc = document.getElementById(valueId.replace('val-health-', 'arc-health-'));
+  if (arc) {
+    const frac = Math.max(0, Math.min(1, (Number(pct) || 0) / 100));
+    arc.style.strokeDashoffset = (GAUGE_ARC_LEN * (1 - frac)).toFixed(2);
+    arc.style.stroke = THEME.forHealth(Number(pct) || 0);
+  }
 }
 
 // Envelope check for a rising parameter (EGT, CHT, vibration).
@@ -177,10 +292,102 @@ function bandStateLow(v, cautionLow, limitLow) {
 }
 
 // ------------------------------------------------------------------
+// THEME MANAGEMENT (Daylight / Night)
+// ------------------------------------------------------------------
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = current === 'light' ? 'dark' : 'light';
+  setTheme(next);
+}
+
+function setTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  try { localStorage.setItem('engine_twin_theme', theme); } catch (e) {}
+  syncThemeButton(theme);
+  updateChartsTheme();
+}
+
+function syncThemeButton(theme) {
+  const current = theme || document.documentElement.getAttribute('data-theme') || 'dark';
+  const btn = document.getElementById('btn-theme-toggle');
+  if (btn) {
+    btn.innerHTML = current === 'light' ? '🌙 Night' : '☀️ Day';
+    btn.title = current === 'light' ? 'Switch to Night/Dark theme' : 'Switch to Daylight/Bright theme';
+  }
+}
+
+function updateChartsTheme() {
+  THEME.refresh();
+  if (typeof Chart !== 'undefined') {
+    Chart.defaults.color = THEME.textMuted;
+  }
+  const gridY = { color: THEME.grid, lineWidth: 1, drawTicks: false, drawOnChartArea: true };
+
+  if (charts.temp) {
+    charts.temp.options.scales.x.border = { color: THEME.border };
+    charts.temp.options.scales.x.ticks.color = THEME.textMuted;
+    charts.temp.options.scales.y.grid = gridY;
+    charts.temp.options.scales.y.border = { color: THEME.border };
+    charts.temp.options.scales.y.ticks.color = THEME.textMuted;
+    charts.temp.options.scales.y.title.color = THEME.textMuted;
+    if (charts.temp.options.plugins && charts.temp.options.plugins.legend) {
+      charts.temp.options.plugins.legend.labels.color = THEME.textMuted;
+    }
+    if (charts.temp.data.datasets[0]) charts.temp.data.datasets[0].borderColor = THEME.cyl[0];
+    if (charts.temp.data.datasets[1]) charts.temp.data.datasets[1].borderColor = THEME.cyl[1];
+    if (charts.temp.data.datasets[2]) charts.temp.data.datasets[2].borderColor = THEME.cyl[2];
+    if (charts.temp.data.datasets[3]) charts.temp.data.datasets[3].borderColor = THEME.cyl[3];
+    if (charts.temp.data.datasets[4]) charts.temp.data.datasets[4].borderColor = THEME.modelExpected;
+    charts.temp.update('none');
+  }
+  if (charts.pressures) {
+    charts.pressures.options.scales.x.border = { color: THEME.border };
+    charts.pressures.options.scales.x.ticks.color = THEME.textMuted;
+    charts.pressures.options.scales.y.grid = gridY;
+    charts.pressures.options.scales.y.border = { color: THEME.border };
+    charts.pressures.options.scales.y.ticks.color = THEME.textMuted;
+    charts.pressures.options.scales.y.title.color = THEME.textMuted;
+    charts.pressures.options.scales.y1.border = { color: THEME.border };
+    charts.pressures.options.scales.y1.ticks.color = THEME.textMuted;
+    charts.pressures.options.scales.y1.title.color = THEME.textMuted;
+    if (charts.pressures.options.plugins && charts.pressures.options.plugins.legend) {
+      charts.pressures.options.plugins.legend.labels.color = THEME.textMuted;
+    }
+    if (charts.pressures.data.datasets[0]) charts.pressures.data.datasets[0].borderColor = THEME.cyl[0];
+    if (charts.pressures.data.datasets[1]) charts.pressures.data.datasets[1].borderColor = THEME.modelExpected;
+    if (charts.pressures.data.datasets[2]) charts.pressures.data.datasets[2].borderColor = THEME.cyl[2];
+    if (charts.pressures.data.datasets[3]) charts.pressures.data.datasets[3].borderColor = THEME.modelExpected;
+    charts.pressures.update('none');
+  }
+  if (charts.vibration) {
+    charts.vibration.options.scales.x.border = { color: THEME.border };
+    charts.vibration.options.scales.x.ticks.color = THEME.textMuted;
+    charts.vibration.options.scales.y.grid = gridY;
+    charts.vibration.options.scales.y.border = { color: THEME.border };
+    charts.vibration.options.scales.y.ticks.color = THEME.textMuted;
+    charts.vibration.options.scales.y.title.color = THEME.textMuted;
+    charts.vibration.options.scales.y1.border = { color: THEME.border };
+    charts.vibration.options.scales.y1.ticks.color = THEME.textMuted;
+    charts.vibration.options.scales.y1.title.color = THEME.textMuted;
+    if (charts.vibration.options.plugins && charts.vibration.options.plugins.legend) {
+      charts.vibration.options.plugins.legend.labels.color = THEME.textMuted;
+    }
+    if (charts.vibration.data.datasets[0]) charts.vibration.data.datasets[0].borderColor = THEME.cyl[0];
+    if (charts.vibration.data.datasets[1]) charts.vibration.data.datasets[1].borderColor = THEME.modelExpected;
+    charts.vibration.update('none');
+  }
+
+  if (typeof engine3D !== 'undefined' && engine3D && typeof engine3D.updateTheme === 'function') {
+    engine3D.updateTheme();
+  }
+}
+
+// ------------------------------------------------------------------
 // 1. INITIALIZATION
 // ------------------------------------------------------------------
 document.addEventListener("DOMContentLoaded", () => {
   console.log("ENGINE-TWIN GCS Controller Initialized.");
+  syncThemeButton();
 
   if (typeof Engine3DView !== "undefined") {
     try {
@@ -223,10 +430,15 @@ function bootDegradedScenario() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(BOOT_SCENARIO)
-  }).then(() => {
-    addEventLog("FLT", `Opening condition: turbocharger boost deficiency, ${(BOOT_SCENARIO.severity * 100).toFixed(0)}% severity.`);
-    addEventLog("AI", "Residual excursion on the manifold pressure channel — under diagnosis.");
   }).catch(() => {});
+  // Deliberately logs nothing here. The previous version wrote "Opening
+  // condition: turbocharger boost deficiency, 38% severity" the instant this
+  // POST resolved -- before the twin had ramped the fault, and with nothing to
+  // retract it if the fault was later cleared. That produced three panels
+  // contradicting each other on screen: an open turbo condition in the log,
+  // HEALTHY at severity 0.00 in the diagnosis panel, and all channels within
+  // tolerance in attribution. Conditions are now logged by logConditionChange()
+  // from what the twin actually reports.
 }
 
 // ------------------------------------------------------------------
@@ -404,7 +616,35 @@ function votedAiState(ai) {
 // ------------------------------------------------------------------
 // 4. TELEMETRY → UI
 // ------------------------------------------------------------------
+/* The event log records what the twin reports, not what the operator asked
+   for. An injection request is an operator ACTION and is logged as one; the
+   resulting CONDITION is logged only once the twin's own diagnosis carries it,
+   and a return to HEALTHY is logged too, so the log can never keep asserting a
+   fault the rest of the console says is gone. */
+let lastLoggedCondition = null;
+
+function logConditionChange(state) {
+  const ai = state.ai_prognostics || {};
+  const cls = ai.fault_class || state.active_fault || "HEALTHY";
+  if (cls === lastLoggedCondition) return;
+
+  // First frame establishes the baseline silently: on connect the twin is
+  // simply in whatever state it is in, and that is not an event.
+  if (lastLoggedCondition === null) { lastLoggedCondition = cls; return; }
+
+  if (cls === "HEALTHY") {
+    addEventLog("FLT", "Condition cleared — all subsystems returned to nominal.");
+  } else {
+    const sev = ai.fault_severity !== undefined ? ai.fault_severity : 0;
+    const conf = ai.fault_confidence_pct !== undefined ? ai.fault_confidence_pct : 0;
+    addEventLog("AI", `Condition: ${cls.replace(/_/g, ' ').toLowerCase()} — ` +
+                      `severity ${Number(sev).toFixed(2)}, confidence ${Number(conf).toFixed(1)}%.`);
+  }
+  lastLoggedCondition = cls;
+}
+
 function updateDashboard(state) {
+  logConditionChange(state);
   if (!state || state.status === "initializing") return;
 
   latestTwinState = state;
@@ -490,7 +730,7 @@ function updateDashboard(state) {
     );
 
     setText(`txt-cyl${i+1}-temp`, egt.toFixed(0));
-    setText(`txt-cyl${i+1}-dev`, `Δ ${dEgt >= 0 ? '+' : ''}${dEgt.toFixed(0)} / ${dCht >= 0 ? '+' : ''}${dCht.toFixed(0)}`);
+    setText(`txt-cyl${i+1}-dev`, `${dEgt >= 0 ? '+' : ''}${dEgt.toFixed(0)} / ${dCht >= 0 ? '+' : ''}${dCht.toFixed(0)}`);
     setState(document.getElementById(`cyl-cell-${i}`), st);
   }
 
@@ -537,8 +777,50 @@ function updateDashboard(state) {
   setText("val-sev", (val(ai.fault_severity, 0.0)).toFixed(2));
 
   updateRul(ai);
+  // After updateRul, so the band and the diagnosis panel report one verdict.
+  updateStatusBand(state, ai, rulSettledFlag);
   updateShapDrawer(ai.top_contributing_channels || []);
   updateRecommendedAction(state, ai);
+
+  // --- Engine Core & State Fusion --------------------------------
+  const rpm = state.sensor_rpm || state.mvem_expected_rpm || 5200;
+  const fuel = state.sensor_fuel_flow_lph || state.mvem_expected_fuel_lph || 26.5;
+  const coolant = state.sensor_coolant_t_c || 84;
+  const oilT = state.sensor_oil_t_c || state.mvem_expected_oil_t_c || 96;
+  const busV = state.sensor_bus_v || 28.2;
+
+  const egtList = state.sensor_egt_c || [810, 810, 810, 810];
+  const spread = Math.max(...egtList) - Math.min(...egtList);
+
+  setText("txt-vital-rpm", Math.round(rpm).toLocaleString());
+  setText("txt-vital-fuel", Number(fuel).toFixed(1));
+  setText("txt-vital-coolant", Math.round(coolant));
+  setText("txt-vital-oilt", Math.round(oilT));
+  setText("txt-vital-bus", Number(busV).toFixed(1));
+  setText("txt-vital-spread", `Δ ${Math.round(spread)}`);
+
+  // State fusion indicators
+  const isAdapted = state.baseline_adapted !== false;
+  const adaptBadge = document.getElementById("txt-fusion-adapt");
+  if (adaptBadge) {
+    adaptBadge.innerText = isAdapted ? "Calibrated" : "Adapting...";
+    adaptBadge.setAttribute("data-state", isAdapted ? "ok" : "caution");
+  }
+
+  const isSensorFault = aiRaw.is_sensor_fault || (state.active_fault && String(state.active_fault).startsWith("SENSOR_FAULT"));
+  const discEl = document.getElementById("txt-fusion-disc");
+  if (discEl) {
+    if (isSensorFault) {
+      discEl.innerText = "Sensor Defect";
+      discEl.style.color = "var(--caution)";
+    } else if (aiRaw.fault_class && aiRaw.fault_class !== "HEALTHY") {
+      discEl.innerText = "Physical Fault";
+      discEl.style.color = "var(--warning)";
+    } else {
+      discEl.innerText = "Engine Valid";
+      discEl.style.color = "var(--nominal)";
+    }
+  }
 
   // --- Fault strip -----------------------------------------------
   updateActiveFaultButton(state.active_fault || currentActiveFault || "HEALTHY");
@@ -699,6 +981,11 @@ function updateRul(ai) {
     }
   }
 
+  // Reported back so the status band can show the same verdict this function
+  // settled on, rather than re-deriving it from the raw frame and disagreeing
+  // with the panel beside it.
+  rulSettledFlag = settled;
+
   if (prevEl) {
     if (rulPrevious) {
       const txt = `revised from ${rulPrevious.min.toFixed(1)} – ${rulPrevious.max.toFixed(1)} h`;
@@ -714,9 +1001,73 @@ function updateRul(ai) {
   }
 }
 
+/**
+ * The full-width verdict strip: condition, confidence, severity, remaining
+ * life and the recommended action, on one line. Its ground carries the
+ * semantic state colour, which is what makes it the first thing read.
+ */
+function updateStatusBand(state, ai, rulSettled) {
+  const band = document.getElementById("status-band");
+  if (!band) return;
+
+  const h = state.health || {};
+  const overall = h.overall_health !== undefined ? h.overall_health : 100;
+  const cls = (ai.fault_class || state.active_fault || "HEALTHY");
+
+  // Same 85/70/50/25 banding the health index uses; nothing new is decided here.
+  let st = overall >= 85 ? "nominal"
+         : overall >= 70 ? "advisory"
+         : overall >= 50 ? "caution"
+         : overall >= 25 ? "warning" : "critical";
+
+  // A named condition can coexist with a high composite health score -- a
+  // boost deficiency during an altitude sweep sits near 89% overall. Painting
+  // that band nominal green while it reads "TURBO BOOST DEFICIENCY" is the
+  // same contradiction this band exists to remove, so a named condition
+  // floors the band at caution regardless of the composite.
+  if (cls !== "HEALTHY" && (st === "nominal" || st === "advisory")) st = "caution";
+  if (band.dataset.state !== st) band.dataset.state = st;
+
+  setText("sb-condition", cls.replace(/_/g, ' '));
+  setText("sb-confidence", `${Number(ai.fault_confidence_pct ?? 100).toFixed(1)} %`);
+  setText("sb-severity", Number(ai.fault_severity ?? 0).toFixed(2));
+
+  // The diagnosis panel damps this interval so it does not flap frame to
+  // frame. Read the damped value, not the raw frame, or the band and the
+  // panel next to it report different remaining life for the same engine.
+  const lo = rulCurrent ? rulCurrent.min : ai.rul_hours_min;
+  const hi = rulCurrent ? rulCurrent.max : ai.rul_hours_max;
+  setText("sb-rul", (rulSettled === false || lo === undefined || hi === undefined)
+    ? "not settled"
+    : `${Number(lo).toFixed(lo < 10 ? 1 : 0)} – ${Number(hi).toFixed(hi < 10 ? 1 : 0)} h`);
+
+  setText("sb-action", ai.recommended_action || "Continue nominal mission profile.");
+}
+
 // ------------------------------------------------------------------
 // 7. LOCAL ATTRIBUTION — ranked horizontal bars, top five
 // ------------------------------------------------------------------
+/* A channel that names a cylinder gets that cylinder's colour as a chip, so
+   the same four hues identify a cylinder in the charts, the tiles, the 3D
+   model and here. The bar itself keeps its state colour: identity and state
+   are different questions and should not share one channel. */
+/* Shown when the twin reports nothing above tolerance, so the panel keeps
+   its shape and the reader sees a quiet system rather than an empty box. */
+const RESIDUAL_CHANNEL_LABELS = [
+  'Cylinder 1 Exhaust Gas Temp (EGT1)',
+  'Cylinder 2 Exhaust Gas Temp (EGT2)',
+  'Cylinder 3 Exhaust Gas Temp (EGT3)',
+  'Cylinder 4 Exhaust Gas Temp (EGT4)',
+  'Manifold pressure (MAP)'
+];
+
+function cylChip(name) {
+  const m = /(?:cylinder|cyl)\s*([1-4])|EGT([1-4])|CHT([1-4])/i.exec(name || '');
+  if (!m) return '';
+  const n = parseInt(m[1] || m[2] || m[3], 10);
+  return `<i class="cyl-chip" style="background:${THEME.cyl[n - 1]}"></i>`;
+}
+
 function updateShapDrawer(shapItems) {
   const container = document.getElementById("container-shap");
   if (!container) return;
@@ -725,8 +1076,17 @@ function updateShapDrawer(shapItems) {
   if (signature === lastShapSignature) return;
   lastShapSignature = signature;
 
+  // Previously a nominal engine swapped the bars for a placeholder sentence,
+  // so the panel was empty most of the time and its height jumped whenever a
+  // fault appeared. The bars now stay, showing their true small magnitudes:
+  // "every channel is inside tolerance" is more convincing shown than stated.
   if (!shapItems || shapItems.length === 0) {
-    container.innerHTML = `<div class="empty-note">All channels within tolerance.</div>`;
+    container.innerHTML = RESIDUAL_CHANNEL_LABELS.map(ch => `
+      <div class="hbar-row">
+        <span class="hbar-label">${cylChip(ch)}${ch}</span>
+        <span class="hbar-val">0.0% · 0.0σ</span>
+        <span class="hbar-track"><span class="hbar-fill" style="width:2%"></span></span>
+      </div>`).join('');
     return;
   }
 
@@ -749,7 +1109,7 @@ function updateShapDrawer(shapItems) {
     const width = Math.max(2, (pct / maxPct) * 100);
     return `
       <div class="hbar-row">
-        <span class="hbar-label">${item.display_name}</span>
+        <span class="hbar-label">${cylChip(item.display_name)}${item.display_name}</span>
         <span class="hbar-val">${pct.toFixed(1)}% · ${arrow}${absSigma.toFixed(1)}σ</span>
         <span class="hbar-track"><span class="hbar-fill"${stAttr} style="width:${width}%"></span></span>
       </div>`;
@@ -759,6 +1119,72 @@ function updateShapDrawer(shapItems) {
 // ------------------------------------------------------------------
 // 8. CHARTS
 // ------------------------------------------------------------------
+
+/**
+ * Paints the +/-k sigma envelope as a filled band that follows the
+ * model-expected centreline, behind the sensor traces.
+ *
+ * Previously the envelope existed only as a dashed centreline and the solid
+ * sensor trace drew straight over it, which made the question "is this line
+ * above that line?" -- a comparison the eye is bad at. A filled band turns it
+ * into "did the line leave the band?", which is read instantly.
+ *
+ * Bands are per series so a cylinder's band carries that cylinder's colour.
+ * The twin's baseline currently models four identical cylinders, so all four
+ * expectations coincide; identical bands are therefore drawn once, in neutral
+ * --model-expected, rather than four times at stacking alpha. If the baseline
+ * ever differentiates cylinders the bands separate and colour themselves
+ * without any change here.
+ *
+ * options.plugins.envelope.series = [{ centre:[], sigma, color }]
+ */
+const envelopePlugin = {
+  id: 'envelope',
+  beforeDatasetsDraw(chart, args, opts) {
+    const series = (opts && opts.series) || [];
+    if (!series.length) return;
+    const { ctx, chartArea, scales } = chart;
+    if (!chartArea) return;
+
+    // Group series whose centreline is identical, so coincident bands paint once.
+    const groups = new Map();
+    series.forEach(sv => {
+      const centre = sv.centre || [];
+      if (!centre.length) return;
+      const key = (sv.axis || 'y') + '|' + sv.sigma + '|' + centre.join(',');
+      if (!groups.has(key)) groups.set(key, { ...sv, members: 1 });
+      else groups.get(key).members += 1;
+    });
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(chartArea.left, chartArea.top,
+             chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+    ctx.clip();
+
+    groups.forEach(g => {
+      const y = scales[g.axis || 'y'];
+      const x = scales.x;
+      if (!y || !x) return;
+      const centre = g.centre;
+      const half = g.sigma * ENVELOPE_K;
+      // A shared band belongs to no single cylinder, so it is neutral.
+      ctx.fillStyle = g.members > 1 ? THEME.modelExpected + '1A' : g.color;
+      ctx.beginPath();
+      for (let i = 0; i < centre.length; i++) {
+        const px = x.getPixelForValue(i);
+        const py = y.getPixelForValue(centre[i] + half);
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      for (let i = centre.length - 1; i >= 0; i--) {
+        ctx.lineTo(x.getPixelForValue(i), y.getPixelForValue(centre[i] - half));
+      }
+      ctx.closePath();
+      ctx.fill();
+    });
+    ctx.restore();
+  }
+};
 
 /**
  * Paints translucent tolerance bands across a y-axis region.
@@ -807,13 +1233,84 @@ function envelopeSegmentColorLow(cautionLow, limitLow, baseColor) {
   };
 }
 
+/**
+ * Clips a y-axis to what is actually on it.
+ *
+ * Every chart previously ran a fixed axis several times taller than its data
+ * -- EGT on 0-1000 with the traces sitting near 500 -- so a real divergence
+ * was a few pixels and every trace read as a flat line mid-panel.
+ *
+ * The range is the union of the plotted series, their model-expected
+ * centrelines and the +/-3 sigma envelope around them, plus 8% headroom. It
+ * is recomputed on AXIS_RESCALE_MS rather than per frame so the axis does not
+ * chase the data, and it is floored at a minimum span so a dead-flat healthy
+ * trace does not get magnified into noise.
+ */
+function fitAxis(scale, series, opts) {
+  const o = opts || {};
+  let lo = Infinity, hi = -Infinity;
+  series.forEach(sv => {
+    const arr = sv.data || [];
+    const pad = (sv.sigma || 0) * ENVELOPE_K;
+    for (let i = 0; i < arr.length; i++) {
+      const v = arr[i];
+      if (v === null || v === undefined || !isFinite(v)) continue;
+      if (v - pad < lo) lo = v - pad;
+      if (v + pad > hi) hi = v + pad;
+    }
+  });
+  if (!isFinite(lo) || !isFinite(hi)) return false;
+
+  let span = hi - lo;
+  const minSpan = o.minSpan || 0;
+  if (span < minSpan) {                      // flat trace: open out around it
+    const mid = (hi + lo) / 2;
+    lo = mid - minSpan / 2; hi = mid + minSpan / 2; span = minSpan;
+  }
+  const head = span * 0.08;
+  lo -= head; hi += head;
+  if (o.floorAtZero && lo < 0) lo = 0;
+  if (o.clampMin !== undefined) lo = Math.min(lo, o.clampMin);
+  if (o.clampMax !== undefined) hi = Math.max(hi, o.clampMax);
+
+  const changed = scale.min !== lo || scale.max !== hi;
+  scale.min = lo; scale.max = hi;
+  return changed;
+}
+
+/** Recomputes all three charts' y-ranges from the live buffers. */
+function rescaleAxes() {
+  const H = historyData;
+  if (charts.temp) {
+    fitAxis(charts.temp.options.scales.y, [
+      { data: H.sensor_egt1 }, { data: H.sensor_egt2 },
+      { data: H.sensor_egt3 }, { data: H.sensor_egt4 },
+      { data: H.mvem_egt, sigma: SIGMA.egt }
+    ], { minSpan: 60 });
+  }
+  if (charts.pressures) {
+    fitAxis(charts.pressures.options.scales.y, [
+      { data: H.sensor_oil_p }, { data: H.mvem_oil_p, sigma: SIGMA.oilP }
+    ], { minSpan: 1.2, floorAtZero: false });
+    fitAxis(charts.pressures.options.scales.y1, [
+      { data: H.sensor_map }, { data: H.mvem_map, sigma: SIGMA.map }
+    ], { minSpan: 0.6 });
+  }
+  if (charts.vibration) {
+    fitAxis(charts.vibration.options.scales.y, [
+      { data: H.sensor_vib, sigma: SIGMA.vib }
+    ], { minSpan: 0.8, floorAtZero: true });
+    fitAxis(charts.vibration.options.scales.y1, [{ data: H.mvem_vib }], { minSpan: 40 });
+  }
+}
+
 function initCharts() {
   if (typeof Chart === "undefined") {
     console.warn("Chart.js not loaded yet.");
     return;
   }
 
-  Chart.register(bandsPlugin);
+  Chart.register(bandsPlugin, envelopePlugin);
   Chart.defaults.font.family = THEME.fontMono;
   Chart.defaults.font.size = THEME.fsTick;
   Chart.defaults.color = THEME.textMuted;
@@ -824,8 +1321,10 @@ function initCharts() {
     maxTicksLimit: 6,
     padding: 4
   };
-  const gridMajor = { color: THEME.border, lineWidth: 1, drawTicks: false };
-  const gridMinor = { color: THEME.border, lineWidth: 1, borderDash: [2, 3], drawTicks: false };
+  // Horizontal gridlines only. Vertical rules added nothing -- the x axis is
+  // uniform time -- and crossed the traces they were meant to support.
+  const gridY = { color: THEME.grid, lineWidth: 1, drawTicks: false, drawOnChartArea: true };
+  const gridX = { display: false };
 
   const commonOptions = {
     responsive: true,
@@ -835,8 +1334,15 @@ function initCharts() {
     layout: { padding: { top: 2, right: 2, bottom: 0, left: 0 } },
     elements: { line: { tension: 0.12, borderWidth: 2 }, point: { radius: 0 } },
     scales: {
-      x: { display: false, grid: { display: false } },
-      y: { grid: gridMinor, border: { color: THEME.border }, ticks: axisTicks }
+      // There was no x axis at all, so a trace carried no sense of how much
+      // history was on screen or how fast anything moved.
+      x: {
+        display: true,
+        grid: gridX,
+        border: { color: THEME.border },
+        ticks: { ...axisTicks, maxTicksLimit: 7, maxRotation: 0, autoSkip: true }
+      },
+      y: { grid: gridY, border: { color: THEME.border }, ticks: axisTicks }
     },
     plugins: {
       legend: {
@@ -900,10 +1406,9 @@ function initCharts() {
         scales: {
           x: commonOptions.scales.x,
           y: {
-            grid: gridMinor,
+            grid: gridY,
             border: { color: THEME.border },
-            min: LIMITS.egt.min,
-            max: LIMITS.egt.max,
+            // range set by rescaleAxes()
             title: { display: true, text: '°C', color: THEME.textDim,
                      font: { size: THEME.fsTick, family: THEME.fontMono } },
             ticks: { ...axisTicks, callback: (v) => Number(v).toFixed(0) }
@@ -916,7 +1421,8 @@ function initCharts() {
               { from: LIMITS.egt.caution, to: LIMITS.egt.limit, color: THEME.cautionBand },
               { from: LIMITS.egt.limit, to: LIMITS.egt.max, color: THEME.warningBand }
             ]
-          }
+          },
+          envelope: { series: [] }   // filled each tick from the live buffers
         }
       }
     });
@@ -945,25 +1451,24 @@ function initCharts() {
         scales: {
           x: commonOptions.scales.x,
           y: {
-            grid: gridMinor,
+            grid: gridY,
             border: { color: THEME.border },
-            min: LIMITS.oilP.min,
-            max: LIMITS.oilP.max,
+            // range set by rescaleAxes()
             title: { display: true, text: 'Oil bar', color: THEME.textDim,
                      font: { size: THEME.fsTick, family: THEME.fontMono } },
             ticks: { ...axisTicks, stepSize: 1, callback: (v) => Number(v).toFixed(1) }
           },
           y1: {
             position: 'right',
-            grid: { drawOnChartArea: false, color: THEME.border },
+            grid: { drawOnChartArea: false, color: THEME.grid },
             border: { color: THEME.border },
-            min: 0, max: 3.5,
+            // range set by rescaleAxes()
             title: { display: true, text: 'MAP bar', color: THEME.textDim,
                      font: { size: THEME.fsTick, family: THEME.fontMono } },
             ticks: { ...axisTicks, callback: (v) => Number(v).toFixed(1) }
           }
         },
-        plugins: commonOptions.plugins
+        plugins: { ...commonOptions.plugins, envelope: { series: [] } }
       }
     });
   }
@@ -987,25 +1492,24 @@ function initCharts() {
         scales: {
           x: commonOptions.scales.x,
           y: {
-            grid: gridMinor,
+            grid: gridY,
             border: { color: THEME.border },
-            min: LIMITS.vib.min,
-            max: LIMITS.vib.max,
+            // range set by rescaleAxes()
             title: { display: true, text: 'g RMS', color: THEME.textDim,
                      font: { size: THEME.fsTick, family: THEME.fontMono } },
             ticks: { ...axisTicks, callback: (v) => Number(v).toFixed(1) }
           },
           y1: {
             position: 'right',
-            grid: { drawOnChartArea: false, color: THEME.border },
+            grid: { drawOnChartArea: false, color: THEME.grid },
             border: { color: THEME.border },
-            min: 0, max: 220,
+            // range set by rescaleAxes()
             title: { display: true, text: 'HP', color: THEME.textDim,
                      font: { size: THEME.fsTick, family: THEME.fontMono } },
             ticks: { ...axisTicks, callback: (v) => Number(v).toFixed(0) }
           }
         },
-        plugins: commonOptions.plugins
+        plugins: { ...commonOptions.plugins, envelope: { series: [] } }
       }
     });
   }
@@ -1015,14 +1519,23 @@ function updateChartData(state) {
   if (!state) return;
   historyData.time.push(`${(state.timestamp_s || 0).toFixed(1)}s`);
 
+  historyData.t_s.push(state.timestamp_s || 0);
+
   const egts = state.sensor_egt_c || [810, 810, 810, 810];
-  const mvemEgt = (state.mvem_expected_egt_c && state.mvem_expected_egt_c[0]) || 810;
+  const mv = state.mvem_expected_egt_c || [];
+  const mvemEgt = mv[0] !== undefined ? mv[0] : 810;
 
   historyData.sensor_egt1.push(egts[0]);
   historyData.sensor_egt2.push(egts[1]);
   historyData.sensor_egt3.push(egts[2]);
   historyData.sensor_egt4.push(egts[3]);
   historyData.mvem_egt.push(mvemEgt);
+  // Kept per cylinder so each band tracks its own expectation. They coincide
+  // today because the baseline models identical cylinders; the envelope
+  // plugin collapses coincident bands rather than stacking their alpha.
+  for (let i = 0; i < 4; i++) {
+    historyData['mvem_egt' + (i + 1)].push(mv[i] !== undefined ? mv[i] : mvemEgt);
+  }
 
   historyData.sensor_oil_p.push(state.sensor_oil_pressure_bar !== undefined ? state.sensor_oil_pressure_bar : 4.2);
   historyData.mvem_oil_p.push(state.mvem_expected_oil_pressure_bar || 4.2);
@@ -1039,6 +1552,31 @@ function updateChartData(state) {
   const now = Date.now();
   if (now - lastChartUpdateTime < CHART_UPDATE_INTERVAL_MS) return;
   lastChartUpdateTime = now;
+
+  const nowMs = Date.now();
+  if (nowMs - lastAxisRescale >= AXIS_RESCALE_MS) {
+    lastAxisRescale = nowMs;
+    rescaleAxes();
+  }
+
+  if (charts.temp) {
+    charts.temp.options.plugins.envelope.series = [
+      { centre: historyData.mvem_egt1, sigma: SIGMA.egt, color: THEME.cylBand[0] },
+      { centre: historyData.mvem_egt2, sigma: SIGMA.egt, color: THEME.cylBand[1] },
+      { centre: historyData.mvem_egt3, sigma: SIGMA.egt, color: THEME.cylBand[2] },
+      { centre: historyData.mvem_egt4, sigma: SIGMA.egt, color: THEME.cylBand[3] }
+    ];
+  }
+  if (charts.pressures) {
+    charts.pressures.options.plugins.envelope.series = [
+      { centre: historyData.mvem_oil_p, sigma: SIGMA.oilP, color: THEME.cylBand[0], axis: 'y' },
+      { centre: historyData.mvem_map,   sigma: SIGMA.map,  color: THEME.cylBand[2], axis: 'y1' }
+    ];
+  }
+  // The vibration chart has no model-expected centreline to band: mvem_vib
+  // carries power on the right-hand axis, not an expected vibration level.
+  // Its tolerance is the absolute caution/limit region, which bandsPlugin
+  // already draws.
 
   if (charts.temp && charts.temp.data.datasets.length >= 5) {
     charts.temp.data.labels = historyData.time;
@@ -1138,14 +1676,16 @@ async function injectFault(faultType, severity = 1.0) {
   try {
     if (faultType === 'HEALTHY') {
       await fetch('/api/fault/clear', { method: 'POST' });
-      addEventLog("FLT", "Engine reset to healthy baseline; all trims normalised.");
+      addEventLog("SYS", "Operator cleared all injected faults.");
     } else {
       await fetch('/api/fault/inject', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fault_type: faultType, severity: severity, ramp_duration_s: 1.0 })
       });
-      addEventLog("FLT", `Injected ${faultType.replace(/_/g, ' ').toLowerCase()} (ramp 1.0 s).`);
+      // An action, not a condition. The condition appears in the log when
+      // the twin's diagnosis actually carries it.
+      addEventLog("SYS", `Operator requested ${faultType.replace(/_/g, ' ').toLowerCase()} (ramp 1.0 s).`);
     }
   } catch (e) {
     console.error("Fault injection error:", e);
