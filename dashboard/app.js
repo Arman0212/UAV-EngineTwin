@@ -1860,6 +1860,8 @@ function focusCylinder(index) {
 function resetSimulation() {
   fetch('/api/sim/reset', { method: 'POST' }).catch(e => {});
   injectFault('HEALTHY');
+  setText("txt-time", "00:00:00");
+  Object.keys(historyData).forEach(k => historyData[k] = []);
   rulPrevious = null;
   rulCurrent = null;
   rulSamples = [];

@@ -204,6 +204,7 @@ class EngineTwinRuntime:
         for _ in range(steps):
             self.step(dt_s=dt_s, record=False)
         self.rul_engine.reset()
+        self.sim_time_s = 0.0
 
     def step(self, dt_s: float = 0.05, record: bool = True) -> DigitalTwinState:
         self.sim_time_s += dt_s * self.time_scale

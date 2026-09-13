@@ -41,3 +41,6 @@ data/flight_logs/
 
 # User-defined engines are created at run time, not shipped
 configs/custom/
+
+# Video recordings
+*.mp4
