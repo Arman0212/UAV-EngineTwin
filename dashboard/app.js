@@ -778,6 +778,46 @@ function updateDashboard(state) {
   updateShapDrawer(ai.top_contributing_channels || []);
   updateRecommendedAction(state, ai);
 
+  // --- Engine Core & State Fusion --------------------------------
+  const rpm = state.sensor_rpm || state.mvem_expected_rpm || 5200;
+  const fuel = state.sensor_fuel_flow_lph || state.mvem_expected_fuel_lph || 26.5;
+  const coolant = state.sensor_coolant_t_c || 84;
+  const oilT = state.sensor_oil_t_c || state.mvem_expected_oil_t_c || 96;
+  const busV = state.sensor_bus_v || 28.2;
+
+  const egtList = state.sensor_egt_c || [810, 810, 810, 810];
+  const spread = Math.max(...egtList) - Math.min(...egtList);
+
+  setText("txt-vital-rpm", Math.round(rpm).toLocaleString());
+  setText("txt-vital-fuel", Number(fuel).toFixed(1));
+  setText("txt-vital-coolant", Math.round(coolant));
+  setText("txt-vital-oilt", Math.round(oilT));
+  setText("txt-vital-bus", Number(busV).toFixed(1));
+  setText("txt-vital-spread", `Δ ${Math.round(spread)}`);
+
+  // State fusion indicators
+  const isAdapted = state.baseline_adapted !== false;
+  const adaptBadge = document.getElementById("txt-fusion-adapt");
+  if (adaptBadge) {
+    adaptBadge.innerText = isAdapted ? "Calibrated" : "Adapting...";
+    adaptBadge.setAttribute("data-state", isAdapted ? "ok" : "caution");
+  }
+
+  const isSensorFault = aiRaw.is_sensor_fault || (state.active_fault && String(state.active_fault).startsWith("SENSOR_FAULT"));
+  const discEl = document.getElementById("txt-fusion-disc");
+  if (discEl) {
+    if (isSensorFault) {
+      discEl.innerText = "Sensor Defect";
+      discEl.style.color = "var(--caution)";
+    } else if (aiRaw.fault_class && aiRaw.fault_class !== "HEALTHY") {
+      discEl.innerText = "Physical Fault";
+      discEl.style.color = "var(--warning)";
+    } else {
+      discEl.innerText = "Engine Valid";
+      discEl.style.color = "var(--nominal)";
+    }
+  }
+
   // --- Fault strip -----------------------------------------------
   updateActiveFaultButton(state.active_fault || currentActiveFault || "HEALTHY");
 

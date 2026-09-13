@@ -1311,10 +1311,59 @@
         </div>
       </div>
 
-      <!-- The "Recommended action" panel stood here. It rendered one sentence
-           in a full-height panel; that sentence now sits in the status band
-           with the diagnosis it follows from. The alert element is kept,
-           hidden, because the alert path still writes to it. -->
+      <!-- Engine Core & Digital Twin State Fusion -->
+      <div id="panel-core-vitals" class="panel flex-shrink-0">
+        <div class="panel-head">
+          <span class="panel-title">Engine core &amp; state fusion</span>
+          <span id="badge-fusion-status" class="badge" data-state="ok">12-State EKF</span>
+        </div>
+        <div class="panel-body flex flex-col gap-2">
+          <!-- 6 Vitals Tiles -->
+          <div class="grid grid-cols-3 gap-1.5">
+            <div class="stat">
+              <span class="label">Engine Speed</span>
+              <span class="readout"><span id="txt-vital-rpm">5,200</span><span class="unit"> RPM</span></span>
+            </div>
+            <div class="stat">
+              <span class="label">Fuel Flow</span>
+              <span class="readout"><span id="txt-vital-fuel">26.5</span><span class="unit"> L/h</span></span>
+            </div>
+            <div class="stat">
+              <span class="label">Coolant Temp</span>
+              <span class="readout"><span id="txt-vital-coolant">84</span><span class="unit"> °C</span></span>
+            </div>
+            <div class="stat">
+              <span class="label">Oil Temp</span>
+              <span class="readout"><span id="txt-vital-oilt">96</span><span class="unit"> °C</span></span>
+            </div>
+            <div class="stat">
+              <span class="label">Bus Voltage</span>
+              <span class="readout"><span id="txt-vital-bus">28.2</span><span class="unit"> V</span></span>
+            </div>
+            <div class="stat">
+              <span class="label">Thermal Spread</span>
+              <span class="readout"><span id="txt-vital-spread">Δ 12</span><span class="unit"> °C</span></span>
+            </div>
+          </div>
+
+          <!-- Digital Twin State Fusion & Estimator Diagnostic Strip -->
+          <div class="flex items-center justify-between px-2 py-1.5 rounded" style="background: var(--bg-elevated); border: 1px solid var(--border); font-size: var(--fs-tick);">
+            <div class="flex items-center gap-1">
+              <span class="label-sm">Estimator:</span>
+              <span id="txt-fusion-ekf" class="font-medium">Physics EKF</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="label-sm">Airframe:</span>
+              <span id="txt-fusion-adapt" class="badge" data-state="ok" style="padding: 1px 5px; font-size: 10px;">Calibrated</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="label-sm">Integrity:</span>
+              <span id="txt-fusion-disc" class="font-medium" style="color: var(--nominal);">Engine Valid</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div id="txt-active-alert" class="action-alert" hidden></div>
       <span id="badge-action-regime" hidden>Stable</span>
     </section>
