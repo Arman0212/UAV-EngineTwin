@@ -2,6 +2,7 @@
   "engine_name": "Limbach L 2400 DT",
   "displacement_litres": 2.424,
   "cylinders": 4,
+  "cylinder_layout": "boxer",
   "rated_power_hp_sealevel": 87.0,
   "rated_rpm": 3000.0,
   "idle_rpm": 900.0,
@@ -106,6 +107,35 @@
       "tau_lag_seconds": 0.1,
       "quantization": 0.05,
       "rate_hz": 10.0
+    }
+  },
+  "data_provenance": {
+    "summary": "Headline specification from Limbach L 2400 DT published data. Operating limits, sensor characteristics and the altitude power curve are modelled.",
+    "published": [
+      "engine_name",
+      "displacement_litres",
+      "cylinders",
+      "cylinder_layout",
+      "rated_power_hp_sealevel",
+      "rated_rpm",
+      "max_continuous_rpm",
+      "compression_ratio",
+      "turbocharged",
+      "intercooled"
+    ],
+    "computed": [
+      "altitude_power_derating"
+    ],
+    "modelled": [
+      "idle_rpm",
+      "max_boost_bar",
+      "nominal_operating_parameters",
+      "sensor_specifications"
+    ],
+    "notes": {
+      "published": "Manufacturer published specification for this engine. Transcribed into this config; not independently checked against the primary type certificate data sheet.",
+      "computed": "Computed, not published. Power lapse follows the Gagg-Farrar relation for normally aspirated engines, P/P0 = (sigma - 0.117) / 0.883, evaluated against the ISA density ratio sigma at each altitude.",
+      "modelled": "Representative of this engine class rather than read from a data sheet. Chosen to be internally consistent with the engine's rated point, which is what the residual model needs; treat the absolute values as indicative."
     }
   }
 }

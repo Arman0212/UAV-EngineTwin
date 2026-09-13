@@ -403,6 +403,11 @@ document.addEventListener("DOMContentLoaded", () => {
   connectWebSocket();
   addEventLog("SYS", "Ground station connected to telemetry stream at 20 Hz.");
 
+  // Shape the model to the engine that is actually fitted, before anyone opens
+  // the engine panel. Otherwise a fitted six-cylinder engine is drawn with the
+  // reference engine's four jugs and the display contradicts the telemetry.
+  refreshEngines();
+
   // Boot into mid-degradation. A screen of 100.0% readings demonstrates
   // nothing; the station should open already having something to say.
   setTimeout(bootDegradedScenario, 400);
@@ -2161,6 +2166,219 @@ function toggleEnginePanel() {
     btn.classList.toggle("is-active", !panel.hidden);
   }
   if (!panel.hidden) refreshEngines();
+
+  // The panel sits in normal flow, so opening it resizes the workspace under
+  // it. The renderer has to be told, twice: once on the next frame and once
+  // after the panel's own transition has settled.
+  if (engine3D && typeof engine3D.onWindowResize === "function") {
+    requestAnimationFrame(() => engine3D.onWindowResize());
+    setTimeout(() => engine3D.onWindowResize(), 80);
+  }
+}
+
+// Full configs, keyed by engine id. Fetched once each: the catalogue can hold
+// a dozen engines and the picker is used by clicking through them.
+const engineDetailCache = {};
+
+async function loadEngineDetail(id) {
+  if (engineDetailCache[id]) return engineDetailCache[id];
+  const res = await fetch(`/api/engines/${encodeURIComponent(id)}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const d = await res.json();
+  engineDetailCache[id] = d;
+  return d;
+}
+
+const LAYOUT_NAMES = {
+  inline: "Inline",
+  boxer: "Horizontally opposed",
+  vee: "Vee"
+};
+
+function setEngineSpec(html) {
+  const el = document.getElementById("box-engine-spec");
+  if (el) el.innerHTML = html;
+}
+
+/** One labelled figure in the spec sheet. Empty values drop out entirely. */
+function specCell(label, value, sub) {
+  if (value === undefined || value === null || value === "") return "";
+  return `<div class="spec-cell"><span class="spec-label">${label}</span>` +
+         `<span class="spec-value">${value}</span>` +
+         (sub ? `<span class="spec-sub">${sub}</span>` : "") + `</div>`;
+}
+
+const engNum = (v, d) =>
+  (v === undefined || v === null || isNaN(v)) ? null : Number(v).toFixed(d || 0);
+
+// Config keys, as an engineer would say them. The provenance block lists the
+// fields it covers by key; a reader should not have to decode JSON names.
+const FIELD_LABELS = {
+  engine_name: "name",
+  displacement_litres: "displacement",
+  cylinders: "cylinder count",
+  cylinder_layout: "bank layout",
+  rated_power_hp_sealevel: "rated power",
+  rated_rpm: "rated RPM",
+  max_continuous_rpm: "max continuous RPM",
+  idle_rpm: "idle RPM",
+  compression_ratio: "compression ratio",
+  turbocharged: "induction",
+  intercooled: "intercooling",
+  max_boost_bar: "max boost",
+  nominal_operating_parameters: "operating limits",
+  sensor_specifications: "sensor characteristics",
+  end_of_life_limits: "end-of-life limits",
+  altitude_power_derating: "altitude power curve",
+  all: "every figure"
+};
+
+const PROVENANCE_TIERS = [
+  ["published", "Published", "Transcribed from the manufacturer's specification."],
+  ["computed", "Computed", "Derived from a stated relation."],
+  ["modelled", "Modelled", "Representative, not read from a data sheet."]
+];
+
+/**
+ * Renders where this engine's numbers came from.
+ *
+ * Reviewers ask whether a figure is a published specification or an estimate.
+ * The configs carry that answer per field, so the sheet states it rather than
+ * leaving the reader to assume.
+ */
+function renderProvenance(prov) {
+  if (!prov) return "";
+
+  const rows = PROVENANCE_TIERS.map(([key, label, blurb]) => {
+    const fields = prov[key] || [];
+    if (!fields.length) return "";
+    const named = fields.map(f => FIELD_LABELS[f] || f).join(", ");
+    const why = (prov.notes && prov.notes[key]) || blurb;
+    return `<div class="prov-row" data-tier="${key}">` +
+           `<span class="prov-tag">${label}</span>` +
+           `<span class="prov-fields">${named}</span>` +
+           `<span class="prov-why">${why}</span></div>`;
+  }).join("");
+
+  return `<div class="spec-prov">` +
+         `<span class="spec-label">Where these numbers come from</span>` +
+         `<div class="prov-summary">${prov.summary || ""}</div>` +
+         rows + `</div>`;
+}
+
+/**
+ * Renders the full spec of one engine. Every figure comes from that engine's
+ * own config file, so no two engines in the catalogue read the same.
+ */
+function renderEngineSpec(id, detail) {
+  const c = (detail && detail.config) || {};
+  const nom = c.nominal_operating_parameters || {};
+  const table = c.altitude_power_derating || [];
+  const fitted = id === fittedEngineId;
+
+  const dispL = c.displacement_litres;
+  const cc = dispL ? Math.round(dispL * 1000).toLocaleString() : null;
+  // Same relation the 3D model uses to size the engine: a square engine with
+  // bore = stroke, so bore = cbrt(4 * swept volume per cylinder / pi).
+  const boreMm = (dispL && c.cylinders)
+    ? Math.cbrt(4 * (dispL * 1e6 / c.cylinders) / Math.PI) : null;
+
+  const ceiling = table.length
+    ? Math.max.apply(null, table.map(r => Number(r.altitude_ft) || 0)) : null;
+  const topRow = table.length
+    ? table.reduce((a, b) => (Number(b.altitude_ft) > Number(a.altitude_ft) ? b : a))
+    : null;
+
+  const cells = [
+    specCell("Rated power", `${engNum(c.rated_power_hp_sealevel)} HP`,
+             `at ${engNum(c.rated_rpm)} rpm, sea level`),
+    specCell("Displacement", cc ? `${cc} cc` : null, dispL ? `${dispL} litres` : ""),
+    specCell("Cylinders", c.cylinders,
+             c.turbocharged === false ? "naturally aspirated" : "turbocharged"),
+    specCell("Bank layout", LAYOUT_NAMES[c.cylinder_layout || "inline"]
+                            || LAYOUT_NAMES.inline, "as drawn in the 3D view"),
+    specCell("Bore", boreMm ? `${boreMm.toFixed(0)} mm` : null,
+             "derived, square engine"),
+    specCell("Compression", c.compression_ratio ? `${c.compression_ratio}:1` : null,
+             c.intercooled ? "intercooled" : ""),
+    specCell("Max boost", engNum(c.max_boost_bar, 2), "bar absolute"),
+    specCell("RPM range", `${engNum(c.idle_rpm)} – ${engNum(c.max_continuous_rpm)}`,
+             "idle to max continuous"),
+    specCell("Nominal EGT", nom.egt_nominal_celsius ? `${engNum(nom.egt_nominal_celsius)} °C` : null,
+             nom.egt_alarm_celsius ? `alarm ${engNum(nom.egt_alarm_celsius)} °C` : ""),
+    specCell("Nominal CHT", nom.cht_nominal_celsius ? `${engNum(nom.cht_nominal_celsius)} °C` : null,
+             nom.cht_alarm_celsius ? `alarm ${engNum(nom.cht_alarm_celsius)} °C` : ""),
+    specCell("Oil pressure", nom.oil_pressure_nominal_bar ? `${engNum(nom.oil_pressure_nominal_bar, 1)} bar` : null,
+             nom.oil_pressure_min_safe_bar ? `min safe ${engNum(nom.oil_pressure_min_safe_bar, 2)} bar` : ""),
+    specCell("Cruise fuel", nom.fuel_flow_cruise_lph ? `${engNum(nom.fuel_flow_cruise_lph, 1)} L/h` : null,
+             nom.fuel_flow_max_lph ? `max ${engNum(nom.fuel_flow_max_lph, 1)} L/h` : ""),
+    specCell("Tested ceiling", ceiling ? `${ceiling.toLocaleString()} ft` : null,
+             topRow ? `${engNum(topRow.power_hp)} HP available there` : ""),
+    specCell("Vibration", nom.vibration_nominal_g_rms ? `${engNum(nom.vibration_nominal_g_rms, 1)} g` : null,
+             nom.vibration_alarm_g_rms ? `alarm ${engNum(nom.vibration_alarm_g_rms, 1)} g` : "")
+  ].join("");
+
+  // The derating curve distinguishes one engine from another at altitude,
+  // which is the regime this whole problem is about.
+  const curve = table.length ? `<div class="spec-curve">
+      <span class="spec-label">Power with altitude</span>
+      <div class="spec-curve-row">${table
+        .slice().sort((a, b) => a.altitude_ft - b.altitude_ft)
+        .map(r => `<span class="spec-pt"><b>${engNum(r.power_hp)}</b> HP` +
+                  `<i>${Number(r.altitude_ft).toLocaleString()} ft</i></span>`).join("")}</div>
+    </div>` : "";
+
+  const banner = fitted
+    ? `<div class="spec-banner is-fitted">Fitted and running · the telemetry on this page is this engine.</div>`
+    : `<div class="spec-banner">Previewing <b>${c.engine_name || id}</b>. ` +
+      `Press <b>Fit</b> to fly the sortie on it. Live telemetry is still the fitted engine.</div>`;
+
+  const note = c.notes ? `<div class="spec-note">${c.notes}</div>` : "";
+  const prov = renderProvenance(c.data_provenance);
+
+  setEngineSpec(banner + `<div class="spec-grid">${cells}</div>` + curve + note + prov);
+}
+
+/**
+ * Runs when the dropdown selection changes. Nothing was wired to the select
+ * before, which is why picking a different engine changed no figure on screen.
+ */
+async function previewSelectedEngine() {
+  const sel = document.getElementById("sel-engine");
+  if (!sel || !sel.value) return;
+  const id = sel.value;
+  const row = engineCatalogue.find(x => x.id === id);
+
+  const kind = row ? (row.builtin ? (row.is_reference ? "reference engine" : "built-in")
+                                  : "custom engine") : "";
+  const head = id === fittedEngineId ? "Fitted" : "Selected";
+  setEngineStatus(
+    `<div><span class="text-dim">${head}</span> <b>${row ? row.name : id}</b>` +
+    (kind ? ` <span class="text-dim">· ${kind}</span>` : "") + `</div>` +
+    (id === fittedEngineId ? "" :
+      `<div class="text-dim" style="margin-top:2px">Press Fit to run it.</div>`));
+
+  // Shape the 3D model to whatever is selected, so the viewport answers the
+  // click. It reverts as soon as the fitted engine is selected again.
+  if (row && engine3D && typeof engine3D.setEngineSpec === "function") {
+    try {
+      engine3D.setEngineSpec({
+        name: row.name,
+        cylinders: row.cylinders,
+        turbocharged: row.turbocharged,
+        displacementLitres: row.displacement_litres,
+        ratedPowerHp: row.rated_power_hp,
+        ratedRpm: row.rated_rpm,
+        layout: row.cylinder_layout
+      });
+    } catch (err) { /* a geometry failure must not block the spec sheet */ }
+  }
+
+  try {
+    renderEngineSpec(id, await loadEngineDetail(id));
+  } catch (err) {
+    setEngineSpec(`<div class="spec-banner">Could not load the full spec. ${err.message}</div>`);
+  }
 }
 
 function setEngineStatus(html) {
@@ -2185,8 +2403,9 @@ async function refreshEngines() {
     }).join("");
     if (fittedEngineId) sel.value = fittedEngineId;
 
-    describeFittedEngine();
+    previewSelectedEngine();
   } catch (e) {
+    describeFittedEngine();
     setEngineStatus("Could not reach the engine catalogue.");
   }
 }

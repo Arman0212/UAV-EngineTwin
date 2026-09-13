@@ -35,11 +35,37 @@ def _slug(name: str) -> str:
     return (s or "engine")[:60]
 
 
+# A user-defined engine is whatever its author typed. The builder pre-fills the
+# form from the reference engine, so without this every custom engine would
+# inherit the reference engine's provenance and claim a basis it does not have.
+CUSTOM_PROVENANCE = {
+    "summary": ("User-defined engine. These figures were entered by the "
+                "operator, not transcribed from a published specification, and "
+                "have not been checked against one."),
+    "published": [],
+    "computed": [],
+    "modelled": ["all"],
+    "notes": {
+        "modelled": ("Entered through the engine builder. The twin models this "
+                     "engine's physics from them; whether they describe a real "
+                     "powerplant is the author's to say."),
+    },
+}
+
+
 def _read(path: Path) -> Optional[Dict[str, Any]]:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        cfg = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
+
+    # Engines saved before provenance was recorded carry none. Every shipped
+    # engine has it, so anything missing it was written by a user: default it
+    # rather than let a sheet claim a basis the figures do not have. Filled on
+    # read, not on disk, so the user's file is left alone.
+    if isinstance(cfg, dict) and "data_provenance" not in cfg:
+        cfg["data_provenance"] = dict(CUSTOM_PROVENANCE)
+    return cfg
 
 
 def _summarise(engine_id: str, cfg: Dict[str, Any], builtin: bool) -> Dict[str, Any]:
@@ -54,6 +80,9 @@ def _summarise(engine_id: str, cfg: Dict[str, Any], builtin: bool) -> Dict[str, 
         "is_reference": engine_id == REFERENCE_ID,
         "displacement_litres": cfg.get("displacement_litres"),
         "cylinders": cfg.get("cylinders"),
+        # Bank arrangement, for the 3D model. Purely a display property:
+        # the physics does not care how the cylinders are laid out.
+        "cylinder_layout": cfg.get("cylinder_layout", "inline"),
         "rated_power_hp": cfg.get("rated_power_hp_sealevel"),
         "rated_rpm": cfg.get("rated_rpm"),
         "max_boost_bar": cfg.get("max_boost_bar"),
@@ -61,6 +90,7 @@ def _summarise(engine_id: str, cfg: Dict[str, Any], builtin: bool) -> Dict[str, 
         "ceiling_ft": ceiling,
         "egt_nominal_c": nom.get("egt_nominal_celsius"),
         "created_utc": cfg.get("created_utc"),
+        "provenance_summary": (cfg.get("data_provenance") or {}).get("summary"),
     }
 
 
@@ -127,6 +157,7 @@ def save_custom(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     cfg = dict(cfg)
     cfg["origin"] = "custom"
+    cfg["data_provenance"] = dict(CUSTOM_PROVENANCE)
     cfg.setdefault("created_utc", time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
 
     # Build the spec before writing: a config that cannot produce a runnable
@@ -165,4 +196,5 @@ def blank_config(name: str = "My Engine") -> Dict[str, Any]:
     cfg = json.loads(json.dumps(ref))
     cfg["engine_name"] = name
     cfg["origin"] = "custom"
+    cfg["data_provenance"] = dict(CUSTOM_PROVENANCE)
     return cfg

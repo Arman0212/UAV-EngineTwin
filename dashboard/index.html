@@ -1087,7 +1087,9 @@
 
         <div class="flex items-center gap-2 flex-shrink-0">
           <label class="label-sm" for="sel-engine">Fitted</label>
-          <select id="sel-engine" class="btn" style="min-width:19rem"></select>
+          <select id="sel-engine" class="btn" style="min-width:19rem"
+                  onchange="previewSelectedEngine()"
+                  title="Pick an engine to read its full specification"></select>
           <button onclick="fitSelectedEngine()" class="btn" title="Fit this engine and restart the sortie">Fit</button>
           <button onclick="toggleEngineForm()" id="btn-engine-new" class="btn">+ New engine</button>
           <button onclick="deleteSelectedEngine()" class="btn" title="Delete the selected custom engine">Delete</button>
@@ -1101,6 +1103,11 @@
 
       <button onclick="toggleEnginePanel()" class="btn" title="Collapse">Close &#9652;</button>
     </div>
+
+    <!-- Full specification of whichever engine is selected above. Populated by
+         previewSelectedEngine(); every figure is read from that engine's own
+         config file. -->
+    <div id="box-engine-spec" class="engine-spec"></div>
 
     <!-- Builder form. Prefilled from the reference engine so a user edits real
          numbers rather than facing empty boxes. -->

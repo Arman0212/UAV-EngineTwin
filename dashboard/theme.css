@@ -2539,3 +2539,176 @@ body, button, input, select, textarea,
   height: clamp(230px, 26vh, 360px);
 }
 .panel-3d-fill .viewport-3d canvas { display: block; width: 100% !important; height: 100% !important; }
+
+/* ==========================================================================
+   ENGINE SPECIFICATION SHEET
+   --------------------------------------------------------------------------
+   Shown for whichever engine is selected in the picker, fitted or not. It is
+   capped in height and scrolls internally: the engine panel sits in normal
+   flow above the workspace, so an uncapped sheet would squeeze the 3D
+   viewport, which must keep the size it has.
+   ========================================================================== */
+
+.engine-spec:empty { display: none; }
+
+.engine-spec {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+  max-height: 30vh;
+  overflow-y: auto;
+}
+
+.spec-banner {
+  font-size: var(--fs-label);
+  color: var(--text-muted);
+  background: var(--instrument-band);
+  border-left: 2px solid var(--instrument);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  padding: 6px 10px;
+  margin-bottom: 10px;
+}
+.spec-banner b { color: var(--text-primary); font-weight: 600; }
+.spec-banner.is-fitted {
+  background: rgba(109, 217, 138, 0.10);
+  border-left-color: var(--ok);
+}
+
+.spec-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(146px, 1fr));
+  gap: 8px;
+}
+
+.spec-cell {
+  display: grid;
+  gap: 1px;
+  align-content: start;
+  background: var(--bg-elevated);
+  border-radius: var(--radius);
+  padding: 7px 9px;
+  min-width: 0;
+}
+
+.spec-label {
+  font-size: var(--fs-tick);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.spec-value {
+  font-size: var(--fs-title);
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.spec-sub {
+  font-size: var(--fs-tick);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* The derating curve, read left to right as the aircraft climbs. */
+.spec-curve { margin-top: 10px; }
+.spec-curve-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
+}
+.spec-pt {
+  display: grid;
+  gap: 1px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  padding: 5px 9px;
+  min-width: 74px;
+}
+.spec-pt b {
+  font-size: var(--fs-title);
+  font-weight: 600;
+  color: var(--instrument);
+  font-variant-numeric: tabular-nums;
+}
+.spec-pt i {
+  font-style: normal;
+  font-size: var(--fs-tick);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.spec-note {
+  margin-top: 9px;
+  font-size: var(--fs-label);
+  line-height: 1.5;
+  color: var(--text-muted);
+  max-width: 82ch;
+}
+
+@media (max-width: 720px) {
+  .engine-spec { max-height: 42vh; }
+  .spec-grid { grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); }
+}
+
+/* ==========================================================================
+   DATA PROVENANCE
+   --------------------------------------------------------------------------
+   Which of an engine's figures are published, which are computed and which
+   are modelled. Set quietly: it is a qualification on the sheet above, not a
+   headline, but a reviewer must be able to find it without asking.
+   ========================================================================== */
+
+.spec-prov {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.prov-summary {
+  font-size: var(--fs-label);
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin: 5px 0 9px;
+  max-width: 86ch;
+}
+
+.prov-row {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 11rem) minmax(0, 1fr);
+  gap: 4px 12px;
+  align-items: baseline;
+  padding: 5px 0;
+  border-top: 1px solid var(--border-soft);
+}
+.prov-row:first-of-type { border-top: none; }
+
+.prov-tag {
+  font-size: var(--fs-tick);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border-left: 2px solid var(--border);
+  padding-left: 7px;
+}
+.prov-row[data-tier="published"] .prov-tag { color: var(--ok); border-left-color: var(--ok); }
+.prov-row[data-tier="computed"]  .prov-tag { color: var(--instrument); border-left-color: var(--instrument); }
+.prov-row[data-tier="modelled"]  .prov-tag { color: var(--caution); border-left-color: var(--caution); }
+
+.prov-fields {
+  font-size: var(--fs-label);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.prov-why {
+  font-size: var(--fs-tick);
+  line-height: 1.5;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .prov-row { grid-template-columns: 1fr; gap: 2px; }
+  .prov-tag { border-left: none; padding-left: 0; }
+}
