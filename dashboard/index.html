@@ -1,9 +1,19 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ENGINE-TWIN | DRDO MALE UAV Aero Piston Engine Ground Control Station</title>
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem('engine_twin_theme') || 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
   <!--
     All third-party assets are vendored under dashboard/vendor/ and served from
     this host. The ground station has to come up on a closed network with no
@@ -21,7 +31,7 @@
   <link rel="stylesheet" href="/static/vendor/plex-mono.css">
   <link rel="stylesheet" href="/static/vendor/plex-sans.css">
   <!-- GLASS COCKPIT THEME: single source of truth for colour and type -->
-  <link rel="stylesheet" href="/static/theme.css?v=2.0">
+  <link rel="stylesheet" href="/static/theme.css?v=3.0">
   <style>
     /* ====================================================================
        INTERACTIVE HOVER BUTTON (Top-Right "CONSOLE" Shortcut)
@@ -952,12 +962,13 @@
       <div class="tape"><span class="label-sm">Throttle</span><span id="txt-throttle" class="tape-val">72.0 %</span></div>
     </div>
 
-    <!-- Row one carries flight state and nothing else. The station controls
-         that used to crowd it now live in the footer, beside fault injection,
-         where the other operator actions already are. -->
-    <div id="badge-connection" class="badge" data-state="ok">
-      <span class="dot" data-state="ok"></span>
-      <span id="lbl-connection">Telemetry live · 20 Hz</span>
+    <!-- Flight bar controls & telemetry connection indicator -->
+    <div class="flex items-center gap-2">
+      <button id="btn-theme-toggle" onclick="toggleTheme()" class="btn" title="Toggle Day / Night mode" style="padding: 2px 9px; font-weight: 500;">☀️ Day</button>
+      <div id="badge-connection" class="badge" data-state="ok">
+        <span class="dot" data-state="ok"></span>
+        <span id="lbl-connection">Telemetry live · 20 Hz</span>
+      </div>
     </div>
   </header>
 
@@ -1499,8 +1510,8 @@
        Both chapters are fixed layers, so this never pushes anything around. -->
   <div id="scroll-track" aria-hidden="true"></div>
 
-  <script src="/static/engine_view3d.js"></script>
-  <script src="/static/app.js"></script>
-  <script src="/static/cover.js"></script>
+  <script src="/static/engine_view3d.js?v=3.0"></script>
+  <script src="/static/app.js?v=3.0"></script>
+  <script src="/static/cover.js?v=3.0"></script>
 </body>
 </html>

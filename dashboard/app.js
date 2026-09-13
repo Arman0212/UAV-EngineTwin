@@ -14,6 +14,16 @@
  * Read straight off :root in theme.css so CSS stays the only place a
  * colour is ever defined. Canvas and WebGL layers consume these.
  * ---------------------------------------------------------------- */
+// Apply saved theme early so initial paint matches user preference (defaults to 'light')
+const CURRENT_THEME = (() => {
+  try {
+    return localStorage.getItem('engine_twin_theme') || 'light';
+  } catch (e) {
+    return 'light';
+  }
+})();
+document.documentElement.setAttribute('data-theme', CURRENT_THEME);
+
 const THEME = (() => {
   const css = (name, fallback) => {
     try {
@@ -78,6 +88,46 @@ const THEME = (() => {
   t.bgChrome = t.bgPanel;
   t.trace = t.cyl;
   t.hex = (c) => parseInt(String(c).replace('#', ''), 16);
+
+  t.refresh = () => {
+    t.bgPage = css('--bg-page', '#151D28');
+    t.bgPanel = css('--bg-panel', '#1E2938');
+    t.bgElevated = css('--bg-elevated', '#2B384C');
+    t.border = css('--border', '#36465D');
+    t.borderStrong = css('--border-strong', '#4D6282');
+    t.textPrimary = css('--text-primary', '#F3F6FA');
+    t.textSecondary = css('--text-secondary', '#A2B4CA');
+    t.textMuted = css('--text-muted', '#6F849E');
+    t.nominal = css('--nominal', '#3DD68C');
+    t.advisory = css('--advisory', '#6BC4E8');
+    t.caution = css('--caution', '#F0B429');
+    t.warning = css('--warning', '#F2822C');
+    t.critical = css('--critical', '#E5484D');
+    t.accent = css('--accent', '#4C8DFF');
+    t.modelExpected = css('--model-expected', '#8598AD');
+    t.grid = css('--grid', '#28374A');
+    t.cyl = [
+      css('--cyl-1', '#56C6F5'),
+      css('--cyl-2', '#7B94FF'),
+      css('--cyl-3', '#A78BFA'),
+      css('--cyl-4', '#DE7BD0')
+    ];
+    t.cylBand = [
+      css('--cyl-1-band', 'rgba(86, 198, 245, 0.10)'),
+      css('--cyl-2-band', 'rgba(123, 148, 255, 0.10)'),
+      css('--cyl-3-band', 'rgba(167, 139, 250, 0.10)'),
+      css('--cyl-4-band', 'rgba(222, 123, 208, 0.10)')
+    ];
+    t.cautionBand = css('--caution-band', 'rgba(240, 180, 41, 0.13)');
+    t.warningBand = css('--warning-band', 'rgba(229, 72, 77, 0.13)');
+    t.ok = t.nominal;
+    t.instrument = t.accent;
+    t.instrumentDim = t.modelExpected;
+    t.textDim = t.textMuted;
+    t.bgChrome = t.bgPanel;
+    t.trace = t.cyl;
+  };
+
   /* Health band -> semantic colour. The 85/70/50/25 thresholds are the
      existing ones; only the hues resolve here. */
   t.forHealth = (h) => h >= 85 ? t.nominal
@@ -242,10 +292,102 @@ function bandStateLow(v, cautionLow, limitLow) {
 }
 
 // ------------------------------------------------------------------
+// THEME MANAGEMENT (Daylight / Night)
+// ------------------------------------------------------------------
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = current === 'light' ? 'dark' : 'light';
+  setTheme(next);
+}
+
+function setTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  try { localStorage.setItem('engine_twin_theme', theme); } catch (e) {}
+  syncThemeButton(theme);
+  updateChartsTheme();
+}
+
+function syncThemeButton(theme) {
+  const current = theme || document.documentElement.getAttribute('data-theme') || 'dark';
+  const btn = document.getElementById('btn-theme-toggle');
+  if (btn) {
+    btn.innerHTML = current === 'light' ? '🌙 Night' : '☀️ Day';
+    btn.title = current === 'light' ? 'Switch to Night/Dark theme' : 'Switch to Daylight/Bright theme';
+  }
+}
+
+function updateChartsTheme() {
+  THEME.refresh();
+  if (typeof Chart !== 'undefined') {
+    Chart.defaults.color = THEME.textMuted;
+  }
+  const gridY = { color: THEME.grid, lineWidth: 1, drawTicks: false, drawOnChartArea: true };
+
+  if (charts.temp) {
+    charts.temp.options.scales.x.border = { color: THEME.border };
+    charts.temp.options.scales.x.ticks.color = THEME.textMuted;
+    charts.temp.options.scales.y.grid = gridY;
+    charts.temp.options.scales.y.border = { color: THEME.border };
+    charts.temp.options.scales.y.ticks.color = THEME.textMuted;
+    charts.temp.options.scales.y.title.color = THEME.textMuted;
+    if (charts.temp.options.plugins && charts.temp.options.plugins.legend) {
+      charts.temp.options.plugins.legend.labels.color = THEME.textMuted;
+    }
+    if (charts.temp.data.datasets[0]) charts.temp.data.datasets[0].borderColor = THEME.cyl[0];
+    if (charts.temp.data.datasets[1]) charts.temp.data.datasets[1].borderColor = THEME.cyl[1];
+    if (charts.temp.data.datasets[2]) charts.temp.data.datasets[2].borderColor = THEME.cyl[2];
+    if (charts.temp.data.datasets[3]) charts.temp.data.datasets[3].borderColor = THEME.cyl[3];
+    if (charts.temp.data.datasets[4]) charts.temp.data.datasets[4].borderColor = THEME.modelExpected;
+    charts.temp.update('none');
+  }
+  if (charts.pressures) {
+    charts.pressures.options.scales.x.border = { color: THEME.border };
+    charts.pressures.options.scales.x.ticks.color = THEME.textMuted;
+    charts.pressures.options.scales.y.grid = gridY;
+    charts.pressures.options.scales.y.border = { color: THEME.border };
+    charts.pressures.options.scales.y.ticks.color = THEME.textMuted;
+    charts.pressures.options.scales.y.title.color = THEME.textMuted;
+    charts.pressures.options.scales.y1.border = { color: THEME.border };
+    charts.pressures.options.scales.y1.ticks.color = THEME.textMuted;
+    charts.pressures.options.scales.y1.title.color = THEME.textMuted;
+    if (charts.pressures.options.plugins && charts.pressures.options.plugins.legend) {
+      charts.pressures.options.plugins.legend.labels.color = THEME.textMuted;
+    }
+    if (charts.pressures.data.datasets[0]) charts.pressures.data.datasets[0].borderColor = THEME.cyl[0];
+    if (charts.pressures.data.datasets[1]) charts.pressures.data.datasets[1].borderColor = THEME.modelExpected;
+    if (charts.pressures.data.datasets[2]) charts.pressures.data.datasets[2].borderColor = THEME.cyl[2];
+    if (charts.pressures.data.datasets[3]) charts.pressures.data.datasets[3].borderColor = THEME.modelExpected;
+    charts.pressures.update('none');
+  }
+  if (charts.vibration) {
+    charts.vibration.options.scales.x.border = { color: THEME.border };
+    charts.vibration.options.scales.x.ticks.color = THEME.textMuted;
+    charts.vibration.options.scales.y.grid = gridY;
+    charts.vibration.options.scales.y.border = { color: THEME.border };
+    charts.vibration.options.scales.y.ticks.color = THEME.textMuted;
+    charts.vibration.options.scales.y.title.color = THEME.textMuted;
+    charts.vibration.options.scales.y1.border = { color: THEME.border };
+    charts.vibration.options.scales.y1.ticks.color = THEME.textMuted;
+    charts.vibration.options.scales.y1.title.color = THEME.textMuted;
+    if (charts.vibration.options.plugins && charts.vibration.options.plugins.legend) {
+      charts.vibration.options.plugins.legend.labels.color = THEME.textMuted;
+    }
+    if (charts.vibration.data.datasets[0]) charts.vibration.data.datasets[0].borderColor = THEME.cyl[0];
+    if (charts.vibration.data.datasets[1]) charts.vibration.data.datasets[1].borderColor = THEME.modelExpected;
+    charts.vibration.update('none');
+  }
+
+  if (typeof engine3D !== 'undefined' && engine3D && typeof engine3D.updateTheme === 'function') {
+    engine3D.updateTheme();
+  }
+}
+
+// ------------------------------------------------------------------
 // 1. INITIALIZATION
 // ------------------------------------------------------------------
 document.addEventListener("DOMContentLoaded", () => {
   console.log("ENGINE-TWIN GCS Controller Initialized.");
+  syncThemeButton();
 
   if (typeof Engine3DView !== "undefined") {
     try {

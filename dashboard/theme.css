@@ -121,6 +121,104 @@
   --accent-w: 4px;
 }
 
+/* ==========================================================================
+   DAYLIGHT / HIGH-VISIBILITY COCKPIT THEME
+   Bright daylight operational console: off-white surfaces, pure white panels,
+   dark high-contrast typography, and calibrated vivid state annunciators.
+   ========================================================================== */
+:root[data-theme="light"],
+[data-theme="light"] {
+  --bg-page:       #EEF2F6;
+  --bg-panel:      #FFFFFF;
+  --bg-elevated:   #F8FAFC;
+  --border:        #CBD5E1;
+  --border-strong: #94A3B8;
+  --border-soft:   #E2E8F0;
+  --bg-chrome:     #FFFFFF;
+  --bg-void:       #E2E8F0;
+
+  --text-primary:   #0F172A;
+  --text-secondary: #334155;
+  --text-muted:     #64748B;
+  --text-dim:       #64748B;
+
+  --nominal:  #059669;
+  --advisory: #0284C7;
+  --caution:  #D97706;
+  --warning:  #EA580C;
+  --critical: #DC2626;
+
+  --cyl-1: #0284C7;
+  --cyl-2: #4F46E5;
+  --cyl-3: #7C3AED;
+  --cyl-4: #C026D3;
+
+  --accent: #2563EB;
+
+  --model-expected: #64748B;
+  --grid: #E2E8F0;
+
+  --cyl-1-band: rgba(2, 132, 199, 0.12);
+  --cyl-2-band: rgba(79, 70, 229, 0.12);
+  --cyl-3-band: rgba(124, 58, 237, 0.12);
+  --cyl-4-band: rgba(192, 38, 211, 0.12);
+  --caution-band: rgba(217, 119, 6, 0.15);
+  --warning-band: rgba(220, 38, 38, 0.15);
+  --accent-band:  rgba(37, 99, 235, 0.12);
+  --accent-glow:  rgba(37, 99, 235, 0.25);
+}
+
+[data-theme="light"] .panel {
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+[data-theme="light"] .btn {
+  background: #F8FAFC;
+  color: #334155;
+  border-color: #CBD5E1;
+}
+
+[data-theme="light"] .btn:hover {
+  background: #EEF2F6;
+  color: #0F172A;
+}
+
+[data-theme="light"] .btn.is-active {
+  background: #E2E8F0;
+  color: #0F172A;
+  border-color: #64748B;
+}
+
+[data-theme="light"] .btn-fault {
+  background: #F8FAFC;
+  border-color: #CBD5E1;
+}
+
+[data-theme="light"] .btn-fault:hover {
+  background: #F1F5F9;
+}
+
+[data-theme="light"] .btn-fault.is-active {
+  background: #FFFFFF;
+}
+
+[data-theme="light"] .stat {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+}
+
+[data-theme="light"] .badge {
+  background: #F1F5F9;
+}
+
+[data-theme="light"] .tag {
+  background: #F1F5F9;
+  color: #475569;
+}
+
+[data-theme="light"] .rule-b { border-bottom: 1px solid #CBD5E1; }
+[data-theme="light"] .rule-t { border-top: 1px solid #CBD5E1; }
+
 
 /* ==========================================================================
    BASE
