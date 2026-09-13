@@ -51,8 +51,12 @@ class FaultInjector:
         """Resets all injected engine and sensor faults to healthy baseline."""
         self.active_fault = None
         self.current_severity = 0.0
-        self.mvem.cylinder_fuel_trim = [1.0, 1.0, 1.0, 1.0]
-        self.mvem.cylinder_cooling_trim = [1.0, 1.0, 1.0, 1.0]
+        # Sized from the engine, not from the reference engine's four cylinders.
+        # This runs on every healthy tick, so a hardcoded length silently
+        # resized the arrays and the next physics step indexed past the end.
+        n_cyl = self.mvem.cylinders
+        self.mvem.cylinder_fuel_trim = [1.0] * n_cyl
+        self.mvem.cylinder_cooling_trim = [1.0] * n_cyl
         self.mvem.oil_pump_health = 1.0
         self.mvem.turbo_efficiency = 1.0
         self.mvem.bearing_wear_factor = 1.0
@@ -88,16 +92,19 @@ class FaultInjector:
 
         if f_type == FaultType.LEAN_MIXTURE_CYL3:
             # Lean mixture on Cylinder 3 (reduces fuel trim -> raises EGT)
-            cyl = cfg.target_cylinder
+            # The taxonomy names cylinders of the reference engine; a smaller
+            # engine has no cylinder 3, so aim at the last one it does have.
+            cyl = min(cfg.target_cylinder, self.mvem.cylinders - 1)
             self.mvem.cylinder_fuel_trim[cyl] = 1.0 - (0.28 * sev)
 
         elif f_type == FaultType.RICH_MIXTURE_CYL1:
             # Rich mixture on Cylinder 1 (increases fuel trim -> drops EGT, higher BSFC)
-            self.mvem.cylinder_fuel_trim[0] = 1.0 + (0.35 * sev)
+            self.mvem.cylinder_fuel_trim[0] = 1.0 + (0.35 * sev)  # cyl 1 always exists
 
         elif f_type == FaultType.COOLING_DEGRADATION_CYL2:
             # Baffle/Airflow restriction on Cylinder 2 (reduces cooling -> CHT climbs)
-            self.mvem.cylinder_cooling_trim[1] = 1.0 - (0.60 * sev)
+            self.mvem.cylinder_cooling_trim[
+                min(1, self.mvem.cylinders - 1)] = 1.0 - (0.60 * sev)
 
         elif f_type == FaultType.OIL_PRESSURE_LOSS:
             # Oil pressure drop (pump relief valve leak / gallery loss)

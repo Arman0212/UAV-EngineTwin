@@ -48,7 +48,8 @@ CYLINDER_VARIANT_KEYS = (
 CYLINDER_SIGMA_PCT = 1.5
 
 
-def sample_variant(rng: np.random.Generator, spread_pct: float) -> Dict[str, Any]:
+def sample_variant(rng: np.random.Generator, spread_pct: float,
+                   cylinders: int = 4) -> Dict[str, Any]:
     """
     Draws one engine's build deviations: each engine-level multiplier normal
     about 1.0 with ``spread_pct`` percent as its standard deviation, truncated
@@ -62,11 +63,14 @@ def sample_variant(rng: np.random.Generator, spread_pct: float) -> Dict[str, Any
 
     :param spread_pct: standard deviation as a percentage. 0.0 returns exact
         datasheet values, which is what keeps the committed datasets valid.
+    :param cylinders: how many per-cylinder deviations to draw. Defaults to 4,
+        the reference engine, so the draw sequence behind the committed
+        datasets is unchanged.
     """
     sigma = spread_pct / 100.0
     if sigma <= 0.0:
         variant: Dict[str, Any] = {k: 1.0 for k in VARIANT_KEYS}
-        variant.update({k: [1.0] * 4 for k in CYLINDER_VARIANT_KEYS})
+        variant.update({k: [1.0] * cylinders for k in CYLINDER_VARIANT_KEYS})
         return variant
 
     lo, hi = 1.0 - 3.0 * sigma, 1.0 + 3.0 * sigma
@@ -75,7 +79,7 @@ def sample_variant(rng: np.random.Generator, spread_pct: float) -> Dict[str, Any
     cyl_sigma = min(spread_pct, CYLINDER_SIGMA_PCT) / 100.0
     c_lo, c_hi = 1.0 - 3.0 * cyl_sigma, 1.0 + 3.0 * cyl_sigma
     for key in CYLINDER_VARIANT_KEYS:
-        draw = np.clip(rng.normal(1.0, cyl_sigma, size=4), c_lo, c_hi)
+        draw = np.clip(rng.normal(1.0, cyl_sigma, size=cylinders), c_lo, c_hi)
         variant[key] = [float(x) for x in draw / draw.mean()]
     return variant
 

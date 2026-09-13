@@ -35,6 +35,8 @@ consistency tests, gated data association -- would require a real EKF or a UKF
 over the MVEM. That is a known limitation, not an oversight.
 """
 import numpy as np
+
+from models.cylinder_map import to_slots
 from typing import Dict, List, Optional, Tuple, Any
 
 from simulation.mvem import MeanValueEngineModel, EngineState
@@ -102,14 +104,8 @@ class PhysicsAnchoredKalmanEstimator:
             mvem_prediction.manifold_pressure_bar,
             mvem_prediction.oil_pressure_bar,
             mvem_prediction.oil_temp_c,
-            mvem_prediction.cht_c[0],
-            mvem_prediction.cht_c[1],
-            mvem_prediction.cht_c[2],
-            mvem_prediction.cht_c[3],
-            mvem_prediction.egt_c[0],
-            mvem_prediction.egt_c[1],
-            mvem_prediction.egt_c[2],
-            mvem_prediction.egt_c[3],
+            *to_slots(mvem_prediction.cht_c),
+            *to_slots(mvem_prediction.egt_c),
         ], dtype=np.float64)
 
         # Complementary propagation toward the physics solution
@@ -130,14 +126,8 @@ class PhysicsAnchoredKalmanEstimator:
             sensor_readings.manifold_pressure_bar,
             sensor_readings.oil_pressure_bar,
             sensor_readings.oil_temp_c,
-            sensor_readings.cht_c[0],
-            sensor_readings.cht_c[1],
-            sensor_readings.cht_c[2],
-            sensor_readings.cht_c[3],
-            sensor_readings.egt_c[0],
-            sensor_readings.egt_c[1],
-            sensor_readings.egt_c[2],
-            sensor_readings.egt_c[3],
+            *to_slots(sensor_readings.cht_c),
+            *to_slots(sensor_readings.egt_c),
         ], dtype=np.float64)
 
         # Innovation (Residual) y = z - H*x

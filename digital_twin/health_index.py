@@ -11,6 +11,8 @@ import json
 import math
 import numpy as np
 
+from models.cylinder_map import to_slots
+
 from .twin_state import SubsystemHealth, StateLevel
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "configs" / "engine_config.json"
@@ -177,16 +179,18 @@ class HealthIndexEngine:
                 sig = self.sigma.get(ch, 1.0)
                 residuals[ch] = round(diff / sig, 3)
 
-        # Multi-cylinder channels
+        # Multi-cylinder channels. The residual vector is fixed at four EGT and
+        # four CHT channels because the trained models consume it at that
+        # width, so an engine of any size is mapped onto those four slots.
+        s_egt_slots = to_slots(sensor_data["egt_c"])
+        m_egt_slots = to_slots(mvem_expected["egt_c"])
+        s_cht_slots = to_slots(sensor_data["cht_c"])
+        m_cht_slots = to_slots(mvem_expected["cht_c"])
         for i in range(4):
-            # EGT
-            s_egt = sensor_data["egt_c"][i]
-            m_egt = mvem_expected["egt_c"][i]
-            residuals[f"egt_cyl_{i+1}"] = round((s_egt - m_egt) / self.sigma["egt"], 3)
-            # CHT
-            s_cht = sensor_data["cht_c"][i]
-            m_cht = mvem_expected["cht_c"][i]
-            residuals[f"cht_cyl_{i+1}"] = round((s_cht - m_cht) / self.sigma["cht"], 3)
+            residuals[f"egt_cyl_{i+1}"] = round(
+                (s_egt_slots[i] - m_egt_slots[i]) / self.sigma["egt"], 3)
+            residuals[f"cht_cyl_{i+1}"] = round(
+                (s_cht_slots[i] - m_cht_slots[i]) / self.sigma["cht"], 3)
 
         return residuals
 

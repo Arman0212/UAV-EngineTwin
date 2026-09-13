@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Any
 import numpy as np
 
+from models.cylinder_map import to_slots
+
 @dataclass
 class SensorValidationResult:
     is_sensor_fault: bool
@@ -36,9 +38,11 @@ class SensorValidator:
         Evaluates physical consistency across all telemetry channels.
         """
         # 1. Check Cylinder Thermocouple Open-Circuit / Dropouts
+        egt_slots = to_slots(sensor_data["egt_c"])
+        cht_slots = to_slots(sensor_data["cht_c"])
         for i in range(4):
-            s_egt = sensor_data["egt_c"][i]
-            s_cht = sensor_data["cht_c"][i]
+            s_egt = egt_slots[i]
+            s_cht = cht_slots[i]
             amb_t = sensor_data.get("ambient_temp_c", 15.0)
 
             # If EGT drops near ambient while CHT is at operational heat (>120 C)
