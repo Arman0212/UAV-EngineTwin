@@ -1,4 +1,4 @@
-# EngineTwin
+# EngineTwin!
 
 A real-time digital twin for the aero piston engines that power medium-altitude
 long-endurance UAVs. It runs a physics model of the engine alongside the engine
