@@ -33,6 +33,8 @@ from simulation import engine_registry
 from core.engine_context import EngineContext
 from core.ai_binding import resolve as resolve_ai_binding
 from core.fault_library import load_for as load_fault_library
+from core.visual_binding import fault_components as visual_fault_components
+from core.visual_binding import resolve as resolve_visual_binding
 from digital_twin.health_index import HealthIndexEngine
 from digital_twin.baseline_adapter import BaselineAdapter
 from digital_twin.state_estimator import PhysicsAnchoredKalmanEstimator
@@ -776,7 +778,8 @@ async def get_engine(engine_id: str):
     if cfg is None:
         raise HTTPException(status_code=404, detail=f"No such engine: {engine_id}")
     spec = engine_registry.get_spec(engine_id)
-    return {"config": cfg, "spec": spec.to_dict() if spec else None}
+    return {"config": cfg, "spec": spec.to_dict() if spec else None,
+            "visual": _visual_summary(engine_id, cfg)}
 
 @app.post("/api/engines")
 async def create_engine(req: EngineCreateRequest):
@@ -801,6 +804,33 @@ async def delete_engine(engine_id: str):
         raise HTTPException(status_code=404,
                             detail="No such custom engine. Built-in engines cannot be deleted.")
     return {"status": "SUCCESS", "deleted": engine_id}
+
+def _visual_summary(engine_id: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """The visual binding for one engine, sized to the engine it describes."""
+    binding = resolve_visual_binding(engine_id)
+    summary = binding.summary(int(cfg.get("cylinders", 4)),
+                              bool(cfg.get("turbocharged", True)))
+    # Which component each fault reaches, composed from the channels it affects
+    # rather than tabulated. No fault id is needed by the renderer itself.
+    summary["fault_components"] = visual_fault_components(engine_id)
+    return summary
+
+
+@app.get("/api/engines/{engine_id}/visual")
+async def engine_visual_binding(engine_id: str):
+    """
+    How this engine is drawn: what its parts are called, and where each
+    telemetry channel is measured so a deviation can be pointed at a part.
+
+    Geometry is not here. The renderer derives that from the engine
+    specification, and repeating cylinder count or displacement would create a
+    second source of truth for one fact.
+    """
+    cfg = engine_registry.get_config(engine_id)
+    if cfg is None:
+        raise HTTPException(status_code=404, detail=f"No such engine: {engine_id}")
+    return _visual_summary(engine_id, cfg)
+
 
 @app.get("/api/engines/{engine_id}/ai")
 async def engine_ai_binding(engine_id: str):

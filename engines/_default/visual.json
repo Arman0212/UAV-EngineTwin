@@ -1,0 +1,62 @@
+{
+  "schema": "enginetwin.visual/1",
+  "description": "What the 3D view needs to know about an engine that its specification does not already say. Geometry is not here: the renderer derives bore, bank length, layout and propeller size from engine.json, and duplicating cylinder count or displacement in a second file would create two sources of truth for one fact.",
+  "type": "procedural",
+  "type_note": "The engine is generated from its specification rather than loaded from a file. An imported model would declare a different type and a model path here; nothing implements that yet, and this field is where it would go so the renderer can branch on it later without being replaced.",
+  "components": {
+    "crankcase": {
+      "label": "CASE",
+      "title": "Crankcase & crankshaft"
+    },
+    "sump": {
+      "label": "SUMP",
+      "title": "Oil sump & lubrication circuit"
+    },
+    "turbo": {
+      "label": "TURBO",
+      "title": "Turbocharger",
+      "present_when": "turbocharged",
+      "present_when_note": "Read from the engine specification. A naturally aspirated engine has no turbocharger, so the component is not built and nothing can be mapped onto it."
+    },
+    "prop": {
+      "label": "PROP",
+      "title": "Propeller & reduction drive"
+    }
+  },
+  "per_cylinder": {
+    "cylinder": {
+      "id": "cyl-{index}",
+      "label": "CYL {number}",
+      "title": "Cylinder {number}"
+    },
+    "probe": {
+      "id": "probe-{index}",
+      "label": "EGT {number}",
+      "title": "EGT probe, cylinder {number}"
+    }
+  },
+  "channel_components": {
+    "oil_pressure": "sump",
+    "oil_temp": "sump",
+    "manifold_pressure": "turbo",
+    "vibration_rms": "crankcase",
+    "rpm": "crankcase",
+    "fuel_flow": "crankcase",
+    "bus_voltage": "crankcase",
+    "egt_cyl_*": "cylinder",
+    "cht_cyl_*": "cylinder"
+  },
+  "channel_components_note": "Where a reading is measured, so the view can point at the part a deviation came from. This is instrumentation placement, not a fault table: manifold pressure is read at the induction system whatever has gone wrong. Per-cylinder channels use a wildcard because the index resolves to the cylinder of the same number.",
+  "sensor_fault_component": "probe",
+  "sensor_fault_note": "When the diagnosis blames a reading on its own sensor, the probe is marked rather than the cylinder. A dead thermocouple is not a damaged cylinder.",
+  "supported_effects": [
+    "state_colour",
+    "outline",
+    "probe_suspect",
+    "shake",
+    "propeller_unsteadiness",
+    "turbo_spin",
+    "stale"
+  ],
+  "supported_effects_note": "Only what the renderer actually does today. state_colour grades a part nominal, caution or warning; outline rings the part the diagnosis is leaning on; probe_suspect marks a distrusted reading in the instrument colour; shake and propeller_unsteadiness are driven by measured vibration health and the speed residual; turbo_spin follows the boost actually being made; stale drops everything to inert grey when telemetry stops."
+}

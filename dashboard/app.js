@@ -2375,7 +2375,14 @@ async function previewSelectedEngine() {
   }
 
   try {
-    renderEngineSpec(id, await loadEngineDetail(id));
+    const detail = await loadEngineDetail(id);
+    // What the parts are called, and where each channel is measured, come from
+    // the engine. A failure here must not stop the spec sheet rendering.
+    if (detail && detail.visual && engine3D
+        && typeof engine3D.applyVisualConfig === "function") {
+      try { engine3D.applyVisualConfig(detail.visual); } catch (err) { /* keep defaults */ }
+    }
+    renderEngineSpec(id, detail);
   } catch (err) {
     setEngineSpec(`<div class="spec-banner">Could not load the full spec. ${err.message}</div>`);
   }

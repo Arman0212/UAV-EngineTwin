@@ -1457,6 +1457,44 @@ class Engine3DView {
   // Two engines of the same size and layout look identical here, so refitting
   // between them is a no-op.
   // ------------------------------------------------------------------
+  /**
+   * Applies this engine's presentational configuration.
+   *
+   * What the parts are called and where each channel is measured come from the
+   * engine rather than from this file. The tables below are the built-in
+   * defaults; a served configuration replaces the entries it supplies and
+   * leaves the rest, so the view still draws correctly if the request fails.
+   *
+   * Labels are rebuilt when a model already exists, because they carry the
+   * names and were drawn with the previous ones.
+   */
+  applyVisualConfig(config) {
+    if (!config) return false;
+    this.visualConfig = config;
+
+    if (config.components) {
+      for (const [id, meta] of Object.entries(config.components)) {
+        if (meta && meta.label) COMPONENT_META[id] = { label: meta.label, title: meta.title };
+      }
+    }
+    if (config.channel_components && Object.keys(config.channel_components).length) {
+      for (const key of Object.keys(CHANNEL_COMPONENT)) delete CHANNEL_COMPONENT[key];
+      Object.assign(CHANNEL_COMPONENT, config.channel_components);
+    }
+
+    if (this.dims && this.labelSprites) {
+      this.labelSprites.forEach(sp => {
+        this.scene.remove(sp);
+        if (sp.material && sp.material.map) sp.material.map.dispose();
+        if (sp.material) sp.material.dispose();
+      });
+      this.labelSprites = [];
+      this.buildLabels();
+      this.setLabelsVisible(this.labelsVisible);
+    }
+    return true;
+  }
+
   setEngineSpec(spec) {
     if (!spec) return false;
 
