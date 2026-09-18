@@ -50,7 +50,7 @@ from simulation import engine_registry
 from simulation.engine_spec import EngineSpec
 from simulation.fault_injector import FaultInjector
 from simulation.mvem import MeanValueEngineModel
-from simulation.sensors import SensorModel
+from simulation.sensors import SensorModel, SensorSuite
 
 # The seed the service has always started its sensor model with. Fitting or
 # resetting reseeds from the clock instead, so a fresh sortie is not a replay of
@@ -73,6 +73,9 @@ class EngineContext:
     :param baseline: the healthy twin of the same engine, which is what makes a
         residual mean "this engine is off its own normal".
     :param sensors: instrumentation, including its lag, noise and quantisation.
+    :param sensor_suite: the instrumentation specification the sensors were
+        built from, kept so a reset rebuilds the same installation and so the
+        service can report where those values came from.
     :param injector: applies an active fault to the plant and its sensors.
     :param estimator: fuses measurement with the physics prediction.
     """
@@ -84,6 +87,7 @@ class EngineContext:
     plant: MeanValueEngineModel
     baseline: MeanValueEngineModel
     sensors: SensorModel
+    sensor_suite: SensorSuite
     injector: FaultInjector
     estimator: PhysicsAnchoredKalmanEstimator
 
@@ -104,6 +108,9 @@ class EngineContext:
             name="DRDO-VRDE-2.2L-Turbo-AeroDiesel",
             config=None,
             spec=EngineSpec(),
+            # No config, so the instrumentation defaults, which are the values
+            # the sensor model has always used.
+            sensor_suite=SensorSuite(),
             sensor_seed=sensor_seed,
         )
 
@@ -124,11 +131,16 @@ class EngineContext:
             name=config.get("engine_name", engine_id),
             config=config,
             spec=EngineSpec.from_config(config),
+            # This engine's own instrumentation. Fields the config omits keep
+            # the default, and the three the configs disagree with the code on
+            # are held at the code value; the suite reports both.
+            sensor_suite=SensorSuite.from_config(config, source=engine_id),
             sensor_seed=int(time.time()) if sensor_seed is None else sensor_seed,
         )
 
     @classmethod
-    def _assemble(cls, engine_id, name, config, spec, sensor_seed) -> "EngineContext":
+    def _assemble(cls, engine_id, name, config, spec, sensor_suite,
+                  sensor_seed) -> "EngineContext":
         """
         Builds the object graph in the one order that is correct.
 
@@ -140,7 +152,7 @@ class EngineContext:
         # the interface it has always had; passing None selects its defaults.
         plant = MeanValueEngineModel(config=config)
         baseline = MeanValueEngineModel(config=config)
-        sensors = SensorModel(seed=sensor_seed)
+        sensors = SensorModel(seed=sensor_seed, suite=sensor_suite)
         return cls(
             engine_id=engine_id,
             name=name,
@@ -149,6 +161,7 @@ class EngineContext:
             plant=plant,
             baseline=baseline,
             sensors=sensors,
+            sensor_suite=sensor_suite,
             injector=FaultInjector(plant, sensors),
             estimator=PhysicsAnchoredKalmanEstimator(),
         )
@@ -168,7 +181,8 @@ class EngineContext:
         self.plant.reset(idle=False)
         self.baseline.reset(idle=False)
         self.sensors = SensorModel(
-            seed=int(time.time()) if sensor_seed is None else sensor_seed)
+            seed=int(time.time()) if sensor_seed is None else sensor_seed,
+            suite=self.sensor_suite)
         self.injector = FaultInjector(self.plant, self.sensors)
         self.estimator = PhysicsAnchoredKalmanEstimator()
 
