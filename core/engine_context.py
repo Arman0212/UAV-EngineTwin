@@ -202,6 +202,20 @@ class EngineContext:
         return self.spec.cylinders
 
     @property
+    def ai_binding(self):
+        """
+        Which AI components diagnose this engine, and what they are validated for.
+
+        Resolved once and cached. Every engine currently resolves the same
+        checkpoints, because only one set exists; the binding reports that as a
+        fallback rather than letting the file's presence imply validation.
+        """
+        if getattr(self, "_ai_binding", None) is None:
+            from core.ai_binding import resolve
+            self._ai_binding = resolve(self.engine_id)
+        return self._ai_binding
+
+    @property
     def end_of_life_criteria(self) -> Dict[str, Any]:
         """
         This engine's condemnation limits, as health-index equivalents.

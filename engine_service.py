@@ -31,6 +31,7 @@ from simulation.sensors import SensorModel, SensorReadings
 from simulation.fault_injector import FaultInjector, FaultType, FaultConfig
 from simulation import engine_registry
 from core.engine_context import EngineContext
+from core.ai_binding import resolve as resolve_ai_binding
 from core.fault_library import load_for as load_fault_library
 from digital_twin.health_index import HealthIndexEngine
 from digital_twin.baseline_adapter import BaselineAdapter
@@ -69,13 +70,13 @@ class EngineTwinRuntime:
         # Remaining life projects toward the fitted engine's own limits.
         self.rul_engine = RULEstimator(criteria=self.engine.end_of_life_criteria)
 
-        # Load AI Models
-        models_dir = PROJECT_ROOT / "models" / "saved_models"
-        ae_path = models_dir / "anomaly_autoencoder.pt"
-        clf_path = models_dir / "fault_classifier.pt"
-
-        self.anomaly_detector = AnomalyDetector(str(ae_path) if ae_path.exists() else None)
-        self.fault_classifier = FaultDiagnosisEngine(str(clf_path) if clf_path.exists() else None)
+        # Which checkpoints diagnose this engine comes from its AI binding,
+        # not from a path built here. The binding also carries what they are
+        # validated for, which is the reference engine and nothing else.
+        binding = self.engine.ai_binding
+        self._loaded_models = (binding.model_path("anomaly"), binding.model_path("classifier"))
+        self.anomaly_detector = AnomalyDetector(self._loaded_models[0])
+        self.fault_classifier = FaultDiagnosisEngine(self._loaded_models[1])
         # Learns the standing offset between this engine and the datasheet
         # baseline, so downstream consumers see deviation from THIS unit's
         # normal rather than from the book.
@@ -123,6 +124,26 @@ class EngineTwinRuntime:
 
         # Flight data recorder (attached by the service on startup)
         self.recorder: Optional[FlightRecorder] = None
+
+    def _rebind_ai_models(self) -> None:
+        """
+        Reloads the checkpoints when a newly fitted engine resolves different ones.
+
+        Every engine currently resolves the same pair, so this does nothing
+        today. It exists so that giving an engine its own model is a
+        configuration change rather than a code change, and so the explainer
+        follows the classifier it explains.
+        """
+        binding = self.engine.ai_binding
+        wanted = (binding.model_path("anomaly"), binding.model_path("classifier"))
+        if wanted == self._loaded_models:
+            return
+
+        self.anomaly_detector = AnomalyDetector(wanted[0])
+        self.fault_classifier = FaultDiagnosisEngine(wanted[1])
+        self.shap_explainer = GradientAttributionExplainer(
+            self.fault_classifier.model if self.fault_classifier.is_trained else None)
+        self._loaded_models = wanted
 
     # ------------------------------------------------------------------
     # The fitted engine, under the names the rest of the system already uses.
@@ -191,6 +212,8 @@ class EngineTwinRuntime:
         """
         # Raises ValueError for an unknown id, which the endpoint turns into a 404.
         self.engine = EngineContext.fitted(engine_id)
+
+        self._rebind_ai_models()
 
         # Remaining life is rebound to the new engine's limits, which also
         # drops the history: it describes the engine that was just removed. The
@@ -778,6 +801,19 @@ async def delete_engine(engine_id: str):
         raise HTTPException(status_code=404,
                             detail="No such custom engine. Built-in engines cannot be deleted.")
     return {"status": "SUCCESS", "deleted": engine_id}
+
+@app.get("/api/engines/{engine_id}/ai")
+async def engine_ai_binding(engine_id: str):
+    """
+    Which AI components serve this engine, and what they are validated for.
+
+    A model file being present is not the same as that model being trained for
+    this engine, so availability and validation are reported separately.
+    """
+    if engine_registry.get_config(engine_id) is None:
+        raise HTTPException(status_code=404, detail=f"No such engine: {engine_id}")
+    return resolve_ai_binding(engine_id).summary()
+
 
 @app.get("/api/engines/{engine_id}/faults")
 async def list_engine_faults(engine_id: str):
