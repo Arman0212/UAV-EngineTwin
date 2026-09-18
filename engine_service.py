@@ -30,6 +30,7 @@ from simulation.mvem import MeanValueEngineModel, EngineState
 from simulation.sensors import SensorModel, SensorReadings
 from simulation.fault_injector import FaultInjector, FaultType, FaultConfig
 from simulation import engine_registry
+from core.engine_context import EngineContext
 from digital_twin.health_index import HealthIndexEngine
 from digital_twin.baseline_adapter import BaselineAdapter
 from digital_twin.state_estimator import PhysicsAnchoredKalmanEstimator
@@ -55,11 +56,13 @@ app.mount("/static", StaticFiles(directory=str(DASHBOARD_DIR)), name="static")
 class EngineTwinRuntime:
     def __init__(self):
         self.flight_gen = FlightProfile()
-        self.mvem_physical = MeanValueEngineModel()      # Physical/Simulated engine (subject to faults)
-        self.mvem_baseline = MeanValueEngineModel()      # Healthy Digital Twin baseline
-        self.sensors = SensorModel(seed=42)
-        self.injector = FaultInjector(self.mvem_physical, self.sensors)
-        self.ekf = PhysicsAnchoredKalmanEstimator()
+        # Everything belonging to the fitted powerplant lives in one object:
+        # the faulted plant, its healthy twin, instrumentation, the injector and
+        # the estimator. The service starts on the engine model's own defaults,
+        # which are what the shipped checkpoints were trained on; see
+        # core/engine_context.py for why that is not the same as loading the
+        # reference config file.
+        self.engine = EngineContext.boot()
         self.health_engine = HealthIndexEngine()
         self.sensor_validator = SensorValidator()
         self.rul_engine = RULEstimator()
@@ -111,11 +114,70 @@ class EngineTwinRuntime:
         # Which powerplant is fitted. The shipped checkpoints are trained on the
         # reference engine's residuals, so anything else is flagged to the
         # operator rather than silently diagnosed with the wrong calibration.
-        self.engine_id: str = engine_registry.REFERENCE_ID
-        self.engine_name: str = "DRDO-VRDE-2.2L-Turbo-AeroDiesel"
+        # Which powerplant is fitted is a fact about the engine, so it is read
+        # from the context. The shipped checkpoints are trained on the reference
+        # engine's residuals, so anything else is flagged to the operator rather
+        # than silently diagnosed with the wrong calibration.
 
         # Flight data recorder (attached by the service on startup)
         self.recorder: Optional[FlightRecorder] = None
+
+    # ------------------------------------------------------------------
+    # The fitted engine, under the names the rest of the system already uses.
+    #
+    # Tests, tools and the service itself reach for runtime.mvem_physical and
+    # friends. Those now live on the context; these forward to it so the move is
+    # invisible to callers, including the ones that assign.
+    # ------------------------------------------------------------------
+    @property
+    def mvem_physical(self) -> MeanValueEngineModel:
+        """The engine faults are injected into."""
+        return self.engine.plant
+
+    @mvem_physical.setter
+    def mvem_physical(self, value: MeanValueEngineModel) -> None:
+        self.engine.plant = value
+
+    @property
+    def mvem_baseline(self) -> MeanValueEngineModel:
+        """The healthy twin of the same engine, which is what a residual is measured against."""
+        return self.engine.baseline
+
+    @mvem_baseline.setter
+    def mvem_baseline(self, value: MeanValueEngineModel) -> None:
+        self.engine.baseline = value
+
+    @property
+    def sensors(self) -> SensorModel:
+        return self.engine.sensors
+
+    @sensors.setter
+    def sensors(self, value: SensorModel) -> None:
+        self.engine.sensors = value
+
+    @property
+    def injector(self) -> FaultInjector:
+        return self.engine.injector
+
+    @injector.setter
+    def injector(self, value: FaultInjector) -> None:
+        self.engine.injector = value
+
+    @property
+    def ekf(self) -> PhysicsAnchoredKalmanEstimator:
+        return self.engine.estimator
+
+    @ekf.setter
+    def ekf(self, value: PhysicsAnchoredKalmanEstimator) -> None:
+        self.engine.estimator = value
+
+    @property
+    def engine_id(self) -> str:
+        return self.engine.engine_id
+
+    @property
+    def engine_name(self) -> str:
+        return self.engine.name
 
     def fit_engine(self, engine_id: str) -> Dict[str, Any]:
         """
@@ -125,33 +187,23 @@ class EngineTwinRuntime:
         same spec — if only one were swapped, every residual would report the
         difference between two engines rather than a fault.
         """
-        cfg = engine_registry.get_config(engine_id)
-        if cfg is None:
-            raise ValueError(f"No such engine: {engine_id}")
+        # Raises ValueError for an unknown id, which the endpoint turns into a 404.
+        self.engine = EngineContext.fitted(engine_id)
 
-        self.mvem_physical = MeanValueEngineModel(config=cfg)
-        self.mvem_baseline = MeanValueEngineModel(config=cfg)
-        self.sensors = SensorModel(seed=int(time.time()))
-        self.injector = FaultInjector(self.mvem_physical, self.sensors)
-        self.ekf = PhysicsAnchoredKalmanEstimator()
+        # Remaining-life history is about the engine that produced it, so it is
+        # dropped. The baseline adapter is deliberately not reset here, which is
+        # the behaviour this has always had.
         self.rul_engine.reset()
         self.latest_alert = None
         self.active_fault_name = "HEALTHY"
         self.sim_time_s = 0.0
 
-        self.engine_id = engine_id
-        self.engine_name = cfg.get("engine_name", engine_id)
         self.warm_up(seconds=15.0, dt_s=SIM_DT_S)
-        return {"id": self.engine_id, "name": self.engine_name,
-                "is_reference": engine_id == engine_registry.REFERENCE_ID}
+        return self.engine.summary()
 
     def reset(self):
         self.sim_time_s = 0.0
-        self.mvem_physical.reset(idle=False)
-        self.mvem_baseline.reset(idle=False)
-        self.sensors = SensorModel(seed=int(time.time()))
-        self.injector = FaultInjector(self.mvem_physical, self.sensors)
-        self.ekf = PhysicsAnchoredKalmanEstimator()
+        self.engine.reset()
         self.rul_engine.reset()
         # A reset means a different engine; the learned offset does not carry over.
         self.baseline_adapter.reset()
