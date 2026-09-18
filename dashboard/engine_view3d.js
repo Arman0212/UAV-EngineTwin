@@ -458,6 +458,11 @@ class Engine3DView {
 
     this.latestState = null;
     this.evidence = null;           // last frame, read into per-part meaning
+
+    // This view's own naming and instrumentation map. Per-instance rather than
+    // module-level, so two views of two engines cannot overwrite each other's
+    // configuration, which is what sharing one table would mean.
+    Object.assign(this, Engine3DView.defaultVisualTables());
     this.persistSince = {};         // part id -> sim time its grade left nominal
     this.currentRpm = 1400.0;
     this.lastFrameAt = 0;           // for the staleness check
@@ -526,6 +531,21 @@ class Engine3DView {
 
     window.addEventListener('resize', () => this.onWindowResize());
     this.animate();
+  }
+
+  /**
+   * A fresh copy of the built-in naming and channel tables.
+   *
+   * Every view starts from these and may then be given an engine's own
+   * configuration. Returning copies is the point: nothing a view is told may
+   * reach the defaults or another view.
+   */
+  static defaultVisualTables() {
+    return {
+      componentMeta: { ...COMPONENT_META },
+      channelComponent: { ...CHANNEL_COMPONENT },
+      visualConfig: null,
+    };
   }
 
   /** Registers a mesh as selectable under a component id. */
@@ -738,7 +758,7 @@ class Engine3DView {
   buildLabels() {
     const d = this.dims;
     const place = (id, pos) => {
-      const meta = COMPONENT_META[id];
+      const meta = this.componentMeta[id];
       if (!meta) return;
       const sprite = this.makeLabelSprite(meta.label);
       sprite.position.copy(pos);
@@ -829,7 +849,7 @@ class Engine3DView {
 
   /** Selects a component by id (or null to clear) and frames it. */
   select(id) {
-    if (id && !COMPONENT_META[id]) id = null;
+    if (id && !this.componentMeta[id]) id = null;
     this.selectedId = id;
     this.frameComponent(id);
     this.drawSelectionBox(id);
@@ -970,7 +990,7 @@ class Engine3DView {
   describeComponent(id, state) {
     const s = state || this.latestState;
     if (!id || !s) return null;
-    const meta = COMPONENT_META[id];
+    const meta = this.componentMeta[id];
     if (!meta) return null;
 
     const health = s.health || {};
@@ -1274,7 +1294,7 @@ class Engine3DView {
       if (i < 0 || i >= this.cylinders.length) return null;
       return (isSensorFault && perCyl[1] === 'egt') ? `probe-${i}` : `cyl-${i}`;
     }
-    return CHANNEL_COMPONENT[key] || null;
+    return this.channelComponent[key] || null;
   }
 
   // ------------------------------------------------------------------
@@ -1461,9 +1481,12 @@ class Engine3DView {
    * Applies this engine's presentational configuration.
    *
    * What the parts are called and where each channel is measured come from the
-   * engine rather than from this file. The tables below are the built-in
-   * defaults; a served configuration replaces the entries it supplies and
+   * engine rather than from this file. The module tables are the built-in
+   * defaults; this replaces the entries a served configuration supplies and
    * leaves the rest, so the view still draws correctly if the request fails.
+   *
+   * The change lands on this view only. Two views showing two engines keep
+   * their own naming, and neither can overwrite the defaults for the other.
    *
    * Labels are rebuilt when a model already exists, because they carry the
    * names and were drawn with the previous ones.
@@ -1474,12 +1497,11 @@ class Engine3DView {
 
     if (config.components) {
       for (const [id, meta] of Object.entries(config.components)) {
-        if (meta && meta.label) COMPONENT_META[id] = { label: meta.label, title: meta.title };
+        if (meta && meta.label) this.componentMeta[id] = { label: meta.label, title: meta.title };
       }
     }
     if (config.channel_components && Object.keys(config.channel_components).length) {
-      for (const key of Object.keys(CHANNEL_COMPONENT)) delete CHANNEL_COMPONENT[key];
-      Object.assign(CHANNEL_COMPONENT, config.channel_components);
+      this.channelComponent = { ...config.channel_components };
     }
 
     if (this.dims && this.labelSprites) {
@@ -1569,7 +1591,7 @@ class Engine3DView {
     this.selectedId = null;
 
     // Restore the selection when that component still exists on this engine.
-    if (wasSelected && COMPONENT_META[wasSelected]) {
+    if (wasSelected && this.componentMeta[wasSelected]) {
       const idx = /^(?:cyl|probe)-(\d+)$/.exec(wasSelected);
       if (!idx || Number(idx[1]) < this.cylCount) {
         if (!(wasSelected === 'turbo' && !this.hasTurbo)) this.select(wasSelected);

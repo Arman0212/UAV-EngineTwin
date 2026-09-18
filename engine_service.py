@@ -127,17 +127,15 @@ class EngineTwinRuntime:
         # Flight data recorder (attached by the service on startup)
         self.recorder: Optional[FlightRecorder] = None
 
-    def _rebind_ai_models(self) -> None:
+    def _apply_ai_models(self, wanted) -> None:
         """
-        Reloads the checkpoints when a newly fitted engine resolves different ones.
+        Loads the given checkpoints, if they are not the ones already loaded.
 
         Every engine currently resolves the same pair, so this does nothing
         today. It exists so that giving an engine its own model is a
         configuration change rather than a code change, and so the explainer
         follows the classifier it explains.
         """
-        binding = self.engine.ai_binding
-        wanted = (binding.model_path("anomaly"), binding.model_path("classifier"))
         if wanted == self._loaded_models:
             return
 
@@ -204,36 +202,68 @@ class EngineTwinRuntime:
     def engine_name(self) -> str:
         return self.engine.name
 
-    def fit_engine(self, engine_id: str) -> Dict[str, Any]:
+    def switch_engine(self, engine_id: str) -> Dict[str, Any]:
         """
-        Swaps the powerplant and restarts the sortie on it.
+        Replaces the powerplant: a different engine, and a runtime with nothing
+        left over from the one it replaced.
 
-        Both the faulted engine and the healthy baseline are rebuilt from the
-        same spec — if only one were swapped, every residual would report the
-        difference between two engines rather than a fault.
+        Distinct from reset(), which starts a new sortie on the same engine.
+        Everything a switch needs is built and validated first, and only then is
+        anything replaced, so an engine that fails to load leaves the running one
+        untouched rather than half exchanged.
+
+        The swap itself has no await in it. The tick loop is an asyncio task on
+        the same event loop, so it cannot observe a runtime that is partway
+        through being exchanged, and no frame can be emitted carrying one
+        engine's identity and another's telemetry.
         """
-        # Raises ValueError for an unknown id, which the endpoint turns into a 404.
-        self.engine = EngineContext.fitted(engine_id)
+        # Raises ValueError for an unknown id, which the endpoint turns into a
+        # 404. Nothing above has been touched at that point.
+        context = EngineContext.fitted(engine_id)
+        criteria = context.end_of_life_criteria
+        binding = context.ai_binding
+        wanted_models = (binding.model_path("anomaly"), binding.model_path("classifier"))
 
-        self._rebind_ai_models()
+        # --- the swap ---------------------------------------------------
+        self.engine = context
+        self._apply_ai_models(wanted_models)
 
-        # Remaining life is rebound to the new engine's limits, which also
-        # drops the history: it describes the engine that was just removed. The
-        # baseline adapter is deliberately not reset here, which is the
-        # behaviour this has always had.
-        self.rul_engine.bind_criteria(self.engine.end_of_life_criteria)
+        # Remaining life projects toward the new engine's limits, and its
+        # history described the one just removed.
+        self.rul_engine.bind_criteria(criteria)
+
+        # The learned per-channel offset is how far the previous unit sat from
+        # its datasheet. Carrying it onto a different powerplant would bias
+        # every residual by another engine's build variation.
+        self.baseline_adapter.reset()
+
+        # Nothing about the previous engine should be served while the new one
+        # warms up, including its last frame.
         self.latest_alert = None
+        self.latest_state = None
+        self.latest_frame = None
         self.active_fault_name = "HEALTHY"
         self.sim_time_s = 0.0
 
         self.warm_up(seconds=15.0, dt_s=SIM_DT_S)
         return self.engine.summary()
 
+    def fit_engine(self, engine_id: str) -> Dict[str, Any]:
+        """The name callers have always used for a switch."""
+        return self.switch_engine(engine_id)
+
     def reset(self):
+        """
+        Starts a new sortie on the same engine.
+
+        The engine itself is not replaced; its models keep their build variant,
+        which is a property of the unit rather than of the run. Everything the
+        previous sortie accumulated is dropped, including the learned offset,
+        because adaptation starts again with the sortie.
+        """
         self.sim_time_s = 0.0
         self.engine.reset()
         self.rul_engine.reset()
-        # A reset means a different engine; the learned offset does not carry over.
         self.baseline_adapter.reset()
         self.latest_alert = None
         self.active_fault_name = "HEALTHY"
