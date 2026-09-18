@@ -1,13 +1,23 @@
 """
-Parametric Fault Injection Engine for Aero Piston Engine Digital Twin.
-Implements the 8 core aero piston engine failure modes + sensor failure modes
-defined by this project for the SIH26054 aero-piston engine.
+Fault injection for the aero piston engine digital twin.
+
+The failure modes and their coefficients live in configuration, under
+engines/<engine-id>/faults.json with a shared default library. This module
+applies them: it reads a definition, works out what severity means for each
+effect, and writes the result onto the engine model's own attributes.
+
+The enum below stays. The ids are a stable contract shared by the classifier's
+output classes, the REST API, the dashboard controls, the recorded flight logs
+and the training set generator, so they are identifiers rather than an
+implementation. What used to be the implementation -- nine branches naming an
+attribute and a magic number -- is now data.
 """
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Dict, Any
 import numpy as np
 
+from core.fault_library import FaultLibrary, load_for
 from .mvem import MeanValueEngineModel
 from .sensors import SensorModel
 
@@ -36,9 +46,16 @@ class FaultInjector:
     Manages active faults and dynamically modifies MVEM physics parameters
     and sensor properties as a function of simulation time.
     """
-    def __init__(self, mvem: MeanValueEngineModel, sensors: SensorModel):
+    def __init__(self, mvem: MeanValueEngineModel, sensors: SensorModel,
+                 library: Optional[FaultLibrary] = None):
+        """
+        :param library: the fault definitions available to this engine. Defaults
+            to the shared library, which is what every caller that predates
+            per-engine faults gets.
+        """
         self.mvem = mvem
         self.sensors = sensors
+        self.library = library or load_for()
         self.active_fault: Optional[FaultConfig] = None
         self.current_severity: float = 0.0
 
@@ -48,25 +65,34 @@ class FaultInjector:
         self.current_severity = 0.0
 
     def clear_faults(self):
-        """Resets all injected engine and sensor faults to healthy baseline."""
+        """
+        Returns the engine and its instrumentation to healthy.
+
+        Every target any defined fault can touch is restored, derived from the
+        library rather than listed here, so a fault cannot be added without its
+        reset. This runs on every healthy tick, which is why the per-cylinder
+        arrays are rebuilt at the engine's own cylinder count: a fixed length
+        silently resized them and the next physics step indexed past the end.
+        """
         self.active_fault = None
         self.current_severity = 0.0
-        # Sized from the engine, not from the reference engine's four cylinders.
-        # This runs on every healthy tick, so a hardcoded length silently
-        # resized the arrays and the next physics step indexed past the end.
+
         n_cyl = self.mvem.cylinders
-        self.mvem.cylinder_fuel_trim = [1.0] * n_cyl
-        self.mvem.cylinder_cooling_trim = [1.0] * n_cyl
-        self.mvem.oil_pump_health = 1.0
-        self.mvem.turbo_efficiency = 1.0
-        self.mvem.bearing_wear_factor = 1.0
-        self.mvem.timing_jitter_deg = 0.0
-        self.mvem.alternator_health = 1.0
+        for target, _cylinder, healthy in self.library.reset_targets():
+            current = getattr(self.mvem, target, None)
+            if isinstance(current, list):
+                setattr(self.mvem, target, [healthy] * n_cyl)
+            else:
+                setattr(self.mvem, target, healthy)
         self.sensors.clear_sensor_faults()
 
     def update(self, current_time_s: float):
         """
-        Evaluates active fault progression and adjusts MVEM & Sensor model states.
+        Advances the active fault and writes its effects onto the engine.
+
+        Severity ramps linearly from zero to the requested level over the
+        configured duration; a definition whose response is binary ignores it,
+        which the definition says outright rather than leaving to be discovered.
         """
         if not self.active_fault or self.active_fault.fault_type == FaultType.HEALTHY:
             self.clear_faults()
@@ -77,7 +103,6 @@ class FaultInjector:
             self.current_severity = 0.0
             return
 
-        # Compute ramp progress (0.0 to cfg.severity)
         if cfg.ramp_duration_s <= 0.0:
             sev = cfg.severity
         else:
@@ -87,45 +112,24 @@ class FaultInjector:
 
         self.current_severity = sev
 
-        # Apply specific fault physics modifications
-        f_type = cfg.fault_type
+        fault_id = getattr(cfg.fault_type, "value", str(cfg.fault_type))
+        definition = self.library.get(fault_id)
+        if definition is None:
+            # Only reachable if the library is missing a fault the API accepted,
+            # which is a configuration error and should not pass quietly.
+            raise ValueError(
+                f"{fault_id!r} is not defined in {self.library.source}; "
+                f"available: {sorted(self.library.ids())}")
 
-        if f_type == FaultType.LEAN_MIXTURE_CYL3:
-            # Lean mixture on Cylinder 3 (reduces fuel trim -> raises EGT)
-            # The taxonomy names cylinders of the reference engine; a smaller
-            # engine has no cylinder 3, so aim at the last one it does have.
-            cyl = min(cfg.target_cylinder, self.mvem.cylinders - 1)
-            self.mvem.cylinder_fuel_trim[cyl] = 1.0 - (0.28 * sev)
+        for effect in definition.effects:
+            if effect.kind == "sensor_override":
+                self.sensors.set_sensor_fault(effect.target, effect.mode)
+                continue
 
-        elif f_type == FaultType.RICH_MIXTURE_CYL1:
-            # Rich mixture on Cylinder 1 (increases fuel trim -> drops EGT, higher BSFC)
-            self.mvem.cylinder_fuel_trim[0] = 1.0 + (0.35 * sev)  # cyl 1 always exists
-
-        elif f_type == FaultType.COOLING_DEGRADATION_CYL2:
-            # Baffle/Airflow restriction on Cylinder 2 (reduces cooling -> CHT climbs)
-            self.mvem.cylinder_cooling_trim[
-                min(1, self.mvem.cylinders - 1)] = 1.0 - (0.60 * sev)
-
-        elif f_type == FaultType.OIL_PRESSURE_LOSS:
-            # Oil pressure drop (pump relief valve leak / gallery loss)
-            self.mvem.oil_pump_health = 1.0 - (0.70 * sev)
-
-        elif f_type == FaultType.TURBO_BOOST_DEFICIENCY:
-            # Turbocharger wastegate stuck or compressor blade erosion
-            self.mvem.turbo_efficiency = 1.0 - (0.45 * sev)
-
-        elif f_type == FaultType.CYLINDER_MISFIRE_TIMING:
-            # Injection/Ignition timing flutter / valve seating issue
-            self.mvem.timing_jitter_deg = 9.0 * sev
-
-        elif f_type == FaultType.BEARING_WEAR_VIBRATION:
-            # Mechanical bearing wear (vibration order amplification + increased friction)
-            self.mvem.bearing_wear_factor = 1.0 + (1.8 * sev)
-
-        elif f_type == FaultType.SENSOR_FAULT_EGT3:
-            # Sensor thermocouple probe disconnection (reads ambient, engine itself is healthy)
-            self.sensors.set_sensor_fault("egt_3", "OPEN_CIRCUIT")
-
-        elif f_type == FaultType.ELECTRICAL_VOLTAGE_SAG:
-            # Alternator regulator degradation
-            self.mvem.alternator_health = 1.0 - (0.32 * sev)
+            value = effect.value_at(sev)
+            current = getattr(self.mvem, effect.target)
+            if isinstance(current, list):
+                index = effect.cylinder_index(cfg.target_cylinder, self.mvem.cylinders)
+                current[index] = value
+            else:
+                setattr(self.mvem, effect.target, value)

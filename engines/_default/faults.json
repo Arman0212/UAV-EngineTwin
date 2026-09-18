@@ -1,0 +1,159 @@
+{
+  "schema": "enginetwin.faults/1",
+  "description": "The shared fault library. Every engine uses these definitions unless it ships an engines/<engine-id>/faults.json of its own. The coefficients are the ones that were written into simulation/fault_injector.py as an if/elif chain; they are reproduced here exactly, not re-derived.",
+  "provenance": {
+    "source": "migrated verbatim from simulation/fault_injector.py",
+    "note": "SIH26054 names the failure modes to cover; the severity coefficients below are this project's calibration of how far each mode moves the engine, not published manufacturer data."
+  },
+  "faults": [
+    {
+      "id": "LEAN_MIXTURE_CYL3",
+      "name": "Lean mixture, cylinder 3",
+      "description": "Reduced fuel trim on one cylinder. The charge burns lean and late, which raises that cylinder's exhaust gas temperature while its neighbours stay nominal.",
+      "subsystem": "cylinders",
+      "severity_response": "ramped",
+      "affected_channels": ["egt_cyl_3"],
+      "classifier_label": "LEAN_MIXTURE_CYL3",
+      "effects": [
+        {
+          "kind": "scale_down",
+          "target": "cylinder_fuel_trim",
+          "coefficient": 0.28,
+          "cylinder_from_request": true,
+          "default_cylinder": 2
+        }
+      ]
+    },
+    {
+      "id": "RICH_MIXTURE_CYL1",
+      "name": "Rich mixture, cylinder 1",
+      "description": "Excess fuel on cylinder 1. Evaporative cooling drops that cylinder's exhaust gas temperature and fuel consumption rises.",
+      "subsystem": "cylinders",
+      "severity_response": "ramped",
+      "affected_channels": ["egt_cyl_1", "fuel_flow"],
+      "classifier_label": "RICH_MIXTURE_CYL1",
+      "effects": [
+        {
+          "kind": "scale_up",
+          "target": "cylinder_fuel_trim",
+          "coefficient": 0.35,
+          "cylinder": 0
+        }
+      ]
+    },
+    {
+      "id": "COOLING_DEGRADATION_CYL2",
+      "name": "Cooling loss, cylinder 2",
+      "description": "Baffle or cooling airflow restriction on cylinder 2. Head temperature climbs while its exhaust temperature stays close to nominal, which is what separates this from a mixture fault.",
+      "subsystem": "cooling",
+      "severity_response": "ramped",
+      "affected_channels": ["cht_cyl_2"],
+      "classifier_label": "COOLING_DEGRADATION_CYL2",
+      "effects": [
+        {
+          "kind": "scale_down",
+          "target": "cylinder_cooling_trim",
+          "coefficient": 0.6,
+          "cylinder": 1
+        }
+      ]
+    },
+    {
+      "id": "OIL_PRESSURE_LOSS",
+      "name": "Oil pressure loss",
+      "description": "Pump relief valve leak or gallery loss. Delivered oil pressure falls away from what the model expects at that speed and temperature.",
+      "subsystem": "oil_system",
+      "severity_response": "ramped",
+      "affected_channels": ["oil_pressure"],
+      "classifier_label": "OIL_PRESSURE_LOSS",
+      "effects": [
+        {
+          "kind": "scale_down",
+          "target": "oil_pump_health",
+          "coefficient": 0.7
+        }
+      ]
+    },
+    {
+      "id": "TURBO_BOOST_DEFICIENCY",
+      "name": "Turbo boost deficiency",
+      "description": "Wastegate stuck open or compressor blade erosion. The engine cannot hold its rated manifold pressure, and the shortfall grows with altitude.",
+      "subsystem": "turbo_boost",
+      "severity_response": "ramped",
+      "affected_channels": ["manifold_pressure"],
+      "classifier_label": "TURBO_BOOST_DEFICIENCY",
+      "effects": [
+        {
+          "kind": "scale_down",
+          "target": "turbo_efficiency",
+          "coefficient": 0.45
+        }
+      ]
+    },
+    {
+      "id": "CYLINDER_MISFIRE_TIMING",
+      "name": "Misfire and timing jitter",
+      "description": "Injection or ignition timing flutter, or a valve failing to seat. Shaft speed becomes unsteady and vibration rises.",
+      "subsystem": "cylinders",
+      "severity_response": "ramped",
+      "affected_channels": ["rpm", "vibration_rms"],
+      "classifier_label": "CYLINDER_MISFIRE_TIMING",
+      "effects": [
+        {
+          "kind": "absolute",
+          "target": "timing_jitter_deg",
+          "coefficient": 9.0
+        }
+      ]
+    },
+    {
+      "id": "BEARING_WEAR_VIBRATION",
+      "name": "Bearing wear",
+      "description": "Mechanical bearing degradation. Second-order vibration is amplified and friction rises with it.",
+      "subsystem": "vibration",
+      "severity_response": "ramped",
+      "affected_channels": ["vibration_rms"],
+      "classifier_label": "BEARING_WEAR_VIBRATION",
+      "effects": [
+        {
+          "kind": "scale_up",
+          "target": "bearing_wear_factor",
+          "coefficient": 1.8
+        }
+      ]
+    },
+    {
+      "id": "SENSOR_FAULT_EGT3",
+      "name": "EGT probe failure, cylinder 3",
+      "description": "The cylinder 3 exhaust thermocouple fails open and reads close to ambient. The engine itself is healthy, and separating this from a real cylinder fault is the point of the physics cross-check.",
+      "subsystem": "instrumentation",
+      "severity_response": "binary",
+      "severity_note": "The probe is either open or it is not, so the severity in the request has no effect. Verified: a run at 1.0 and a run at 0.5 produce identical telemetry.",
+      "affected_channels": ["egt_cyl_3"],
+      "classifier_label": "SENSOR_FAULT_EGT3",
+      "effects": [
+        {
+          "kind": "sensor_override",
+          "target": "egt_3",
+          "mode": "OPEN_CIRCUIT"
+        }
+      ]
+    },
+    {
+      "id": "ELECTRICAL_VOLTAGE_SAG",
+      "name": "Bus voltage sag",
+      "description": "Alternator regulator degradation. The avionics bus sags under load, which is an airframe-level symptom rather than an engine one.",
+      "subsystem": "electrical",
+      "severity_response": "ramped",
+      "affected_channels": ["bus_voltage"],
+      "classifier_label": "ELECTRICAL_VOLTAGE_SAG",
+      "effects": [
+        {
+          "kind": "scale_down",
+          "target": "alternator_health",
+          "coefficient": 0.32
+        }
+      ]
+    }
+  ]
+}

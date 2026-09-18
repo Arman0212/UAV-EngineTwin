@@ -31,6 +31,7 @@ from simulation.sensors import SensorModel, SensorReadings
 from simulation.fault_injector import FaultInjector, FaultType, FaultConfig
 from simulation import engine_registry
 from core.engine_context import EngineContext
+from core.fault_library import load_for as load_fault_library
 from digital_twin.health_index import HealthIndexEngine
 from digital_twin.baseline_adapter import BaselineAdapter
 from digital_twin.state_estimator import PhysicsAnchoredKalmanEstimator
@@ -777,6 +778,26 @@ async def delete_engine(engine_id: str):
         raise HTTPException(status_code=404,
                             detail="No such custom engine. Built-in engines cannot be deleted.")
     return {"status": "SUCCESS", "deleted": engine_id}
+
+@app.get("/api/engines/{engine_id}/faults")
+async def list_engine_faults(engine_id: str):
+    """
+    The faults defined for one engine, and what the stack can do with each.
+
+    Support is reported in three parts because they are genuinely separate: a
+    fault can be simulated without the classifier having a class for it, and
+    without the XAI layer having advice for it.
+    """
+    if engine_registry.get_config(engine_id) is None:
+        raise HTTPException(status_code=404, detail=f"No such engine: {engine_id}")
+    library = load_fault_library(engine_id)
+    return {
+        "engine": engine_id,
+        "source": library.source,
+        "shared_library": library.source.endswith("_default/faults.json"),
+        "faults": library.to_list(),
+    }
+
 
 @app.post("/api/engines/{engine_id}/fit")
 async def fit_engine(engine_id: str):

@@ -299,14 +299,19 @@ class SensorModel:
         for ch, fault in self.fault_overrides.items():
             f_type = fault["type"]
             if ch == "egt_3":
+                # The channel is named for the reference engine's third
+                # cylinder. A twin has no third cylinder, and writing index 2
+                # raised IndexError; the probe is placed on the last cylinder
+                # the engine actually has instead. No change at three or more.
+                idx = min(2, len(egt_meas) - 1)
                 if f_type == "OPEN_CIRCUIT":
-                    egt_meas[2] = round(flight.ambient_temp_c + self.rng.normal(0, 1.0), 1) # Reads ambient
+                    egt_meas[idx] = round(flight.ambient_temp_c + self.rng.normal(0, 1.0), 1) # Reads ambient
                     status_flags["egt_3"] = "SENSOR_OPEN_CIRCUIT"
                 elif f_type == "FROZEN":
-                    egt_meas[2] = 520.0
+                    egt_meas[idx] = 520.0
                     status_flags["egt_3"] = "SENSOR_FROZEN"
                 elif f_type == "BIAS":
-                    egt_meas[2] += fault.get("value", 120.0)
+                    egt_meas[idx] += fault.get("value", 120.0)
                     status_flags["egt_3"] = "SENSOR_BIAS"
             elif ch == "oil_pressure":
                 if f_type == "DROPOUT":

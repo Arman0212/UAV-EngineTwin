@@ -50,6 +50,7 @@ from simulation import engine_registry
 from simulation.engine_spec import EngineSpec
 from simulation.fault_injector import FaultInjector
 from simulation.mvem import MeanValueEngineModel
+from core.fault_library import FaultLibrary, load_for as load_fault_library
 from simulation.sensors import SensorModel, SensorSuite
 
 # The seed the service has always started its sensor model with. Fitting or
@@ -76,6 +77,7 @@ class EngineContext:
     :param sensor_suite: the instrumentation specification the sensors were
         built from, kept so a reset rebuilds the same installation and so the
         service can report where those values came from.
+    :param faults: the fault definitions available to this engine.
     :param injector: applies an active fault to the plant and its sensors.
     :param estimator: fuses measurement with the physics prediction.
     """
@@ -88,6 +90,7 @@ class EngineContext:
     baseline: MeanValueEngineModel
     sensors: SensorModel
     sensor_suite: SensorSuite
+    faults: FaultLibrary
     injector: FaultInjector
     estimator: PhysicsAnchoredKalmanEstimator
 
@@ -111,6 +114,7 @@ class EngineContext:
             # No config, so the instrumentation defaults, which are the values
             # the sensor model has always used.
             sensor_suite=SensorSuite(),
+            faults=load_fault_library(),
             sensor_seed=sensor_seed,
         )
 
@@ -135,11 +139,14 @@ class EngineContext:
             # the default, and the three the configs disagree with the code on
             # are held at the code value; the suite reports both.
             sensor_suite=SensorSuite.from_config(config, source=engine_id),
+            # This engine's faults if it ships any, otherwise the shared
+            # library. Which one it was is recorded on the library itself.
+            faults=load_fault_library(engine_id),
             sensor_seed=int(time.time()) if sensor_seed is None else sensor_seed,
         )
 
     @classmethod
-    def _assemble(cls, engine_id, name, config, spec, sensor_suite,
+    def _assemble(cls, engine_id, name, config, spec, sensor_suite, faults,
                   sensor_seed) -> "EngineContext":
         """
         Builds the object graph in the one order that is correct.
@@ -162,7 +169,8 @@ class EngineContext:
             baseline=baseline,
             sensors=sensors,
             sensor_suite=sensor_suite,
-            injector=FaultInjector(plant, sensors),
+            faults=faults,
+            injector=FaultInjector(plant, sensors, library=faults),
             estimator=PhysicsAnchoredKalmanEstimator(),
         )
 
@@ -183,7 +191,7 @@ class EngineContext:
         self.sensors = SensorModel(
             seed=int(time.time()) if sensor_seed is None else sensor_seed,
             suite=self.sensor_suite)
-        self.injector = FaultInjector(self.plant, self.sensors)
+        self.injector = FaultInjector(self.plant, self.sensors, library=self.faults)
         self.estimator = PhysicsAnchoredKalmanEstimator()
 
     # ------------------------------------------------------------------
