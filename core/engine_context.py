@@ -194,6 +194,48 @@ class EngineContext:
         return self.spec.cylinders
 
     @property
+    def end_of_life_criteria(self) -> Dict[str, Any]:
+        """
+        This engine's condemnation limits, as health-index equivalents.
+
+        Derived once and cached, because the derivation reads a config and the
+        result is fixed for the life of the context.
+
+        Two engines in nine declare end_of_life_limits. The rest return an empty
+        mapping, which the remaining-life estimator treats as "no limits
+        declared" and falls back to a composite forecast. That is deliberate:
+        the alternative is projecting a Rotax toward the reference engine's oil
+        limit, which is what used to happen.
+        """
+        if getattr(self, "_criteria", None) is None:
+            from digital_twin.health_index import HealthIndexEngine
+            self._criteria = HealthIndexEngine().end_of_life_criteria(
+                config=self.health_limits_config)
+        return self._criteria
+
+    @property
+    def health_limits_config(self) -> Optional[Dict[str, Any]]:
+        """
+        The config the limits are read from.
+
+        The boot engine runs on the model's built-in defaults and so carries no
+        config of its own, but it has always taken its limits from the reference
+        config file. That is preserved here rather than quietly changed; it is
+        part of the same boot-versus-config discrepancy recorded in the module
+        docstring.
+        """
+        if self.config is not None:
+            return self.config
+        return engine_registry.get_config(engine_registry.REFERENCE_ID)
+
+    @property
+    def end_of_life_source(self) -> str:
+        """Where the limits came from, for reporting rather than for logic."""
+        if not self.end_of_life_criteria:
+            return "none declared; composite fallback"
+        return "reference config (boot engine)" if self.config is None else self.engine_id
+
+    @property
     def is_reference(self) -> bool:
         return self.engine_id == engine_registry.REFERENCE_ID
 

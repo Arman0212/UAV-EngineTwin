@@ -65,7 +65,8 @@ class EngineTwinRuntime:
         self.engine = EngineContext.boot()
         self.health_engine = HealthIndexEngine()
         self.sensor_validator = SensorValidator()
-        self.rul_engine = RULEstimator()
+        # Remaining life projects toward the fitted engine's own limits.
+        self.rul_engine = RULEstimator(criteria=self.engine.end_of_life_criteria)
 
         # Load AI Models
         models_dir = PROJECT_ROOT / "models" / "saved_models"
@@ -190,10 +191,11 @@ class EngineTwinRuntime:
         # Raises ValueError for an unknown id, which the endpoint turns into a 404.
         self.engine = EngineContext.fitted(engine_id)
 
-        # Remaining-life history is about the engine that produced it, so it is
-        # dropped. The baseline adapter is deliberately not reset here, which is
-        # the behaviour this has always had.
-        self.rul_engine.reset()
+        # Remaining life is rebound to the new engine's limits, which also
+        # drops the history: it describes the engine that was just removed. The
+        # baseline adapter is deliberately not reset here, which is the
+        # behaviour this has always had.
+        self.rul_engine.bind_criteria(self.engine.end_of_life_criteria)
         self.latest_alert = None
         self.active_fault_name = "HEALTHY"
         self.sim_time_s = 0.0
