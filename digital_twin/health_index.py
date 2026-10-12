@@ -11,6 +11,8 @@ import json
 import math
 import numpy as np
 
+from models.cylinder_map import to_slots
+
 from .twin_state import SubsystemHealth, StateLevel
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "configs" / "engine_config.json"
@@ -111,18 +113,32 @@ class HealthIndexEngine:
         return self._calc_subscore(residual_norm, channel_key)
 
     def end_of_life_criteria(
-        self, config_path: Optional[Any] = None
+        self, config_path: Optional[Any] = None,
+        config: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, EndOfLifeCriterion]:
         """
-        Loads the per-subsystem end-of-life limits from an engine config and maps
-        each to its health-index equivalent.
+        Maps an engine's end-of-life limits onto their health-index equivalents.
 
-        The limits are physical and come from the config; the percentages are
-        derived here. Swapping in another engine's config swaps the limits
-        without touching any code.
+        The limits are physical and come from the engine; the percentages are
+        derived here, through the same sigma, deadband and exponential the live
+        path uses.
+
+        :param config: an already-loaded engine config. Preferred, because the
+            caller knows which engine is fitted and this method should not go
+            looking for one. Nothing is read from disk when it is supplied.
+        :param config_path: a path to read instead. Kept for existing callers.
+        :raises: nothing is loaded from DEFAULT_CONFIG_PATH unless both are
+            omitted, which is the old behaviour and now only a fallback.
+
+        Note that everything else on this class -- the sigmas, the alphas, the
+        subsystem weights, the status bands -- is deliberately not per-engine.
+        The sigmas normalise the residual vector the shipped checkpoints consume,
+        and the alphas and weights are tuning of the index itself. Those are
+        model and algorithm constants; only the limits belong to the engine.
         """
-        path = Path(config_path) if config_path is not None else DEFAULT_CONFIG_PATH
-        config = json.loads(Path(path).read_text())
+        if config is None:
+            path = Path(config_path) if config_path is not None else DEFAULT_CONFIG_PATH
+            config = json.loads(Path(path).read_text())
         limits = config.get("end_of_life_limits", {})
 
         criteria: Dict[str, EndOfLifeCriterion] = {}
@@ -177,16 +193,18 @@ class HealthIndexEngine:
                 sig = self.sigma.get(ch, 1.0)
                 residuals[ch] = round(diff / sig, 3)
 
-        # Multi-cylinder channels
+        # Multi-cylinder channels. The residual vector is fixed at four EGT and
+        # four CHT channels because the trained models consume it at that
+        # width, so an engine of any size is mapped onto those four slots.
+        s_egt_slots = to_slots(sensor_data["egt_c"])
+        m_egt_slots = to_slots(mvem_expected["egt_c"])
+        s_cht_slots = to_slots(sensor_data["cht_c"])
+        m_cht_slots = to_slots(mvem_expected["cht_c"])
         for i in range(4):
-            # EGT
-            s_egt = sensor_data["egt_c"][i]
-            m_egt = mvem_expected["egt_c"][i]
-            residuals[f"egt_cyl_{i+1}"] = round((s_egt - m_egt) / self.sigma["egt"], 3)
-            # CHT
-            s_cht = sensor_data["cht_c"][i]
-            m_cht = mvem_expected["cht_c"][i]
-            residuals[f"cht_cyl_{i+1}"] = round((s_cht - m_cht) / self.sigma["cht"], 3)
+            residuals[f"egt_cyl_{i+1}"] = round(
+                (s_egt_slots[i] - m_egt_slots[i]) / self.sigma["egt"], 3)
+            residuals[f"cht_cyl_{i+1}"] = round(
+                (s_cht_slots[i] - m_cht_slots[i]) / self.sigma["cht"], 3)
 
         return residuals
 
@@ -210,7 +228,17 @@ class HealthIndexEngine:
         oil_t_score = self._calc_subscore(residuals.get("oil_temp", 0.0), "oil_temp")
         oil_health = min(oil_p_score, oil_t_score * 1.05)
 
-        # 2. Per-Cylinder Health (Cyl 1 to 4)
+        # 2. Per-cylinder health.
+        #
+        # Four, always, whatever the engine has. These scores are read out of the
+        # residual vector, which is fixed at four EGT and four CHT channels
+        # because that is the width the shipped checkpoints consume. An engine
+        # with six cylinders has its readings mapped onto those four slots
+        # upstream in compute_residuals, so cylinders five and six are not
+        # represented here at all.
+        #
+        # This is the trained-model contract, not an assumption about the
+        # reference engine having four cylinders. Widening it means retraining.
         cyl_scores = []
         for i in range(4):
             egt_score = self._calc_subscore(residuals.get(f"egt_cyl_{i+1}", 0.0), "egt")
@@ -226,7 +254,8 @@ class HealthIndexEngine:
         # 5. Electrical Bus Health
         elec_health = self._calc_subscore(residuals.get("bus_voltage", 0.0), "bus_voltage")
 
-        # 6. Cooling System Health (driven by CHT average)
+        # 6. Cooling system health, averaged over the same four CHT slots as
+        # above, and four for the same reason.
         cooling_health = float(np.mean([self._calc_subscore(residuals.get(f"cht_cyl_{i+1}", 0.0), "cht") for i in range(4)]))
 
         # Composite Engine Health Score (Weighted sum with conservative safety bottleneck)

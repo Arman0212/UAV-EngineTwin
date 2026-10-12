@@ -2166,6 +2166,225 @@ body[data-phase="app"] .cover-skip { display: none !important; }
   .engine-derate-table { min-width: 0; }
 }
 
+/* ==========================================================================
+   VERDICT BAND
+   --------------------------------------------------------------------------
+   The station's conclusion, above the workspace, at a scale that survives a
+   projector. It annunciates on the same scale as everything else: neutral when
+   nominal, amber out of tolerance, red at a hard limit. It never invents a
+   colour of its own.
+   ========================================================================== */
+
+.verdict {
+  flex: 0 0 auto;
+  margin: 8px 8px 0;
+  padding: 10px 14px;
+  background: var(--bg-panel);
+  border-radius: var(--radius);
+  border-left: var(--accent-w) solid var(--border);
+  display: grid;
+  gap: 4px;
+  transition: border-left-color var(--dur-settle) var(--ease);
+}
+.verdict[data-state="caution"] { border-left-color: var(--caution); }
+.verdict[data-state="warning"] { border-left-color: var(--warning); }
+.verdict[data-state="nominal"] { border-left-color: var(--ok); }
+
+.verdict-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  min-width: 0;
+}
+.verdict-class {
+  font-size: clamp(19px, 2.4vw, 30px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+  color: var(--text-primary);
+}
+.verdict[data-state="caution"] .verdict-class { color: var(--caution); }
+.verdict[data-state="warning"] .verdict-class { color: var(--warning); }
+.verdict[data-state="nominal"] .verdict-class { color: var(--ok); }
+
+.verdict-meta { font-size: var(--fs-label); color: var(--text-muted); white-space: nowrap; }
+
+.verdict-action {
+  font-size: var(--fs-title);
+  color: var(--text-primary);
+  line-height: 1.35;
+}
+
+.verdict-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 22px;
+  margin-top: 2px;
+}
+.verdict-facts span { display: flex; align-items: baseline; gap: 6px; }
+.verdict-facts i {
+  font-style: normal;
+  font-size: var(--fs-tick);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.verdict-facts b {
+  font-weight: 500;
+  font-size: var(--fs-label);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   BRIEF MODE
+   --------------------------------------------------------------------------
+   A second view of the same frame, sized for a room. Operate mode keeps every
+   panel and control it has today; this is shown instead of the workspace, not
+   in place of the station.
+   ========================================================================== */
+
+body[data-mode="brief"] .app-shell > main,
+body[data-mode="brief"] .app-shell > footer,
+body[data-mode="brief"] #verdict-band { display: none; }
+
+body[data-mode="brief"] #brief-view { display: flex; }
+
+.brief {
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  gap: 18px;
+  padding: 22px clamp(18px, 4vw, 54px) 18px;
+  overflow-y: auto;
+}
+.brief[hidden] { display: none; }
+
+.brief-verdict {
+  display: grid;
+  gap: 7px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.brief-class {
+  font-size: clamp(30px, 5.4vw, 62px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--ok);
+  text-wrap: balance;
+}
+body[data-mode="brief"][data-verdict="caution"] .brief-class { color: var(--caution); }
+body[data-mode="brief"][data-verdict="warning"] .brief-class { color: var(--warning); }
+
+.brief-meta { font-size: clamp(13px, 1.4vw, 17px); color: var(--text-muted); }
+.brief-action {
+  font-size: clamp(14px, 1.6vw, 21px);
+  color: var(--text-primary);
+  line-height: 1.4;
+  max-width: 48ch;
+}
+
+.brief-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: clamp(14px, 2.5vw, 32px);
+  align-items: center;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.brief-engine { display: grid; gap: 8px; min-width: 0; }
+/* The live viewport is moved in here on switch. Height is set so the renderer
+   has something to measure the moment it arrives. */
+.brief-3d-slot {
+  background: var(--bg-page);
+  border-radius: var(--radius);
+  overflow: hidden;
+  min-height: 220px;
+  height: clamp(220px, 34vh, 380px);
+}
+.brief-3d-slot .viewport-3d { height: 100% !important; flex: 1 1 auto !important; }
+.brief-engine-name {
+  font-size: var(--fs-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.brief-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(8px, 1.4vw, 14px);
+  min-width: 0;
+}
+.brief-tile {
+  background: var(--bg-elevated);
+  border-radius: var(--radius);
+  border-left: 3px solid transparent;
+  padding: clamp(10px, 1.6vw, 18px) clamp(12px, 1.8vw, 20px);
+  display: grid;
+  gap: 2px;
+  align-content: center;
+  min-width: 0;
+}
+.brief-tile[data-state="caution"] { border-left-color: var(--caution); }
+.brief-tile[data-state="warning"] { border-left-color: var(--warning); }
+.brief-tile[data-state="accent"]  { border-left-color: var(--instrument); }
+
+.brief-tile-label {
+  font-size: var(--fs-tick);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.brief-tile-value {
+  font-size: clamp(26px, 4vw, 46px);
+  font-weight: 600;
+  line-height: 1.05;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+/* A channel name is words, not a figure, so it must not be set at numeral scale. */
+.brief-tile-value.brief-tile-text {
+  font-size: clamp(15px, 1.9vw, 24px);
+  color: var(--instrument);
+  letter-spacing: -0.01em;
+}
+.brief-tile[data-state="caution"] .brief-tile-value { color: var(--caution); }
+.brief-tile[data-state="warning"] .brief-tile-value { color: var(--warning); }
+.brief-tile-unit { font-size: var(--fs-tick); color: var(--text-dim); }
+
+.brief-foot {
+  font-size: var(--fs-tick);
+  color: var(--text-dim);
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
+}
+.kbd-lite {
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  padding: 0 4px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 860px) {
+  .brief-body { grid-template-columns: 1fr; align-items: start; }
+  .brief-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .verdict-facts { gap: 3px 14px; }
+}
+@media (max-width: 520px) {
+  .brief-tiles { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .verdict { transition: none; }
+}
+
 
 /* ======================================================================
    TYPOGRAPHY
@@ -2320,3 +2539,176 @@ body, button, input, select, textarea,
   height: clamp(230px, 26vh, 360px);
 }
 .panel-3d-fill .viewport-3d canvas { display: block; width: 100% !important; height: 100% !important; }
+
+/* ==========================================================================
+   ENGINE SPECIFICATION SHEET
+   --------------------------------------------------------------------------
+   Shown for whichever engine is selected in the picker, fitted or not. It is
+   capped in height and scrolls internally: the engine panel sits in normal
+   flow above the workspace, so an uncapped sheet would squeeze the 3D
+   viewport, which must keep the size it has.
+   ========================================================================== */
+
+.engine-spec:empty { display: none; }
+
+.engine-spec {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+  max-height: 30vh;
+  overflow-y: auto;
+}
+
+.spec-banner {
+  font-size: var(--fs-label);
+  color: var(--text-muted);
+  background: var(--instrument-band);
+  border-left: 2px solid var(--instrument);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  padding: 6px 10px;
+  margin-bottom: 10px;
+}
+.spec-banner b { color: var(--text-primary); font-weight: 600; }
+.spec-banner.is-fitted {
+  background: rgba(109, 217, 138, 0.10);
+  border-left-color: var(--ok);
+}
+
+.spec-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(146px, 1fr));
+  gap: 8px;
+}
+
+.spec-cell {
+  display: grid;
+  gap: 1px;
+  align-content: start;
+  background: var(--bg-elevated);
+  border-radius: var(--radius);
+  padding: 7px 9px;
+  min-width: 0;
+}
+
+.spec-label {
+  font-size: var(--fs-tick);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.spec-value {
+  font-size: var(--fs-title);
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.spec-sub {
+  font-size: var(--fs-tick);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* The derating curve, read left to right as the aircraft climbs. */
+.spec-curve { margin-top: 10px; }
+.spec-curve-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
+}
+.spec-pt {
+  display: grid;
+  gap: 1px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  padding: 5px 9px;
+  min-width: 74px;
+}
+.spec-pt b {
+  font-size: var(--fs-title);
+  font-weight: 600;
+  color: var(--instrument);
+  font-variant-numeric: tabular-nums;
+}
+.spec-pt i {
+  font-style: normal;
+  font-size: var(--fs-tick);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.spec-note {
+  margin-top: 9px;
+  font-size: var(--fs-label);
+  line-height: 1.5;
+  color: var(--text-muted);
+  max-width: 82ch;
+}
+
+@media (max-width: 720px) {
+  .engine-spec { max-height: 42vh; }
+  .spec-grid { grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); }
+}
+
+/* ==========================================================================
+   DATA PROVENANCE
+   --------------------------------------------------------------------------
+   Which of an engine's figures are published, which are computed and which
+   are modelled. Set quietly: it is a qualification on the sheet above, not a
+   headline, but a reviewer must be able to find it without asking.
+   ========================================================================== */
+
+.spec-prov {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.prov-summary {
+  font-size: var(--fs-label);
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin: 5px 0 9px;
+  max-width: 86ch;
+}
+
+.prov-row {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 11rem) minmax(0, 1fr);
+  gap: 4px 12px;
+  align-items: baseline;
+  padding: 5px 0;
+  border-top: 1px solid var(--border-soft);
+}
+.prov-row:first-of-type { border-top: none; }
+
+.prov-tag {
+  font-size: var(--fs-tick);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border-left: 2px solid var(--border);
+  padding-left: 7px;
+}
+.prov-row[data-tier="published"] .prov-tag { color: var(--ok); border-left-color: var(--ok); }
+.prov-row[data-tier="computed"]  .prov-tag { color: var(--instrument); border-left-color: var(--instrument); }
+.prov-row[data-tier="modelled"]  .prov-tag { color: var(--caution); border-left-color: var(--caution); }
+
+.prov-fields {
+  font-size: var(--fs-label);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.prov-why {
+  font-size: var(--fs-tick);
+  line-height: 1.5;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .prov-row { grid-template-columns: 1fr; gap: 2px; }
+  .prov-tag { border-left: none; padding-left: 0; }
+}

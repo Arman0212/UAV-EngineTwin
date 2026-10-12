@@ -1,0 +1,56 @@
+{
+  "schema": "enginetwin.ai/1",
+  "description": "The AI components an engine uses, and what they are actually validated for. Every engine currently resolves to this file, because only one set of checkpoints exists. An engine that later gets models of its own ships engines/<engine-id>/ai.json and this is no longer consulted for it.",
+  "trained_on": "engine_config",
+  "trained_on_note": "The checkpoints were trained on residuals generated from the reference engine built with the model's built-in defaults. They are validated for that engine and for no other. Using them elsewhere gives correct physics and an indicative diagnosis, which is reported rather than assumed.",
+  "input_contract": {
+    "channels": [
+      "rpm", "manifold_pressure", "fuel_flow", "oil_pressure", "oil_temp",
+      "cht_cyl_1", "cht_cyl_2", "cht_cyl_3", "cht_cyl_4",
+      "egt_cyl_1", "egt_cyl_2", "egt_cyl_3", "egt_cyl_4",
+      "vibration_rms", "bus_voltage"
+    ],
+    "cylinder_slots": 4,
+    "ordering": "fixed",
+    "note": "Declared here so the dependency is visible, and checked against the code on load. The code remains the source of truth: if these disagree, loading fails rather than one silently winning. Widening the four cylinder slots, reordering the channels or adding to them invalidates the checkpoints and is a retraining task."
+  },
+  "output_contract": {
+    "classes": [
+      "HEALTHY",
+      "LEAN_MIXTURE_CYL3",
+      "RICH_MIXTURE_CYL1",
+      "COOLING_DEGRADATION_CYL2",
+      "OIL_PRESSURE_LOSS",
+      "TURBO_BOOST_DEFICIENCY",
+      "CYLINDER_MISFIRE_TIMING",
+      "BEARING_WEAR_VIBRATION",
+      "SENSOR_FAULT_EGT3",
+      "ELECTRICAL_VOLTAGE_SAG"
+    ],
+    "class_order": "fixed",
+    "severity_head": true
+  },
+  "components": {
+    "anomaly": {
+      "kind": "checkpoint",
+      "model": "models/saved_models/anomaly_autoencoder.pt",
+      "description": "Undercomplete autoencoder over the residual vector, trained on healthy sorties only. Reconstruction error above its calibrated threshold gates the classifier."
+    },
+    "classifier": {
+      "kind": "checkpoint",
+      "model": "models/saved_models/fault_classifier.pt",
+      "description": "Multi-task network: ten fault classes with temperature-scaled confidence, plus a severity head."
+    },
+    "xai": {
+      "kind": "derived",
+      "derived_from": "classifier",
+      "method": "gradient x input",
+      "description": "Attribution over the same residual vector, using one backward pass through the classifier. It has no checkpoint of its own and inherits whatever the classifier is validated for."
+    },
+    "rul": {
+      "kind": "configuration",
+      "algorithm": "regime-aware trend projection",
+      "description": "Trend filtering over the health history, projected to the engine's own end-of-life limits. It has no trained weights, so it is not a checkpoint and is not bound like one. Its engine-specific part is the limits, which come from the engine config and were bound in the health and RUL step."
+    }
+  }
+}

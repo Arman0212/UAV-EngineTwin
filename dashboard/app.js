@@ -403,6 +403,11 @@ document.addEventListener("DOMContentLoaded", () => {
   connectWebSocket();
   addEventLog("SYS", "Ground station connected to telemetry stream at 20 Hz.");
 
+  // Shape the model to the engine that is actually fitted, before anyone opens
+  // the engine panel. Otherwise a fitted six-cylinder engine is drawn with the
+  // reference engine's four jugs and the display contradicts the telemetry.
+  refreshEngines();
+
   // Boot into mid-degradation. A screen of 100.0% readings demonstrates
   // nothing; the station should open already having something to say.
   setTimeout(bootDegradedScenario, 400);
@@ -652,6 +657,10 @@ function updateDashboard(state) {
   // Live or replayed frames are otherwise identical, so this is the only
   // place the dashboard cares which it is rendering.
   updateReplayBadge(state);
+
+  // The verdict band and brief mode are two more views of this same frame,
+  // so they update here rather than anywhere that could drift from it.
+  updateVerdict(state);
 
   // The inspector reads the same frame everything else does, so its numbers
   // never lag the panel beside them.
@@ -2159,6 +2168,226 @@ function toggleEnginePanel() {
     btn.classList.toggle("is-active", !panel.hidden);
   }
   if (!panel.hidden) refreshEngines();
+
+  // The panel sits in normal flow, so opening it resizes the workspace under
+  // it. The renderer has to be told, twice: once on the next frame and once
+  // after the panel's own transition has settled.
+  if (engine3D && typeof engine3D.onWindowResize === "function") {
+    requestAnimationFrame(() => engine3D.onWindowResize());
+    setTimeout(() => engine3D.onWindowResize(), 80);
+  }
+}
+
+// Full configs, keyed by engine id. Fetched once each: the catalogue can hold
+// a dozen engines and the picker is used by clicking through them.
+const engineDetailCache = {};
+
+async function loadEngineDetail(id) {
+  if (engineDetailCache[id]) return engineDetailCache[id];
+  const res = await fetch(`/api/engines/${encodeURIComponent(id)}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const d = await res.json();
+  engineDetailCache[id] = d;
+  return d;
+}
+
+const LAYOUT_NAMES = {
+  inline: "Inline",
+  boxer: "Horizontally opposed",
+  vee: "Vee"
+};
+
+function setEngineSpec(html) {
+  const el = document.getElementById("box-engine-spec");
+  if (el) el.innerHTML = html;
+}
+
+/** One labelled figure in the spec sheet. Empty values drop out entirely. */
+function specCell(label, value, sub) {
+  if (value === undefined || value === null || value === "") return "";
+  return `<div class="spec-cell"><span class="spec-label">${label}</span>` +
+         `<span class="spec-value">${value}</span>` +
+         (sub ? `<span class="spec-sub">${sub}</span>` : "") + `</div>`;
+}
+
+const engNum = (v, d) =>
+  (v === undefined || v === null || isNaN(v)) ? null : Number(v).toFixed(d || 0);
+
+// Config keys, as an engineer would say them. The provenance block lists the
+// fields it covers by key; a reader should not have to decode JSON names.
+const FIELD_LABELS = {
+  engine_name: "name",
+  displacement_litres: "displacement",
+  cylinders: "cylinder count",
+  cylinder_layout: "bank layout",
+  rated_power_hp_sealevel: "rated power",
+  rated_rpm: "rated RPM",
+  max_continuous_rpm: "max continuous RPM",
+  idle_rpm: "idle RPM",
+  compression_ratio: "compression ratio",
+  turbocharged: "induction",
+  intercooled: "intercooling",
+  max_boost_bar: "max boost",
+  nominal_operating_parameters: "operating limits",
+  sensor_specifications: "sensor characteristics",
+  end_of_life_limits: "end-of-life limits",
+  altitude_power_derating: "altitude power curve",
+  all: "every figure"
+};
+
+const PROVENANCE_TIERS = [
+  ["published", "Published", "Transcribed from the manufacturer's specification."],
+  ["computed", "Computed", "Derived from a stated relation."],
+  ["modelled", "Modelled", "Representative, not read from a data sheet."]
+];
+
+/**
+ * Renders where this engine's numbers came from.
+ *
+ * Reviewers ask whether a figure is a published specification or an estimate.
+ * The configs carry that answer per field, so the sheet states it rather than
+ * leaving the reader to assume.
+ */
+function renderProvenance(prov) {
+  if (!prov) return "";
+
+  const rows = PROVENANCE_TIERS.map(([key, label, blurb]) => {
+    const fields = prov[key] || [];
+    if (!fields.length) return "";
+    const named = fields.map(f => FIELD_LABELS[f] || f).join(", ");
+    const why = (prov.notes && prov.notes[key]) || blurb;
+    return `<div class="prov-row" data-tier="${key}">` +
+           `<span class="prov-tag">${label}</span>` +
+           `<span class="prov-fields">${named}</span>` +
+           `<span class="prov-why">${why}</span></div>`;
+  }).join("");
+
+  return `<div class="spec-prov">` +
+         `<span class="spec-label">Where these numbers come from</span>` +
+         `<div class="prov-summary">${prov.summary || ""}</div>` +
+         rows + `</div>`;
+}
+
+/**
+ * Renders the full spec of one engine. Every figure comes from that engine's
+ * own config file, so no two engines in the catalogue read the same.
+ */
+function renderEngineSpec(id, detail) {
+  const c = (detail && detail.config) || {};
+  const nom = c.nominal_operating_parameters || {};
+  const table = c.altitude_power_derating || [];
+  const fitted = id === fittedEngineId;
+
+  const dispL = c.displacement_litres;
+  const cc = dispL ? Math.round(dispL * 1000).toLocaleString() : null;
+  // Same relation the 3D model uses to size the engine: a square engine with
+  // bore = stroke, so bore = cbrt(4 * swept volume per cylinder / pi).
+  const boreMm = (dispL && c.cylinders)
+    ? Math.cbrt(4 * (dispL * 1e6 / c.cylinders) / Math.PI) : null;
+
+  const ceiling = table.length
+    ? Math.max.apply(null, table.map(r => Number(r.altitude_ft) || 0)) : null;
+  const topRow = table.length
+    ? table.reduce((a, b) => (Number(b.altitude_ft) > Number(a.altitude_ft) ? b : a))
+    : null;
+
+  const cells = [
+    specCell("Rated power", `${engNum(c.rated_power_hp_sealevel)} HP`,
+             `at ${engNum(c.rated_rpm)} rpm, sea level`),
+    specCell("Displacement", cc ? `${cc} cc` : null, dispL ? `${dispL} litres` : ""),
+    specCell("Cylinders", c.cylinders,
+             c.turbocharged === false ? "naturally aspirated" : "turbocharged"),
+    specCell("Bank layout", LAYOUT_NAMES[c.cylinder_layout || "inline"]
+                            || LAYOUT_NAMES.inline, "as drawn in the 3D view"),
+    specCell("Bore", boreMm ? `${boreMm.toFixed(0)} mm` : null,
+             "derived, square engine"),
+    specCell("Compression", c.compression_ratio ? `${c.compression_ratio}:1` : null,
+             c.intercooled ? "intercooled" : ""),
+    specCell("Max boost", engNum(c.max_boost_bar, 2), "bar absolute"),
+    specCell("RPM range", `${engNum(c.idle_rpm)} – ${engNum(c.max_continuous_rpm)}`,
+             "idle to max continuous"),
+    specCell("Nominal EGT", nom.egt_nominal_celsius ? `${engNum(nom.egt_nominal_celsius)} °C` : null,
+             nom.egt_alarm_celsius ? `alarm ${engNum(nom.egt_alarm_celsius)} °C` : ""),
+    specCell("Nominal CHT", nom.cht_nominal_celsius ? `${engNum(nom.cht_nominal_celsius)} °C` : null,
+             nom.cht_alarm_celsius ? `alarm ${engNum(nom.cht_alarm_celsius)} °C` : ""),
+    specCell("Oil pressure", nom.oil_pressure_nominal_bar ? `${engNum(nom.oil_pressure_nominal_bar, 1)} bar` : null,
+             nom.oil_pressure_min_safe_bar ? `min safe ${engNum(nom.oil_pressure_min_safe_bar, 2)} bar` : ""),
+    specCell("Cruise fuel", nom.fuel_flow_cruise_lph ? `${engNum(nom.fuel_flow_cruise_lph, 1)} L/h` : null,
+             nom.fuel_flow_max_lph ? `max ${engNum(nom.fuel_flow_max_lph, 1)} L/h` : ""),
+    specCell("Tested ceiling", ceiling ? `${ceiling.toLocaleString()} ft` : null,
+             topRow ? `${engNum(topRow.power_hp)} HP available there` : ""),
+    specCell("Vibration", nom.vibration_nominal_g_rms ? `${engNum(nom.vibration_nominal_g_rms, 1)} g` : null,
+             nom.vibration_alarm_g_rms ? `alarm ${engNum(nom.vibration_alarm_g_rms, 1)} g` : "")
+  ].join("");
+
+  // The derating curve distinguishes one engine from another at altitude,
+  // which is the regime this whole problem is about.
+  const curve = table.length ? `<div class="spec-curve">
+      <span class="spec-label">Power with altitude</span>
+      <div class="spec-curve-row">${table
+        .slice().sort((a, b) => a.altitude_ft - b.altitude_ft)
+        .map(r => `<span class="spec-pt"><b>${engNum(r.power_hp)}</b> HP` +
+                  `<i>${Number(r.altitude_ft).toLocaleString()} ft</i></span>`).join("")}</div>
+    </div>` : "";
+
+  const banner = fitted
+    ? `<div class="spec-banner is-fitted">Fitted and running · the telemetry on this page is this engine.</div>`
+    : `<div class="spec-banner">Previewing <b>${c.engine_name || id}</b>. ` +
+      `Press <b>Fit</b> to fly the sortie on it. Live telemetry is still the fitted engine.</div>`;
+
+  const note = c.notes ? `<div class="spec-note">${c.notes}</div>` : "";
+  const prov = renderProvenance(c.data_provenance);
+
+  setEngineSpec(banner + `<div class="spec-grid">${cells}</div>` + curve + note + prov);
+}
+
+/**
+ * Runs when the dropdown selection changes. Nothing was wired to the select
+ * before, which is why picking a different engine changed no figure on screen.
+ */
+async function previewSelectedEngine() {
+  const sel = document.getElementById("sel-engine");
+  if (!sel || !sel.value) return;
+  const id = sel.value;
+  const row = engineCatalogue.find(x => x.id === id);
+
+  const kind = row ? (row.builtin ? (row.is_reference ? "reference engine" : "built-in")
+                                  : "custom engine") : "";
+  const head = id === fittedEngineId ? "Fitted" : "Selected";
+  setEngineStatus(
+    `<div><span class="text-dim">${head}</span> <b>${row ? row.name : id}</b>` +
+    (kind ? ` <span class="text-dim">· ${kind}</span>` : "") + `</div>` +
+    (id === fittedEngineId ? "" :
+      `<div class="text-dim" style="margin-top:2px">Press Fit to run it.</div>`));
+
+  // Shape the 3D model to whatever is selected, so the viewport answers the
+  // click. It reverts as soon as the fitted engine is selected again.
+  if (row && engine3D && typeof engine3D.setEngineSpec === "function") {
+    try {
+      engine3D.setEngineSpec({
+        name: row.name,
+        cylinders: row.cylinders,
+        turbocharged: row.turbocharged,
+        displacementLitres: row.displacement_litres,
+        ratedPowerHp: row.rated_power_hp,
+        ratedRpm: row.rated_rpm,
+        layout: row.cylinder_layout
+      });
+    } catch (err) { /* a geometry failure must not block the spec sheet */ }
+  }
+
+  try {
+    const detail = await loadEngineDetail(id);
+    // What the parts are called, and where each channel is measured, come from
+    // the engine. A failure here must not stop the spec sheet rendering.
+    if (detail && detail.visual && engine3D
+        && typeof engine3D.applyVisualConfig === "function") {
+      try { engine3D.applyVisualConfig(detail.visual); } catch (err) { /* keep defaults */ }
+    }
+    renderEngineSpec(id, detail);
+  } catch (err) {
+    setEngineSpec(`<div class="spec-banner">Could not load the full spec. ${err.message}</div>`);
+  }
 }
 
 function setEngineStatus(html) {
@@ -2183,8 +2412,9 @@ async function refreshEngines() {
     }).join("");
     if (fittedEngineId) sel.value = fittedEngineId;
 
-    describeFittedEngine();
+    previewSelectedEngine();
   } catch (e) {
+    describeFittedEngine();
     setEngineStatus("Could not reach the engine catalogue.");
   }
 }
@@ -2264,7 +2494,7 @@ async function prefillEngineForm() {
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
 
     set("eng-name", "My Engine");
-    set("eng-disp", t.displacement_litres);
+    set("eng-disp", Math.round((t.displacement_litres || 0) * 1000));
     set("eng-cyl", t.cylinders);
     set("eng-power", t.rated_power_hp_sealevel);
     set("eng-rated-rpm", t.rated_rpm);
@@ -2329,7 +2559,9 @@ async function saveCustomEngine(alsoFit) {
   const num = (id) => parseFloat((document.getElementById(id) || {}).value);
   const body = {
     engine_name: (document.getElementById("eng-name") || {}).value || "",
-    displacement_litres: num("eng-disp"),
+    // The form asks for cc because that is how engines in this class are
+    // quoted; the schema stores litres.
+    displacement_litres: num("eng-disp") / 1000.0,
     cylinders: Math.round(num("eng-cyl")),
     rated_power_hp_sealevel: num("eng-power"),
     rated_rpm: num("eng-rated-rpm"),
@@ -2367,6 +2599,11 @@ async function saveCustomEngine(alsoFit) {
       return;
     }
     addEventLog("SYS", `Created engine "${d.engine.name}".`);
+    // A config can be valid and still sit outside the range the correlations
+    // were fitted on. Say so plainly rather than letting the numbers imply
+    // more confidence than they carry.
+    ((d.engine && d.engine.warnings) || []).forEach(
+      w => addEventLog("SYS", `Note: ${w}`));
     toggleEngineForm();
     await refreshEngines();
 
@@ -2379,3 +2616,172 @@ async function saveCustomEngine(alsoFit) {
     showEngineErrors([e.message]);
   }
 }
+
+/**
+ * Shows the litre equivalent while a displacement is typed in cc.
+ * Small UAV engines are always quoted in cc and large aero engines in litres,
+ * so showing both removes a unit slip that would otherwise scale the whole
+ * engine by a thousand.
+ */
+function updateDispHint() {
+  const el = document.getElementById("eng-disp");
+  const hint = document.getElementById("hint-disp");
+  if (!el || !hint) return;
+  const cc = parseFloat(el.value);
+  if (!isFinite(cc) || cc <= 0) { hint.innerHTML = "&nbsp;"; return; }
+  hint.textContent = `${(cc / 1000).toFixed(3)} L`;
+}
+
+// ------------------------------------------------------------------
+// 16. VERDICT BAND & BRIEF MODE
+//
+// Two additional views of the frame the station is already rendering.
+// Neither computes anything: they read `state` exactly as the panels do,
+// so a value can never disagree between views. Operate mode keeps every
+// panel and control it has today — nothing was moved out of it.
+// ------------------------------------------------------------------
+
+/** Nominal / caution / warning for a diagnosis, on the station's own scale. */
+function verdictState(ai) {
+  const cls = (ai && ai.fault_class) || "HEALTHY";
+  if (cls === "HEALTHY") return "nominal";
+  if (ai.is_sensor_fault || cls.startsWith("SENSOR_FAULT")) return "caution";
+  return (ai.fault_severity || 0) >= 0.6 ? "warning" : "caution";
+}
+
+/** Human-readable name for the residual channel that drove the decision. */
+function topDriver(ai) {
+  const top = (ai && ai.top_contributing_channels) || [];
+  if (!top.length) return null;
+  return {
+    name: top[0].display_name || top[0].channel_key || "—",
+    pct: top[0].importance_pct,
+  };
+}
+
+function updateVerdict(state) {
+  const ai = state.ai_prognostics || {};
+  const health = state.health || {};
+  const cls = (ai.fault_class || "HEALTHY").replace(/_/g, " ");
+  const st = verdictState(ai);
+  const driver = topDriver(ai);
+
+  // --- the band above the workspace --------------------------------
+  const band = document.getElementById("verdict-band");
+  if (band && band.getAttribute("data-state") !== st) {
+    band.setAttribute("data-state", st);
+  }
+  setText("txt-verdict-class", cls);
+  setText("txt-verdict-meta",
+    `${(ai.fault_confidence_pct ?? 100).toFixed(0)} % confidence`);
+  setText("txt-verdict-action",
+    ai.recommended_action || "Continue nominal mission profile.");
+  setText("txt-verdict-health",
+    `${(health.overall_health ?? 100).toFixed(1)} %`);
+  setText("txt-verdict-rul", formatRul(ai));
+  setText("txt-verdict-driver",
+    driver ? `${driver.name} · ${driver.pct.toFixed(0)} %` : "—");
+
+  // --- brief mode ---------------------------------------------------
+  // Written even while operate mode is showing. It is a handful of
+  // setText calls against a cached frame, and it means switching modes
+  // never shows a stale screen for a frame.
+  document.body.setAttribute("data-verdict", st);
+  setText("txt-brief-class", cls);
+  setText("txt-brief-meta",
+    `${(ai.fault_confidence_pct ?? 100).toFixed(0)} % confidence` +
+    (ai.is_sensor_fault ? " · instrumentation, not the engine" : ""));
+  setText("txt-brief-action",
+    ai.recommended_action || "Continue nominal mission profile.");
+
+  setText("txt-brief-health", (health.overall_health ?? 100).toFixed(1));
+  setText("txt-brief-rul", formatRul(ai, true));
+  setText("txt-brief-alt",
+    Math.round(state.altitude_ft || 0).toLocaleString());
+  setText("txt-brief-driver", driver ? driver.name : "—");
+  setText("txt-brief-driver-sub",
+    driver ? `${driver.pct.toFixed(0)} % of the decision` : "no anomaly");
+
+  const engineName = (state.engine && state.engine.name) || "";
+  if (engineName) setText("txt-brief-engine", engineName.replace(/[-_]/g, " "));
+
+  setState(document.getElementById("tile-brief-health"),
+    healthState(health.overall_health ?? 100, "brief-health"));
+  setState(document.getElementById("tile-brief-rul"),
+    st === "warning" ? "warning" : (st === "caution" ? "caution" : null));
+  setState(document.getElementById("tile-brief-driver"), driver ? "accent" : null);
+}
+
+/** Remaining life, formatted for a readout rather than a table. */
+function formatRul(ai, bare) {
+  const lo = ai.rul_hours_min, hi = ai.rul_hours_max;
+  if (lo === undefined || hi === undefined) return bare ? "—" : "—";
+  if (bare) return (lo === hi) ? `${lo.toFixed(0)}` : `${lo.toFixed(0)}–${hi.toFixed(0)}`;
+  return (lo === hi) ? `${lo.toFixed(1)} h` : `${lo.toFixed(0)}–${hi.toFixed(0)} h`;
+}
+
+// ------------------------------------------------------------------
+// Mode switching
+//
+// The 3D viewport is MOVED between the two layouts, never copied. A WebGL
+// canvas cannot be cloned, and two of them would be two engines drifting
+// apart. Moving the element preserves its context; the renderer only needs
+// telling that its box changed size.
+// ------------------------------------------------------------------
+let briefMode = false;
+
+function toggleBriefMode() {
+  setBriefMode(!briefMode);
+}
+
+function setBriefMode(on) {
+  briefMode = !!on;
+
+  const brief = document.getElementById("brief-view");
+  const slot = document.getElementById("brief-3d-slot");
+  const home = document.getElementById("panel-3d");
+  const viewport = document.getElementById("container-3d");
+  const btn = document.getElementById("btn-mode");
+
+  document.body.setAttribute("data-mode", briefMode ? "brief" : "operate");
+  if (brief) brief.hidden = !briefMode;
+
+  if (viewport && slot && home) {
+    if (briefMode) {
+      slot.appendChild(viewport);
+    } else {
+      // Back to its original position: first child of its panel, above the
+      // cylinder strip and the inspector.
+      home.insertBefore(viewport, home.children[1] || null);
+    }
+  }
+
+  if (btn) {
+    btn.innerText = briefMode ? "Mode: brief" : "Mode: operate";
+    btn.classList.toggle("is-active", briefMode);
+  }
+
+  // The viewport has a different box in each mode, so the renderer has to
+  // remeasure or the model arrives letterboxed.
+  if (engine3D && typeof engine3D.onWindowResize === "function") {
+    requestAnimationFrame(() => engine3D.onWindowResize());
+    setTimeout(() => engine3D.onWindowResize(), 60);
+  }
+
+  if (latestTwinState) updateVerdict(latestTwinState);
+  addEventLog("SYS", briefMode
+    ? "Switched to brief mode — same telemetry, sized for a room."
+    : "Returned to the operator station.");
+}
+
+// B toggles modes, but never while something is being typed into.
+window.addEventListener("keydown", (ev) => {
+  if (ev.key !== "b" && ev.key !== "B") return;
+  if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  const t = ev.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" ||
+            t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+  if (document.body.getAttribute("data-phase") !== "app") return;
+  ev.preventDefault();
+  toggleBriefMode();
+});

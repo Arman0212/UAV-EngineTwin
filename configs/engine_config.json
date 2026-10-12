@@ -2,6 +2,7 @@
   "engine_name": "DRDO-VRDE-2.2L-Turbo-AeroDiesel",
   "displacement_litres": 2.2,
   "cylinders": 4,
+  "cylinder_layout": "inline",
   "rated_power_hp_sealevel": 200.0,
   "rated_rpm": 4200.0,
   "idle_rpm": 1400.0,
@@ -162,6 +163,34 @@
       "at_condition": "full avionics load",
       "operator_text": "bus voltage projected to fall to {limit} V",
       "source": "MIL-STD-704F steady-state lower limit for a 28 VDC bus is 22.0 V; 24.0 V is this project's margin above it, so the projection reaches the operator before flight-critical avionics reach their own undervoltage cutouts."
+    }
+  },
+  "data_provenance": {
+    "summary": "Representative specification. No public data sheet exists for this powerplant, so every figure here is modelled to be internally consistent rather than transcribed. This is the engine the fault models are trained on, so its numbers define the twin's reference behaviour.",
+    "published": [],
+    "computed": [
+      "altitude_power_derating"
+    ],
+    "modelled": [
+      "engine_name",
+      "displacement_litres",
+      "cylinders",
+      "cylinder_layout",
+      "rated_power_hp_sealevel",
+      "rated_rpm",
+      "max_continuous_rpm",
+      "compression_ratio",
+      "turbocharged",
+      "intercooled",
+      "idle_rpm",
+      "max_boost_bar",
+      "nominal_operating_parameters",
+      "sensor_specifications",
+      "end_of_life_limits"
+    ],
+    "notes": {
+      "computed": "Modelled, not published. The engine is flat-rated to a critical altitude and lapses above it, which is the correct shape for a turbocharged engine; the critical altitude and the rate of lapse beyond it are modelling choices consistent with the rated point.",
+      "modelled": "Modelled throughout. Representative of this engine class rather than read from a data sheet. Chosen to be internally consistent with the engine's rated point, which is what the residual model needs; treat the absolute values as indicative."
     }
   }
 }

@@ -30,6 +30,11 @@ from simulation.mvem import MeanValueEngineModel, EngineState
 from simulation.sensors import SensorModel, SensorReadings
 from simulation.fault_injector import FaultInjector, FaultType, FaultConfig
 from simulation import engine_registry
+from core.engine_context import EngineContext
+from core.ai_binding import resolve as resolve_ai_binding
+from core.fault_library import load_for as load_fault_library
+from core.visual_binding import fault_components as visual_fault_components
+from core.visual_binding import resolve as resolve_visual_binding
 from digital_twin.health_index import HealthIndexEngine
 from digital_twin.baseline_adapter import BaselineAdapter
 from digital_twin.state_estimator import PhysicsAnchoredKalmanEstimator
@@ -55,22 +60,25 @@ app.mount("/static", StaticFiles(directory=str(DASHBOARD_DIR)), name="static")
 class EngineTwinRuntime:
     def __init__(self):
         self.flight_gen = FlightProfile()
-        self.mvem_physical = MeanValueEngineModel()      # Physical/Simulated engine (subject to faults)
-        self.mvem_baseline = MeanValueEngineModel()      # Healthy Digital Twin baseline
-        self.sensors = SensorModel(seed=42)
-        self.injector = FaultInjector(self.mvem_physical, self.sensors)
-        self.ekf = PhysicsAnchoredKalmanEstimator()
+        # Everything belonging to the fitted powerplant lives in one object:
+        # the faulted plant, its healthy twin, instrumentation, the injector and
+        # the estimator. The service starts on the engine model's own defaults,
+        # which are what the shipped checkpoints were trained on; see
+        # core/engine_context.py for why that is not the same as loading the
+        # reference config file.
+        self.engine = EngineContext.boot()
         self.health_engine = HealthIndexEngine()
         self.sensor_validator = SensorValidator()
-        self.rul_engine = RULEstimator()
+        # Remaining life projects toward the fitted engine's own limits.
+        self.rul_engine = RULEstimator(criteria=self.engine.end_of_life_criteria)
 
-        # Load AI Models
-        models_dir = PROJECT_ROOT / "models" / "saved_models"
-        ae_path = models_dir / "anomaly_autoencoder.pt"
-        clf_path = models_dir / "fault_classifier.pt"
-
-        self.anomaly_detector = AnomalyDetector(str(ae_path) if ae_path.exists() else None)
-        self.fault_classifier = FaultDiagnosisEngine(str(clf_path) if clf_path.exists() else None)
+        # Which checkpoints diagnose this engine comes from its AI binding,
+        # not from a path built here. The binding also carries what they are
+        # validated for, which is the reference engine and nothing else.
+        binding = self.engine.ai_binding
+        self._loaded_models = (binding.model_path("anomaly"), binding.model_path("classifier"))
+        self.anomaly_detector = AnomalyDetector(self._loaded_models[0])
+        self.fault_classifier = FaultDiagnosisEngine(self._loaded_models[1])
         # Learns the standing offset between this engine and the datasheet
         # baseline, so downstream consumers see deviation from THIS unit's
         # normal rather than from the book.
@@ -111,49 +119,151 @@ class EngineTwinRuntime:
         # Which powerplant is fitted. The shipped checkpoints are trained on the
         # reference engine's residuals, so anything else is flagged to the
         # operator rather than silently diagnosed with the wrong calibration.
-        self.engine_id: str = engine_registry.REFERENCE_ID
-        self.engine_name: str = "DRDO-VRDE-2.2L-Turbo-AeroDiesel"
+        # Which powerplant is fitted is a fact about the engine, so it is read
+        # from the context. The shipped checkpoints are trained on the reference
+        # engine's residuals, so anything else is flagged to the operator rather
+        # than silently diagnosed with the wrong calibration.
 
         # Flight data recorder (attached by the service on startup)
         self.recorder: Optional[FlightRecorder] = None
 
-    def fit_engine(self, engine_id: str) -> Dict[str, Any]:
+    def _apply_ai_models(self, wanted) -> None:
         """
-        Swaps the powerplant and restarts the sortie on it.
+        Loads the given checkpoints, if they are not the ones already loaded.
 
-        Both the faulted engine and the healthy baseline are rebuilt from the
-        same spec — if only one were swapped, every residual would report the
-        difference between two engines rather than a fault.
+        Every engine currently resolves the same pair, so this does nothing
+        today. It exists so that giving an engine its own model is a
+        configuration change rather than a code change, and so the explainer
+        follows the classifier it explains.
         """
-        cfg = engine_registry.get_config(engine_id)
-        if cfg is None:
-            raise ValueError(f"No such engine: {engine_id}")
+        if wanted == self._loaded_models:
+            return
 
-        self.mvem_physical = MeanValueEngineModel(config=cfg)
-        self.mvem_baseline = MeanValueEngineModel(config=cfg)
-        self.sensors = SensorModel(seed=int(time.time()))
-        self.injector = FaultInjector(self.mvem_physical, self.sensors)
-        self.ekf = PhysicsAnchoredKalmanEstimator()
-        self.rul_engine.reset()
+        self.anomaly_detector = AnomalyDetector(wanted[0])
+        self.fault_classifier = FaultDiagnosisEngine(wanted[1])
+        self.shap_explainer = GradientAttributionExplainer(
+            self.fault_classifier.model if self.fault_classifier.is_trained else None)
+        self._loaded_models = wanted
+
+    # ------------------------------------------------------------------
+    # The fitted engine, under the names the rest of the system already uses.
+    #
+    # Tests, tools and the service itself reach for runtime.mvem_physical and
+    # friends. Those now live on the context; these forward to it so the move is
+    # invisible to callers, including the ones that assign.
+    # ------------------------------------------------------------------
+    @property
+    def mvem_physical(self) -> MeanValueEngineModel:
+        """The engine faults are injected into."""
+        return self.engine.plant
+
+    @mvem_physical.setter
+    def mvem_physical(self, value: MeanValueEngineModel) -> None:
+        self.engine.plant = value
+
+    @property
+    def mvem_baseline(self) -> MeanValueEngineModel:
+        """The healthy twin of the same engine, which is what a residual is measured against."""
+        return self.engine.baseline
+
+    @mvem_baseline.setter
+    def mvem_baseline(self, value: MeanValueEngineModel) -> None:
+        self.engine.baseline = value
+
+    @property
+    def sensors(self) -> SensorModel:
+        return self.engine.sensors
+
+    @sensors.setter
+    def sensors(self, value: SensorModel) -> None:
+        self.engine.sensors = value
+
+    @property
+    def injector(self) -> FaultInjector:
+        return self.engine.injector
+
+    @injector.setter
+    def injector(self, value: FaultInjector) -> None:
+        self.engine.injector = value
+
+    @property
+    def ekf(self) -> PhysicsAnchoredKalmanEstimator:
+        return self.engine.estimator
+
+    @ekf.setter
+    def ekf(self, value: PhysicsAnchoredKalmanEstimator) -> None:
+        self.engine.estimator = value
+
+    @property
+    def engine_id(self) -> str:
+        return self.engine.engine_id
+
+    @property
+    def engine_name(self) -> str:
+        return self.engine.name
+
+    def switch_engine(self, engine_id: str) -> Dict[str, Any]:
+        """
+        Replaces the powerplant: a different engine, and a runtime with nothing
+        left over from the one it replaced.
+
+        Distinct from reset(), which starts a new sortie on the same engine.
+        Everything a switch needs is built and validated first, and only then is
+        anything replaced, so an engine that fails to load leaves the running one
+        untouched rather than half exchanged.
+
+        The swap itself has no await in it. The tick loop is an asyncio task on
+        the same event loop, so it cannot observe a runtime that is partway
+        through being exchanged, and no frame can be emitted carrying one
+        engine's identity and another's telemetry.
+        """
+        # Raises ValueError for an unknown id, which the endpoint turns into a
+        # 404. Nothing above has been touched at that point.
+        context = EngineContext.fitted(engine_id)
+        criteria = context.end_of_life_criteria
+        binding = context.ai_binding
+        wanted_models = (binding.model_path("anomaly"), binding.model_path("classifier"))
+
+        # --- the swap ---------------------------------------------------
+        self.engine = context
+        self._apply_ai_models(wanted_models)
+
+        # Remaining life projects toward the new engine's limits, and its
+        # history described the one just removed.
+        self.rul_engine.bind_criteria(criteria)
+
+        # The learned per-channel offset is how far the previous unit sat from
+        # its datasheet. Carrying it onto a different powerplant would bias
+        # every residual by another engine's build variation.
+        self.baseline_adapter.reset()
+
+        # Nothing about the previous engine should be served while the new one
+        # warms up, including its last frame.
         self.latest_alert = None
+        self.latest_state = None
+        self.latest_frame = None
         self.active_fault_name = "HEALTHY"
         self.sim_time_s = 0.0
 
-        self.engine_id = engine_id
-        self.engine_name = cfg.get("engine_name", engine_id)
         self.warm_up(seconds=15.0, dt_s=SIM_DT_S)
-        return {"id": self.engine_id, "name": self.engine_name,
-                "is_reference": engine_id == engine_registry.REFERENCE_ID}
+        return self.engine.summary()
+
+    def fit_engine(self, engine_id: str) -> Dict[str, Any]:
+        """The name callers have always used for a switch."""
+        return self.switch_engine(engine_id)
 
     def reset(self):
+        """
+        Starts a new sortie on the same engine.
+
+        The engine itself is not replaced; its models keep their build variant,
+        which is a property of the unit rather than of the run. Everything the
+        previous sortie accumulated is dropped, including the learned offset,
+        because adaptation starts again with the sortie.
+        """
         self.sim_time_s = 0.0
-        self.mvem_physical.reset(idle=False)
-        self.mvem_baseline.reset(idle=False)
-        self.sensors = SensorModel(seed=int(time.time()))
-        self.injector = FaultInjector(self.mvem_physical, self.sensors)
-        self.ekf = PhysicsAnchoredKalmanEstimator()
+        self.engine.reset()
         self.rul_engine.reset()
-        # A reset means a different engine; the learned offset does not carry over.
         self.baseline_adapter.reset()
         self.latest_alert = None
         self.active_fault_name = "HEALTHY"
@@ -356,6 +466,10 @@ class EngineTwinRuntime:
             throttle_pct=round(flight.throttle_pct, 1),
             airspeed_mps=round(flight.airspeed_mps, 1),
             mission_phase=flight.phase,
+            # Which fault is injected, if any. This was tracked on the runtime
+            # but never emitted, so every client read the dataclass default of
+            # HEALTHY and the console's fault annunciation never fired.
+            active_fault=self.active_fault_name,
             # Sensor
             sensor_rpm=round(sensor_meas.rpm, 1),
             sensor_map_bar=round(sensor_meas.manifold_pressure_bar, 3),
@@ -695,7 +809,8 @@ async def get_engine(engine_id: str):
     if cfg is None:
         raise HTTPException(status_code=404, detail=f"No such engine: {engine_id}")
     spec = engine_registry.get_spec(engine_id)
-    return {"config": cfg, "spec": spec.to_dict() if spec else None}
+    return {"config": cfg, "spec": spec.to_dict() if spec else None,
+            "visual": _visual_summary(engine_id, cfg)}
 
 @app.post("/api/engines")
 async def create_engine(req: EngineCreateRequest):
@@ -720,6 +835,66 @@ async def delete_engine(engine_id: str):
         raise HTTPException(status_code=404,
                             detail="No such custom engine. Built-in engines cannot be deleted.")
     return {"status": "SUCCESS", "deleted": engine_id}
+
+def _visual_summary(engine_id: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """The visual binding for one engine, sized to the engine it describes."""
+    binding = resolve_visual_binding(engine_id)
+    summary = binding.summary(int(cfg.get("cylinders", 4)),
+                              bool(cfg.get("turbocharged", True)))
+    # Which component each fault reaches, composed from the channels it affects
+    # rather than tabulated. No fault id is needed by the renderer itself.
+    summary["fault_components"] = visual_fault_components(engine_id)
+    return summary
+
+
+@app.get("/api/engines/{engine_id}/visual")
+async def engine_visual_binding(engine_id: str):
+    """
+    How this engine is drawn: what its parts are called, and where each
+    telemetry channel is measured so a deviation can be pointed at a part.
+
+    Geometry is not here. The renderer derives that from the engine
+    specification, and repeating cylinder count or displacement would create a
+    second source of truth for one fact.
+    """
+    cfg = engine_registry.get_config(engine_id)
+    if cfg is None:
+        raise HTTPException(status_code=404, detail=f"No such engine: {engine_id}")
+    return _visual_summary(engine_id, cfg)
+
+
+@app.get("/api/engines/{engine_id}/ai")
+async def engine_ai_binding(engine_id: str):
+    """
+    Which AI components serve this engine, and what they are validated for.
+
+    A model file being present is not the same as that model being trained for
+    this engine, so availability and validation are reported separately.
+    """
+    if engine_registry.get_config(engine_id) is None:
+        raise HTTPException(status_code=404, detail=f"No such engine: {engine_id}")
+    return resolve_ai_binding(engine_id).summary()
+
+
+@app.get("/api/engines/{engine_id}/faults")
+async def list_engine_faults(engine_id: str):
+    """
+    The faults defined for one engine, and what the stack can do with each.
+
+    Support is reported in three parts because they are genuinely separate: a
+    fault can be simulated without the classifier having a class for it, and
+    without the XAI layer having advice for it.
+    """
+    if engine_registry.get_config(engine_id) is None:
+        raise HTTPException(status_code=404, detail=f"No such engine: {engine_id}")
+    library = load_fault_library(engine_id)
+    return {
+        "engine": engine_id,
+        "source": library.source,
+        "shared_library": library.source.endswith("_default/faults.json"),
+        "faults": library.to_list(),
+    }
+
 
 @app.post("/api/engines/{engine_id}/fit")
 async def fit_engine(engine_id: str):

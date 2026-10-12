@@ -73,14 +73,35 @@ class RULEstimator:
             # training scripts that have no reason to pull in the twin package.
             from digital_twin.health_index import HealthIndexEngine
             criteria = HealthIndexEngine().end_of_life_criteria(config_path)
-        self.criteria = criteria
+        self.bind_criteria(criteria, critical_health_threshold)
+
+    def bind_criteria(self, criteria: Optional[Dict[str, Any]],
+                      critical_health_threshold: Optional[float] = None) -> None:
+        """
+        Points the estimator at one engine's end-of-life limits.
+
+        Fitting a different powerplant has to rebind these, or the forecast
+        projects toward the previous engine's condemnation limits. The rolling
+        history is dropped with them, because it describes the engine that is no
+        longer installed.
+
+        An engine that declares no limits leaves ``criteria`` empty. The
+        estimator then falls back to the composite health score against a
+        generic threshold, which is a weaker forecast and is reported as such
+        rather than being filled in with another engine's numbers.
+
+        Nothing here is a trained parameter: this estimator is trend filtering
+        over the health history, with no learned weights to invalidate.
+        """
+        self.criteria = criteria or {}
 
         if critical_health_threshold is not None:
             self.critical_thresh = float(critical_health_threshold)
-        elif criteria:
-            self.critical_thresh = max(c.health_at_limit for c in criteria.values())
+        elif self.criteria:
+            self.critical_thresh = max(c.health_at_limit for c in self.criteria.values())
         else:
             self.critical_thresh = 30.0
+        self.reset()
 
     def reset(self):
         self.health_history.clear()
